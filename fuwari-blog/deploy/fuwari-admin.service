@@ -1,0 +1,18 @@
+[Unit]
+Description=Fuwari Blog Admin Editor
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/fuwari
+Environment=PORT=3010
+Environment=PROJECT_DIR=/srv/fuwari
+Environment="BUILD_CMD=pnpm build"
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=CI=true
+ExecStart=/usr/local/bin/node /srv/fuwari/admin/server.cjs
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

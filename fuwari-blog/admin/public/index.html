@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>云笺集 · 文章管理</title>
+<style>
+  :root {
+    --paper: #FAF9F6;
+    --ink: #1A1A1A;
+    --cinnabar: #C2402A;
+    --line: #E8E4DC;
+    --muted: #8A8578;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Inter", -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 32px 24px 80px; }
+
+  header {
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding-bottom: 16px; margin-bottom: 24px;
+    border-bottom: 1px solid var(--line);
+  }
+  h1 { font-size: 22px; font-weight: 700; letter-spacing: 0.02em; }
+  h1 .brand { color: var(--cinnabar); }
+  header .sub { font-size: 12px; color: var(--muted); margin-left: 12px; }
+
+  .btn {
+    border: 1px solid var(--ink);
+    background: transparent; color: var(--ink);
+    padding: 6px 14px; font-size: 13px; cursor: pointer;
+    transition: all .15s ease; text-decoration: none; display: inline-block;
+  }
+  .btn:hover { background: var(--ink); color: var(--paper); }
+  .btn.cinnabar { border-color: var(--cinnabar); color: var(--cinnabar); }
+  .btn.cinnabar:hover { background: var(--cinnabar); color: #fff; }
+  .btn.solid { background: var(--ink); color: var(--paper); }
+  .btn.solid:hover { background: var(--cinnabar); border-color: var(--cinnabar); color: #fff; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn.danger:hover { background: var(--cinnabar); border-color: var(--cinnabar); color: #fff; }
+
+  /* 列表 */
+  .list { list-style: none; }
+  .item {
+    display: flex; align-items: center; gap: 16px;
+    padding: 14px 4px; border-bottom: 1px solid var(--line);
+    transition: background .15s;
+  }
+  .item:hover { background: rgba(194, 64, 42, .04); }
+  .item .meta { width: 110px; font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .item .title { flex: 1; font-weight: 600; cursor: pointer; }
+  .item .title:hover { color: var(--cinnabar); }
+  .item .tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .item .tags span {
+    font-size: 11px; color: var(--cinnabar);
+    border: 1px solid rgba(194,64,42,.35); padding: 1px 8px; border-radius: 999px;
+  }
+  .item .ops { display: flex; gap: 8px; flex-shrink: 0; }
+  .item .draft { font-size: 11px; color: var(--muted); border: 1px dashed var(--line); padding: 1px 6px; }
+
+  /* 编辑器 */
+  #editor { display: none; }
+  #editor.show { display: block; }
+  .edit-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--line);
+  }
+  .edit-head h2 { font-size: 17px; }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .field input[type=text] {
+    width: 100%; border: 1px solid var(--line); background: #fff;
+    padding: 8px 10px; font-size: 14px; color: var(--ink); outline: none;
+    transition: border-color .15s;
+  }
+  .field input[type=text]:focus { border-color: var(--cinnabar); }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  textarea {
+    width: 100%; min-height: 60vh; border: 1px solid var(--line); background: #fff;
+    padding: 14px; font-size: 14px; color: var(--ink); outline: none;
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+    line-height: 1.7; resize: vertical;
+  }
+  textarea:focus { border-color: var(--cinnabar); }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .status { font-size: 13px; color: var(--muted); }
+  .status.err { color: var(--cinnabar); }
+  .status.ok { color: #2E7D32; }
+
+  /* 视图切换 */
+  .view-toggle { display: flex; gap: 4px; }
+  .view-toggle .btn { border-color: var(--line); color: var(--muted); }
+  .view-toggle .btn.active { border-color: var(--ink); color: var(--ink); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1><span class="brand">云笺集</span> · 文章管理</h1>
+      <span class="sub">保存后自动重新构建站点</span>
+    </div>
+    <div>
+      <a class="btn" href="/dev/" target="_blank">查看博客</a>
+      <button class="btn" id="btn-new">新建文章</button>
+    </div>
+  </header>
+
+  <!-- 列表视图 -->
+  <section id="list-view">
+    <ul class="list" id="article-list"></ul>
+    <div class="hint" id="list-empty" style="display:none">还没有文章，点击右上角「新建文章」开始写作。</div>
+  </section>
+
+  <!-- 编辑视图 -->
+  <section id="editor">
+    <div class="edit-head">
+      <h2 id="editor-title">编辑文章</h2>
+      <div class="status" id="save-status"></div>
+      <div>
+        <button class="btn" id="btn-cancel">返回</button>
+        <button class="btn solid" id="btn-save">保存并发布</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <div class="field">
+          <label>标题</label>
+          <input type="text" id="f-title" placeholder="文章标题">
+        </div>
+        <div class="field">
+          <label>日期（published）</label>
+          <input type="text" id="f-published" placeholder="2026-08-01">
+        </div>
+        <div class="field">
+          <label>标签（逗号分隔）</label>
+          <input type="text" id="f-tags" placeholder="随笔, 技术">
+        </div>
+        <div class="field">
+          <label>分类（category）</label>
+          <input type="text" id="f-category" placeholder="随笔">
+        </div>
+        <div class="field">
+          <label>摘要（description）</label>
+          <input type="text" id="f-description" placeholder="一句话描述">
+        </div>
+        <div class="field">
+          <label><input type="checkbox" id="f-draft"> 草稿（draft，暂不发布）</label>
+        </div>
+        <div class="field">
+          <label>文件名</label>
+          <input type="text" id="f-name" placeholder="article-name.md">
+        </div>
+      </div>
+      <div>
+        <div class="field">
+          <label>正文（Markdown，frontmatter 由系统生成）</label>
+          <textarea id="f-content" placeholder="# 标题&#10;&#10;开始写作…"></textarea>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+const API = '/dev/admin/api';
+let list = [];
+
+const $ = (id) => document.getElementById(id);
+
+async function loadList() {
+  const res = await fetch(API + '/articles');
+  const data = await res.json();
+  list = data.items || [];
+  renderList();
+}
+
+function renderList() {
+  const ul = $('article-list');
+  ul.innerHTML = '';
+  $('list-empty').style.display = list.length ? 'none' : 'block';
+  for (const it of list) {
+    const li = document.createElement('li');
+    li.className = 'item';
+    const tags = (it.tags || []).map(t => `<span>${escapeHtml(t)}</span>`).join('');
+    li.innerHTML = `
+      <div class="meta">${escapeHtml(it.published || '')}</div>
+      <div class="title" data-name="${escapeHtml(it.name)}">${escapeHtml(it.title)}</div>
+      <div class="tags">${tags}</div>
+      ${it.draft ? '<div class="draft">草稿</div>' : ''}
+      <div class="ops">
+        <button class="btn cinnabar" data-edit="${escapeHtml(it.name)}">编辑</button>
+        <button class="btn danger" data-del="${escapeHtml(it.name)}">删除</button>
+      </div>`;
+    ul.appendChild(li);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+function showList() {
+  $('list-view').style.display = 'block';
+  $('editor').classList.remove('show');
+  loadList();
+}
+
+function showEditor(article) {
+  $('list-view').style.display = 'none';
+  $('editor').classList.add('show');
+  $('f-title').value = article.title || '';
+  $('f-published').value = article.published || '';
+  $('f-tags').value = (article.tags || []).join(', ');
+  $('f-category').value = article.category || '';
+  $('f-description').value = article.description || '';
+  $('f-draft').checked = !!article.draft;
+  $('f-name').value = article.name || '';
+  $('f-content').value = article.body || '';
+  $('editor-title').textContent = article.name ? '编辑文章' : '新建文章';
+  $('save-status').textContent = '';
+  $('save-status').className = 'status';
+}
+
+async function openArticle(name) {
+  const res = await fetch(API + '/articles/' + encodeURIComponent(name));
+  const data = await res.json();
+  if (!res.ok) { alert(data.error || '加载失败'); return; }
+  // 从完整 md 中剥离 frontmatter
+  const match = data.content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
+  const body = match ? data.content.slice(match[0].length) : data.content;
+  const metaMatch = data.content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  const meta = {};
+  if (metaMatch) {
+    for (const line of metaMatch[1].split(/\r?\n/)) {
+      const idx = line.indexOf(':');
+      if (idx < 1) continue;
+      const k = line.slice(0, idx).trim();
+      const v = line.slice(idx + 1).trim().replace(/^['"]|['"]$/g, '');
+      if (k === 'tags') {
+        meta.tags = v.replace(/^\[|\]$/g, '').split(',').map(t => t.trim()).filter(Boolean);
+      } else meta[k] = v;
+    }
+  }
+  showEditor({ name, body, ...meta });
+}
+
+$('article-list').addEventListener('click', (e) => {
+  const edit = e.target.closest('[data-edit]');
+  const del = e.target.closest('[data-del]');
+  const title = e.target.closest('.title');
+  if (edit) openArticle(edit.dataset.edit);
+  else if (del) {
+    if (confirm('确定删除「' + del.dataset.del + '」？删除后自动重新构建。')) {
+      fetch(API + '/articles/' + encodeURIComponent(del.dataset.del), { method: 'DELETE' })
+        .then(r => r.json()).then(d => {
+          if (d.buildError) alert('已删除，但构建失败：' + d.buildError);
+          loadList();
+        });
+    }
+  } else if (title) openArticle(title.dataset.name);
+});
+
+$('btn-new').addEventListener('click', () => showEditor({}));
+$('btn-cancel').addEventListener('click', showList);
+
+$('btn-save').addEventListener('click', async () => {
+  const name = $('f-name').value.trim();
+  const title = $('f-title').value.trim();
+  if (!title) { alert('请填写标题'); return; }
+  if (!name) { alert('请填写文件名（如 my-post.md）'); return; }
+  if (!name.toLowerCase().endsWith('.md')) {
+    $('f-name').value = name + '.md';
+  }
+  const tags = $('f-tags').value.split(',').map(t => t.trim()).filter(Boolean);
+  const body = $('f-content').value;
+  const btn = $('btn-save');
+  btn.disabled = true;
+  $('save-status').textContent = '保存中…';
+  $('save-status').className = 'status';
+
+  const exists = list.some(it => it.name === $('f-name').value);
+  const url = API + '/articles' + (exists ? '/' + encodeURIComponent($('f-name').value) : '');
+  const method = exists ? 'PUT' : 'POST';
+  const payload = { content: body };
+  if (!exists) payload.name = $('f-name').value;
+  payload.meta = {
+    title,
+    published: $('f-published').value.trim(),
+    tags,
+    category: $('f-category').value.trim(),
+    description: $('f-description').value.trim(),
+    draft: $('f-draft').checked,
+  };
+
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || '保存失败'); return; }
+    $('save-status').textContent = data.buildError
+      ? ('已保存，但构建失败：' + data.buildError)
+      : '已保存，站点构建完成';
+    $('save-status').className = 'status ' + (data.buildError ? 'err' : 'ok');
+    showList();
+  } catch (e) {
+    $('save-status').textContent = '保存出错：' + e.message;
+    $('save-status').className = 'status err';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+loadList();
+</script>
+</body>
+</html>
