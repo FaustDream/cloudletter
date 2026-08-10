@@ -24,3 +24,4 @@
 
 ## 部署端口
 - fuwari-admin(在线编辑):3010，nginx 反代到 /dev/admin/
+- admin 后台现支持两个标签页：**文章管理** 和 **站点设置**（通过 GET/PUT /api/settings 读写 src/config.ts，保存后自动构建）
