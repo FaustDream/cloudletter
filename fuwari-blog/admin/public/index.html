@@ -3,180 +3,613 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>云笺集 · 文章管理</title>
+<title>云笺集 · 管理后台</title>
 <style>
   :root {
-    --paper: #FAF9F6;
-    --ink: #1A1A1A;
-    --cinnabar: #C2402A;
-    --line: #E8E4DC;
-    --muted: #8A8578;
+    --paper: #FAF9F6; --ink: #1A1A1A; --cinnabar: #C2402A;
+    --line: #E8E4DC; --muted: #8A8578; --bg-card: #F5F3EF;
+    --green: #2E7D32; --amber: #E6A817;
   }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  * { margin:0; padding:0; box-sizing:border-box; }
   body {
-    background: var(--paper);
-    color: var(--ink);
-    font-family: "Inter", -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-    font-size: 15px;
-    line-height: 1.6;
+    background:var(--paper); color:var(--ink);
+    font-family:"Inter",-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    font-size:15px; line-height:1.6;
   }
-  .wrap { max-width: 1200px; margin: 0 auto; padding: 32px 24px 80px; }
+  .wrap { max-width:1200px; margin:0 auto; padding:32px 24px 80px; }
 
   header {
-    display: flex; align-items: baseline; justify-content: space-between;
-    padding-bottom: 16px; margin-bottom: 24px;
-    border-bottom: 1px solid var(--line);
+    display:flex; align-items:center; justify-content:space-between;
+    padding-bottom:16px; margin-bottom:24px; border-bottom:1px solid var(--line);
   }
-  h1 { font-size: 22px; font-weight: 700; letter-spacing: 0.02em; }
-  h1 .brand { color: var(--cinnabar); }
-  header .sub { font-size: 12px; color: var(--muted); margin-left: 12px; }
+  h1 { font-size:22px; font-weight:700; letter-spacing:.02em; }
+  h1 .brand { color:var(--cinnabar); }
+  .user-info { font-size:13px; color:var(--muted); display:flex; align-items:center; gap:12px; }
 
+  /* tabs */
+  .tabs { display:flex; gap:4px; margin-bottom:24px; }
+  .tab {
+    padding:8px 20px; font-size:14px; cursor:pointer;
+    background:transparent; border:1px solid var(--line); color:var(--muted);
+    transition:all .15s;
+  }
+  .tab:hover { border-color:var(--ink); color:var(--ink); }
+  .tab.active { border-color:var(--cinnabar); color:var(--cinnabar); font-weight:600; }
+
+  /* buttons */
   .btn {
-    border: 1px solid var(--ink);
-    background: transparent; color: var(--ink);
-    padding: 6px 14px; font-size: 13px; cursor: pointer;
-    transition: all .15s ease; text-decoration: none; display: inline-block;
+    border:1px solid var(--ink); background:transparent; color:var(--ink);
+    padding:6px 14px; font-size:13px; cursor:pointer; transition:all .15s; text-decoration:none; display:inline-block;
   }
-  .btn:hover { background: var(--ink); color: var(--paper); }
-  .btn.cinnabar { border-color: var(--cinnabar); color: var(--cinnabar); }
-  .btn.cinnabar:hover { background: var(--cinnabar); color: #fff; }
-  .btn.solid { background: var(--ink); color: var(--paper); }
-  .btn.solid:hover { background: var(--cinnabar); border-color: var(--cinnabar); color: #fff; }
-  .btn:disabled { opacity: .4; cursor: not-allowed; }
-  .btn.danger:hover { background: var(--cinnabar); border-color: var(--cinnabar); color: #fff; }
+  .btn:hover { background:var(--ink); color:var(--paper); }
+  .btn.cinnabar { border-color:var(--cinnabar); color:var(--cinnabar); }
+  .btn.cinnabar:hover { background:var(--cinnabar); color:#fff; }
+  .btn.solid { background:var(--ink); color:var(--paper); }
+  .btn.solid:hover { background:var(--cinnabar); border-color:var(--cinnabar); color:#fff; }
+  .btn:disabled { opacity:.4; cursor:not-allowed; }
+  .btn.danger:hover { background:var(--cinnabar); border-color:var(--cinnabar); color:#fff; }
+  .btn.small { padding:4px 10px; font-size:12px; }
 
-  /* 列表 */
-  .list { list-style: none; }
+  /* views */
+  .view { display:none; }
+  .view.show { display:block; }
+
+  /* login */
+  .login-box {
+    max-width:380px; margin:80px auto; padding:40px 32px;
+    border:1px solid var(--line); background:var(--bg-card);
+  }
+  .login-box h2 { text-align:center; margin-bottom:24px; font-size:20px; }
+  .login-box .field { margin-bottom:16px; }
+
+  /* cards */
+  .settings-wrap { display:flex; flex-direction:column; gap:24px; }
+  .card {
+    border:1px solid var(--line); padding:24px; background:var(--bg-card); border-radius:2px;
+  }
+  .card h3 {
+    font-size:16px; margin-bottom:16px; padding-bottom:10px;
+    border-bottom:1px solid var(--line); display:flex; align-items:center; gap:8px;
+  }
+  .card h3 .dot { width:6px; height:6px; background:var(--cinnabar); border-radius:50%; display:inline-block; }
+
+  /* fields */
+  .field { margin-bottom:12px; }
+  .field label { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+  .field input[type=text], .field input[type=url], .field input[type=number], .field input[type=password],
+  .field select {
+    width:100%; border:1px solid var(--line); background:#fff;
+    padding:8px 10px; font-size:14px; color:var(--ink); outline:none; transition:border-color .15s;
+  }
+  .field input:focus, .field select:focus { border-color:var(--cinnabar); }
+  .field input[type=checkbox] { margin-right:6px; accent-color:var(--cinnabar); }
+  .field input[type=range] { width:100%; accent-color:var(--cinnabar); }
+  .field .color-preview {
+    display:inline-block; width:20px; height:20px; border-radius:50%;
+    vertical-align:middle; margin-left:8px; border:1px solid var(--line);
+  }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .row3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
+  .hint { font-size:12px; color:var(--muted); margin-top:8px; }
+  .status { font-size:13px; color:var(--muted); }
+  .status.err { color:var(--cinnabar); }
+  .status.ok { color:var(--green); }
+
+  /* dashboard */
+  .stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+  .stat-card {
+    border:1px solid var(--line); padding:20px; text-align:center; background:var(--bg-card);
+  }
+  .stat-card .num { font-size:36px; font-weight:700; color:var(--cinnabar); }
+  .stat-card .lbl { font-size:12px; color:var(--muted); margin-top:4px; }
+  .chart-bar { display:flex; gap:2px; align-items:flex-end; height:120px; padding:8px 0; }
+  .chart-bar .bar {
+    flex:1; background:var(--cinnabar); opacity:.7; min-height:2px; transition:opacity .2s;
+  }
+  .chart-bar .bar:hover { opacity:1; }
+  .chart-labels { display:flex; gap:2px; font-size:9px; color:var(--muted); margin-top:4px; }
+  .chart-labels span { flex:1; text-align:center; overflow:hidden; }
+
+  /* article list */
+  .list { list-style:none; }
   .item {
-    display: flex; align-items: center; gap: 16px;
-    padding: 14px 4px; border-bottom: 1px solid var(--line);
-    transition: background .15s;
+    display:flex; align-items:center; gap:16px;
+    padding:14px 4px; border-bottom:1px solid var(--line); transition:background .15s;
   }
-  .item:hover { background: rgba(194, 64, 42, .04); }
-  .item .meta { width: 110px; font-size: 12px; color: var(--muted); flex-shrink: 0; }
-  .item .title { flex: 1; font-weight: 600; cursor: pointer; }
-  .item .title:hover { color: var(--cinnabar); }
-  .item .tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .item:hover { background:rgba(194,64,42,.04); }
+  .item .meta { width:110px; font-size:12px; color:var(--muted); flex-shrink:0; }
+  .item .title { flex:1; font-weight:600; cursor:pointer; }
+  .item .title:hover { color:var(--cinnabar); }
+  .item .tags { display:flex; gap:6px; flex-wrap:wrap; }
   .item .tags span {
-    font-size: 11px; color: var(--cinnabar);
-    border: 1px solid rgba(194,64,42,.35); padding: 1px 8px; border-radius: 999px;
+    font-size:11px; color:var(--cinnabar);
+    border:1px solid rgba(194,64,42,.35); padding:1px 8px; border-radius:999px;
   }
-  .item .ops { display: flex; gap: 8px; flex-shrink: 0; }
-  .item .draft { font-size: 11px; color: var(--muted); border: 1px dashed var(--line); padding: 1px 6px; }
+  .item .ops { display:flex; gap:8px; flex-shrink:0; }
+  .item .draft { font-size:11px; color:var(--muted); border:1px dashed var(--line); padding:1px 6px; }
 
-  /* 编辑器 */
-  #editor { display: none; }
-  #editor.show { display: block; }
   .edit-head {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--line);
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid var(--line);
   }
-  .edit-head h2 { font-size: 17px; }
-  .field { margin-bottom: 12px; }
-  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
-  .field input[type=text] {
-    width: 100%; border: 1px solid var(--line); background: #fff;
-    padding: 8px 10px; font-size: 14px; color: var(--ink); outline: none;
-    transition: border-color .15s;
-  }
-  .field input[type=text]:focus { border-color: var(--cinnabar); }
-  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .edit-head h2 { font-size:17px; }
   textarea {
-    width: 100%; min-height: 60vh; border: 1px solid var(--line); background: #fff;
-    padding: 14px; font-size: 14px; color: var(--ink); outline: none;
-    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
-    line-height: 1.7; resize: vertical;
+    width:100%; min-height:60vh; border:1px solid var(--line); background:#fff;
+    padding:14px; font-size:14px; color:var(--ink); outline:none;
+    font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Consolas,monospace;
+    line-height:1.7; resize:vertical;
   }
-  textarea:focus { border-color: var(--cinnabar); }
-  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
-  .status { font-size: 13px; color: var(--muted); }
-  .status.err { color: var(--cinnabar); }
-  .status.ok { color: #2E7D32; }
+  textarea:focus { border-color:var(--cinnabar); }
 
-  /* 视图切换 */
-  .view-toggle { display: flex; gap: 4px; }
-  .view-toggle .btn { border-color: var(--line); color: var(--muted); }
-  .view-toggle .btn.active { border-color: var(--ink); color: var(--ink); }
+  .links-table { width:100%; border-collapse:collapse; }
+  .links-table td { padding:6px 8px; }
+  .links-table td:first-child { width:28%; }
+  .links-table td:nth-child(2) { width:28%; }
+  .links-table td:nth-child(3) { width:28%; }
+  .links-table td:last-child { width:16%; text-align:right; }
+  .links-table input { width:100%!important; }
+
+  .nav-presets { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  .nav-preset {
+    display:flex; align-items:center; gap:4px;
+    padding:4px 12px; font-size:13px;
+    border:1px solid var(--line); cursor:pointer; transition:all .15s;
+  }
+  .nav-preset.checked { border-color:var(--cinnabar); color:var(--cinnabar); background:rgba(194,64,42,.06); }
+  .nav-preset:hover { border-color:var(--ink); }
+
+  .flex-between { display:flex; justify-content:space-between; align-items:center; }
+  .flex-gap { display:flex; gap:8px; align-items:center; }
+
+  /* recent visits table */
+  .visits-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .visits-table td { padding:6px 10px; border-bottom:1px solid var(--line); }
+  .visits-table .time { color:var(--muted); font-size:12px; }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <div>
-      <h1><span class="brand">云笺集</span> · 文章管理</h1>
-      <span class="sub">保存后自动重新构建站点</span>
-    </div>
-    <div>
-      <a class="btn" href="/dev/" target="_blank">查看博客</a>
-      <button class="btn" id="btn-new">新建文章</button>
-    </div>
-  </header>
 
-  <!-- 列表视图 -->
-  <section id="list-view">
-    <ul class="list" id="article-list"></ul>
-    <div class="hint" id="list-empty" style="display:none">还没有文章，点击右上角「新建文章」开始写作。</div>
-  </section>
+<!-- ========== LOGIN VIEW ========== -->
+<div class="view show" id="view-login">
+  <div class="login-box" id="login-box">
+    <h2><span style="color:var(--cinnabar)">云笺集</span> · 管理后台</h2>
 
-  <!-- 编辑视图 -->
-  <section id="editor">
-    <div class="edit-head">
-      <h2 id="editor-title">编辑文章</h2>
-      <div class="status" id="save-status"></div>
+    <!-- 密码登录 -->
+    <div class="field"><label>用户名</label><input type="text" id="login-username" placeholder="admin" autocomplete="username"></div>
+    <div class="field"><label>密码</label><input type="password" id="login-password" placeholder="输入密码" autocomplete="current-password"></div>
+    <div class="status err" id="login-err" style="margin-bottom:12px;display:none"></div>
+    <button class="btn solid" id="btn-login" style="width:100%;padding:10px">登录</button>
+
+    <!-- 邮箱验证码登录 -->
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line)">
+      <button class="btn cinnabar" id="btn-show-email" style="width:100%;padding:10px">📧 邮箱验证码登录</button>
+    </div>
+
+    <div class="hint" style="text-align:center;margin-top:16px">
+      管理员账号默认 admin/admin123，登录后请修改
+    </div>
+  </div>
+
+  <!-- 邮箱验证码表单 -->
+  <div class="login-box" id="email-box" style="display:none">
+    <h2>邮箱验证码登录</h2>
+    <div class="field"><label>邮箱地址</label>
+      <div class="flex-gap">
+        <input type="email" id="email-input" placeholder="your@email.com" autocomplete="email" style="flex:1">
+        <button class="btn cinnabar" id="btn-send-code" style="white-space:nowrap">发送验证码</button>
+      </div>
+    </div>
+    <div class="field"><label>验证码</label><input type="text" id="code-input" placeholder="6 位数字" maxlength="6" autocomplete="one-time-code"></div>
+    <div class="status err" id="email-err" style="margin-bottom:12px;display:none"></div>
+    <div class="status ok" id="email-ok" style="margin-bottom:12px;display:none"></div>
+    <button class="btn solid" id="btn-verify-code" style="width:100%;padding:10px">验证并登录</button>
+    <div class="hint" style="text-align:center;margin-top:16px">
+      验证码 5 分钟内有效，最多尝试 5 次
+    </div>
+    <div class="hint" style="text-align:center;margin-top:8px">
+      <a href="#" id="show-password-login" style="color:var(--cinnabar);text-decoration:none">返回密码登录</a>
+    </div>
+  </div>
+</div>
+
+<!-- ========== ADMIN VIEW (authenticated) ========== -->
+<div class="view" id="view-admin">
+  <div class="wrap">
+    <header>
       <div>
-        <button class="btn" id="btn-cancel">返回</button>
-        <button class="btn solid" id="btn-save">保存并发布</button>
+        <h1><span class="brand">云笺集</span> · 管理后台</h1>
+      </div>
+      <div class="user-info">
+        <span id="header-user"></span>
+        <a class="btn" href="/dev/" target="_blank">查看博客</a>
+        <button class="btn danger" id="btn-logout">退出</button>
+      </div>
+    </header>
+
+    <div class="tabs">
+      <button class="tab active" data-view="dashboard">仪表盘</button>
+      <button class="tab" data-view="articles">文章管理</button>
+      <button class="tab" data-view="settings">站点设置</button>
+      <button class="tab" data-view="account">账户安全</button>
+    </div>
+
+    <!-- ====== 仪表盘 ====== -->
+    <div class="view show" id="view-dashboard" style="display:block">
+      <div class="stats-grid">
+        <div class="stat-card"><div class="num" id="stat-articles">-</div><div class="lbl">文章总数</div></div>
+        <div class="stat-card"><div class="num" id="stat-today">-</div><div class="lbl">今日访问</div></div>
+        <div class="stat-card"><div class="num" id="stat-total">-</div><div class="lbl">总访问量</div></div>
+        <div class="stat-card"><div class="num" id="stat-build" style="font-size:22px">-</div><div class="lbl">构建状态</div></div>
+      </div>
+
+      <div class="card">
+        <h3><span class="dot"></span>最近 30 天访问趋势</h3>
+        <div class="chart-bar" id="daily-chart"></div>
+        <div class="chart-labels" id="daily-labels"></div>
+      </div>
+
+      <div class="row" style="margin-top:24px">
+        <div class="card">
+          <h3><span class="dot"></span>热门页面</h3>
+          <table class="visits-table" id="top-pages"><tbody></tbody></table>
+        </div>
+        <div class="card">
+          <h3><span class="dot"></span>最近访问</h3>
+          <table class="visits-table" id="recent-visits"><tbody></tbody></table>
+        </div>
       </div>
     </div>
 
-    <div class="row">
-      <div>
-        <div class="field">
-          <label>标题</label>
-          <input type="text" id="f-title" placeholder="文章标题">
+    <!-- ====== 文章管理 ====== -->
+    <div class="view" id="view-articles">
+      <div id="list-section">
+        <div class="flex-between" style="margin-bottom:16px">
+          <button class="btn solid" id="btn-new">+ 新建文章</button>
+          <span class="hint" style="margin:0">保存后自动重新构建站点</span>
         </div>
-        <div class="field">
-          <label>日期（published）</label>
-          <input type="text" id="f-published" placeholder="2026-08-01">
-        </div>
-        <div class="field">
-          <label>标签（逗号分隔）</label>
-          <input type="text" id="f-tags" placeholder="随笔, 技术">
-        </div>
-        <div class="field">
-          <label>分类（category）</label>
-          <input type="text" id="f-category" placeholder="随笔">
-        </div>
-        <div class="field">
-          <label>摘要（description）</label>
-          <input type="text" id="f-description" placeholder="一句话描述">
-        </div>
-        <div class="field">
-          <label><input type="checkbox" id="f-draft"> 草稿（draft，暂不发布）</label>
-        </div>
-        <div class="field">
-          <label>文件名</label>
-          <input type="text" id="f-name" placeholder="article-name.md">
-        </div>
+        <ul class="list" id="article-list"></ul>
+        <div class="hint" id="list-empty" style="display:none">还没有文章，点击「新建文章」开始写作。</div>
       </div>
-      <div>
-        <div class="field">
-          <label>正文（Markdown，frontmatter 由系统生成）</label>
-          <textarea id="f-content" placeholder="# 标题&#10;&#10;开始写作…"></textarea>
+      <div id="editor" style="display:none">
+        <div class="edit-head">
+          <h2 id="editor-title">编辑文章</h2>
+          <div class="flex-gap">
+            <span class="status" id="save-status"></span>
+            <button class="btn" id="btn-cancel">返回</button>
+            <button class="btn solid" id="btn-save">保存并发布</button>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <div class="field"><label>标题</label><input type="text" id="f-title" placeholder="文章标题"></div>
+            <div class="field"><label>日期</label><input type="text" id="f-published" placeholder="2026-08-01"></div>
+            <div class="field"><label>标签（逗号分隔）</label><input type="text" id="f-tags" placeholder="随笔, 技术"></div>
+            <div class="field"><label>分类</label><input type="text" id="f-category" placeholder="随笔"></div>
+            <div class="field"><label>摘要</label><input type="text" id="f-description" placeholder="一句话描述"></div>
+            <div class="field"><label><input type="checkbox" id="f-draft"> 草稿</label></div>
+            <div class="field"><label>文件名</label><input type="text" id="f-name" placeholder="article-name.md"></div>
+          </div>
+          <div>
+            <div class="field"><label>正文（Markdown）</label><textarea id="f-content" placeholder="# 标题&#10;&#10;开始写作…"></textarea></div>
+          </div>
         </div>
       </div>
     </div>
-  </section>
+
+    <!-- ====== 站点设置 ====== -->
+    <div class="view" id="view-settings">
+      <div class="settings-wrap">
+        <div class="card">
+          <h3><span class="dot"></span>站点信息</h3>
+          <div class="row3">
+            <div class="field"><label>站点标题</label><input type="text" id="s-title"></div>
+            <div class="field"><label>副标题</label><input type="text" id="s-subtitle"></div>
+            <div class="field"><label>语言</label>
+              <select id="s-lang">
+                <option value="zh_CN">简体中文</option><option value="zh_TW">繁體中文</option>
+                <option value="en">English</option><option value="ja">日本語</option><option value="ko">한국어</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h3><span class="dot"></span>主题配色</h3>
+          <div class="row">
+            <div class="field">
+              <label>主题色色相（0-360）<span class="color-preview" id="color-swatch"></span></label>
+              <div class="flex-gap">
+                <input type="range" id="s-hue" min="0" max="360" style="flex:1">
+                <input type="number" id="s-hue-num" min="0" max="360" style="width:70px;text-align:center">
+              </div>
+            </div>
+            <div class="field" style="display:flex;align-items:flex-end;padding-bottom:8px">
+              <label style="margin:0"><input type="checkbox" id="s-fixed"> 固定主题色</label>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h3><span class="dot"></span>导航栏</h3>
+          <div class="nav-presets" id="nav-presets">
+            <label class="nav-preset" data-preset="home"><input type="checkbox" checked> 首页</label>
+            <label class="nav-preset" data-preset="archive"><input type="checkbox" checked> 归档</label>
+            <label class="nav-preset" data-preset="about"><input type="checkbox" checked> 关于</label>
+          </div>
+        </div>
+        <div class="card">
+          <h3><span class="dot"></span>个人信息</h3>
+          <div class="row3">
+            <div class="field"><label>名称</label><input type="text" id="s-profile-name"></div>
+            <div class="field"><label>简介</label><input type="text" id="s-profile-bio"></div>
+          </div>
+          <div class="field">
+            <label>社交链接</label>
+            <table class="links-table" id="links-tbody"><thead><tr style="font-size:11px;color:var(--muted)"><td>名称</td><td>图标</td><td>URL</td><td></td></tr></thead><tbody></tbody></table>
+            <button class="btn small" id="btn-add-link" style="margin-top:8px">+ 添加链接</button>
+          </div>
+        </div>
+        <div class="card">
+          <h3><span class="dot"></span>文章目录 (TOC)</h3>
+          <div class="row">
+            <div class="field" style="display:flex;align-items:flex-end;padding-bottom:8px"><label style="margin:0"><input type="checkbox" id="s-toc-enable"> 显示目录</label></div>
+            <div class="field"><label>目录深度</label><select id="s-toc-depth"><option value="1">1 级</option><option value="2">2 级</option><option value="3">3 级</option></select></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3><span class="dot"></span>Banner</h3>
+          <div class="row3">
+            <div class="field" style="display:flex;align-items:flex-end;padding-bottom:8px"><label style="margin:0"><input type="checkbox" id="s-banner-enable"> 启用</label></div>
+            <div class="field"><label>图片路径</label><input type="text" id="s-banner-src"></div>
+            <div class="field"><label>位置</label><select id="s-banner-position"><option value="center">居中</option><option value="top">顶部</option><option value="bottom">底部</option></select></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3><span class="dot"></span>许可证</h3>
+          <div class="row3">
+            <div class="field" style="display:flex;align-items:flex-end;padding-bottom:8px"><label style="margin:0"><input type="checkbox" id="s-license-enable"> 启用</label></div>
+            <div class="field"><label>名称</label><input type="text" id="s-license-name"></div>
+            <div class="field"><label>链接</label><input type="url" id="s-license-url"></div>
+          </div>
+        </div>
+        <div class="flex-between" style="border-top:1px solid var(--line);padding-top:16px">
+          <span class="status" id="settings-status"></span>
+          <button class="btn solid" id="btn-settings-save" style="padding:10px 32px">保存设置并重新构建</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== 账户安全 ====== -->
+    <div class="view" id="view-account">
+      <div class="row">
+        <div class="card">
+          <h3><span class="dot"></span>修改密码</h3>
+          <div class="field"><label>当前密码</label><input type="password" id="pw-old" autocomplete="current-password"></div>
+          <div class="field"><label>新密码（至少 6 位）</label><input type="password" id="pw-new" autocomplete="new-password"></div>
+          <div class="field"><label>确认新密码</label><input type="password" id="pw-confirm" autocomplete="new-password"></div>
+          <div class="status err" id="pw-err" style="margin-bottom:12px;display:none"></div>
+          <div class="status ok" id="pw-ok" style="margin-bottom:12px;display:none"></div>
+          <button class="btn solid" id="btn-change-pw">修改密码</button>
+          <div class="hint">修改成功后需要重新登录</div>
+        </div>
+
+        <div class="card">
+          <h3><span class="dot"></span>添加管理员</h3>
+          <div class="field"><label>用户名（字母、数字、下划线，2-30 位）</label><input type="text" id="new-username" placeholder="editor" autocomplete="off"></div>
+          <div class="field"><label>密码（至少 6 位）</label><input type="password" id="new-password" placeholder="输入密码" autocomplete="new-password"></div>
+          <div class="status err" id="add-err" style="margin-bottom:12px;display:none"></div>
+          <div class="status ok" id="add-ok" style="margin-bottom:12px;display:none"></div>
+          <button class="btn cinnabar" id="btn-add-user">添加管理员</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:24px">
+        <h3><span class="dot"></span>管理员列表</h3>
+        <table class="visits-table" style="width:100%">
+          <thead><tr style="font-size:11px;color:var(--muted)"><td>用户名</td><td>创建时间</td><td style="text-align:right">操作</td></tr></thead>
+          <tbody id="user-list-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
 const API = '/dev/admin/api';
+
+const $ = id => document.getElementById(id);
+
+/* ============ Auth ============ */
+let currentUser = null;
+
+async function checkLogin() {
+  try {
+    const res = await fetch(API + '/auth/check', { credentials: 'include' });
+    const data = await res.json();
+    if (data.loggedIn) {
+      currentUser = data.username;
+      showAdmin();
+    } else {
+      showLogin();
+    }
+  } catch { showLogin(); }
+}
+
+function showLogin() {
+  $('view-login').classList.add('show');
+  $('view-admin').classList.remove('show');
+}
+
+function showAdmin() {
+  $('view-login').classList.remove('show');
+  $('view-admin').classList.add('show');
+  $('header-user').textContent = '👤 ' + (currentUser || '');
+  // 默认显示仪表盘
+  switchInnerTab('dashboard');
+  loadDashboard();
+}
+
+$('btn-login').addEventListener('click', async () => {
+  const username = $('login-username').value.trim();
+  const password = $('login-password').value;
+  if (!username || !password) { $('login-err').textContent = '请填写用户名和密码'; $('login-err').style.display = 'block'; return; }
+  $('btn-login').disabled = true;
+  $('login-err').style.display = 'none';
+  try {
+    const res = await fetch(API + '/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+      credentials: 'include',
+    });
+    const data = await res.json();
+    if (!res.ok) { $('login-err').textContent = data.error; $('login-err').style.display = 'block'; return; }
+    currentUser = data.username;
+    showAdmin();
+  } catch (e) {
+    $('login-err').textContent = '网络错误: ' + e.message;
+    $('login-err').style.display = 'block';
+  } finally { $('btn-login').disabled = false; }
+});
+
+$('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-login').click(); });
+
+// 邮箱验证码登录切换
+$('btn-show-email').addEventListener('click', () => { $('login-box').style.display='none'; $('email-box').style.display='block'; });
+$('show-password-login').addEventListener('click', e => { e.preventDefault(); $('email-box').style.display='none'; $('login-box').style.display='block'; });
+
+// 发送验证码
+let codeCooldown = 0;
+$('btn-send-code').addEventListener('click', async () => {
+  const email = $('email-input').value.trim();
+  $('email-err').style.display = 'none'; $('email-ok').style.display = 'none';
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { $('email-err').textContent = '请输入有效的邮箱地址'; $('email-err').style.display = 'block'; return; }
+  if (codeCooldown > 0) return;
+  $('btn-send-code').disabled = true;
+  try {
+    const res = await fetch(API + '/auth/code/send', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    if (!res.ok) { $('email-err').textContent = data.error; $('email-err').style.display = 'block'; return; }
+    $('email-ok').textContent = data.message;
+    $('email-ok').style.display = 'block';
+    // 倒计时 60 秒
+    codeCooldown = 60;
+    const countdown = setInterval(() => {
+      codeCooldown--;
+      if (codeCooldown <= 0) { clearInterval(countdown); $('btn-send-code').disabled = false; $('btn-send-code').textContent = '发送验证码'; }
+      else { $('btn-send-code').textContent = codeCooldown + 's'; }
+    }, 1000);
+  } catch (e) { $('email-err').textContent = '网络错误'; $('email-err').style.display = 'block'; $('btn-send-code').disabled = false; }
+});
+
+// 验证码登录
+$('btn-verify-code').addEventListener('click', async () => {
+  const email = $('email-input').value.trim();
+  const code = $('code-input').value.trim();
+  $('email-err').style.display = 'none'; $('email-ok').style.display = 'none';
+  if (!code || code.length !== 6) { $('email-err').textContent = '请输入 6 位验证码'; $('email-err').style.display = 'block'; return; }
+  $('btn-verify-code').disabled = true; $('btn-verify-code').textContent = '验证中…';
+  try {
+    const res = await fetch(API + '/auth/code/verify', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code }),
+      credentials: 'include',
+    });
+    const data = await res.json();
+    if (!res.ok) { $('email-err').textContent = data.error; $('email-err').style.display = 'block'; return; }
+    currentUser = data.username;
+    showAdmin();
+  } catch (e) { $('email-err').textContent = '网络错误'; $('email-err').style.display = 'block'; }
+  finally { $('btn-verify-code').disabled = false; $('btn-verify-code').textContent = '验证并登录'; }
+});
+
+$('code-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-verify-code').click(); });
+
+$('btn-logout').addEventListener('click', async () => {
+  await fetch(API + '/auth/logout', { method: 'POST', credentials: 'include' });
+  currentUser = null;
+  showLogin();
+});
+
+/* ============ Inner Tab Switching ============ */
+function switchInnerTab(name) {
+  document.querySelectorAll('.tabs .tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v => { if (v.id.startsWith('view-') && v.id !== 'view-login' && v.id !== 'view-admin') v.style.display = 'none'; });
+  const tab = document.querySelector(`.tab[data-view="${name}"]`);
+  if (tab) tab.classList.add('active');
+  const panel = $('view-' + name);
+  if (panel) panel.style.display = 'block';
+}
+
+document.querySelectorAll('.tabs .tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const name = btn.dataset.view;
+    switchInnerTab(name);
+    if (name === 'dashboard') loadDashboard();
+    else if (name === 'articles') loadList();
+    else if (name === 'settings') loadSettings();
+    else if (name === 'account') loadUserList();
+  });
+});
+
+/* ============ Dashboard ============ */
+async function loadDashboard() {
+  try {
+    const res = await fetch(API + '/dashboard', { credentials: 'include' });
+    if (res.status === 401) { checkLogin(); return; }
+    const d = await res.json();
+    $('stat-articles').textContent = d.articleCount || 0;
+    $('stat-today').textContent = d.todayVisits || 0;
+    $('stat-total').textContent = d.totalVisits || 0;
+    if (d.buildStatus) {
+      const bs = d.buildStatus;
+      $('stat-build').textContent = bs.building ? '构建中...' : bs.lastBuildStatus === 'success' ? '正常' : (bs.lastBuildStatus || '-');
+      $('stat-build').style.color = bs.building ? 'var(--amber)' : bs.lastBuildStatus === 'success' ? 'var(--green)' : 'var(--cinnabar)';
+    }
+
+    // daily chart
+    const statsRes = await fetch(API + '/stats', { credentials: 'include' });
+    const stats = await statsRes.json();
+    renderDailyChart(stats.daily || []);
+
+    // top pages
+    const tp = $('top-pages').querySelector('tbody');
+    tp.innerHTML = '';
+    (stats.topPages || []).slice(0, 10).forEach(p => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${escHtml(p.path)}</td><td style="text-align:right;color:var(--cinnabar);font-weight:600">${p.c}</td>`;
+      tp.appendChild(tr);
+    });
+
+    // recent visits
+    const rv = $('recent-visits').querySelector('tbody');
+    rv.innerHTML = '';
+    (stats.recentVisits || []).slice(0, 15).forEach(v => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${escHtml(v.path)}</td><td class="time">${v.visited_at || ''}</td>`;
+      rv.appendChild(tr);
+    });
+  } catch (e) { console.error(e); }
+}
+
+function renderDailyChart(daily) {
+  const chart = $('daily-chart');
+  const labels = $('daily-labels');
+  if (!daily.length) { chart.innerHTML = '<div style="color:var(--muted);font-size:13px">暂无数据</div>'; labels.innerHTML = ''; return; }
+  const max = Math.max(...daily.map(d => d.c), 1);
+  chart.innerHTML = daily.map(d => {
+    const h = Math.max(2, (d.c / max) * 110);
+    return `<div class="bar" style="height:${h}px" title="${d.day}: ${d.c}"></div>`;
+  }).join('');
+  labels.innerHTML = daily.map(d => `<span>${d.day.slice(5)}</span>`).join('');
+}
+
+/* ============ Article Management ============ */
 let list = [];
 
-const $ = (id) => document.getElementById(id);
-
 async function loadList() {
-  const res = await fetch(API + '/articles');
+  const res = await fetch(API + '/articles', { credentials: 'include' });
+  if (res.status === 401) { checkLogin(); return; }
   const data = await res.json();
   list = data.items || [];
   renderList();
@@ -189,53 +622,37 @@ function renderList() {
   for (const it of list) {
     const li = document.createElement('li');
     li.className = 'item';
-    const tags = (it.tags || []).map(t => `<span>${escapeHtml(t)}</span>`).join('');
+    const tags = (it.tags || []).map(t => `<span>${escHtml(t)}</span>`).join('');
     li.innerHTML = `
-      <div class="meta">${escapeHtml(it.published || '')}</div>
-      <div class="title" data-name="${escapeHtml(it.name)}">${escapeHtml(it.title)}</div>
+      <div class="meta">${escHtml(it.published || '')}</div>
+      <div class="title" data-name="${escHtml(it.name)}">${escHtml(it.title)}</div>
       <div class="tags">${tags}</div>
       ${it.draft ? '<div class="draft">草稿</div>' : ''}
       <div class="ops">
-        <button class="btn cinnabar" data-edit="${escapeHtml(it.name)}">编辑</button>
-        <button class="btn danger" data-del="${escapeHtml(it.name)}">删除</button>
+        <button class="btn cinnabar" data-edit="${escHtml(it.name)}">编辑</button>
+        <button class="btn danger" data-del="${escHtml(it.name)}">删除</button>
       </div>`;
     ul.appendChild(li);
   }
 }
 
-function escapeHtml(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  }[c]));
-}
-
-function showList() {
-  $('list-view').style.display = 'block';
-  $('editor').classList.remove('show');
-  loadList();
-}
+function showList() { $('list-section').style.display = 'block'; $('editor').style.display = 'none'; loadList(); }
 
 function showEditor(article) {
-  $('list-view').style.display = 'none';
-  $('editor').classList.add('show');
-  $('f-title').value = article.title || '';
-  $('f-published').value = article.published || '';
-  $('f-tags').value = (article.tags || []).join(', ');
-  $('f-category').value = article.category || '';
-  $('f-description').value = article.description || '';
-  $('f-draft').checked = !!article.draft;
-  $('f-name').value = article.name || '';
-  $('f-content').value = article.body || '';
+  $('list-section').style.display = 'none'; $('editor').style.display = 'block';
+  $('f-title').value = article.title || ''; $('f-published').value = article.published || '';
+  $('f-tags').value = (article.tags || []).join(', '); $('f-category').value = article.category || '';
+  $('f-description').value = article.description || ''; $('f-draft').checked = !!article.draft;
+  $('f-name').value = article.name || ''; $('f-content').value = article.body || '';
   $('editor-title').textContent = article.name ? '编辑文章' : '新建文章';
-  $('save-status').textContent = '';
-  $('save-status').className = 'status';
+  $('save-status').textContent = ''; $('save-status').className = 'status';
 }
 
 async function openArticle(name) {
-  const res = await fetch(API + '/articles/' + encodeURIComponent(name));
+  const res = await fetch(API + '/articles/' + encodeURIComponent(name), { credentials: 'include' });
+  if (res.status === 401) { checkLogin(); return; }
   const data = await res.json();
   if (!res.ok) { alert(data.error || '加载失败'); return; }
-  // 从完整 md 中剥离 frontmatter
   const match = data.content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
   const body = match ? data.content.slice(match[0].length) : data.content;
   const metaMatch = data.content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
@@ -246,26 +663,22 @@ async function openArticle(name) {
       if (idx < 1) continue;
       const k = line.slice(0, idx).trim();
       const v = line.slice(idx + 1).trim().replace(/^['"]|['"]$/g, '');
-      if (k === 'tags') {
-        meta.tags = v.replace(/^\[|\]$/g, '').split(',').map(t => t.trim()).filter(Boolean);
-      } else meta[k] = v;
+      if (k === 'tags') meta.tags = v.replace(/^\[|\]$/g, '').split(',').map(t => t.trim()).filter(Boolean);
+      else meta[k] = v;
     }
   }
   showEditor({ name, body, ...meta });
 }
 
-$('article-list').addEventListener('click', (e) => {
+$('article-list').addEventListener('click', e => {
   const edit = e.target.closest('[data-edit]');
   const del = e.target.closest('[data-del]');
   const title = e.target.closest('.title');
   if (edit) openArticle(edit.dataset.edit);
   else if (del) {
-    if (confirm('确定删除「' + del.dataset.del + '」？删除后自动重新构建。')) {
-      fetch(API + '/articles/' + encodeURIComponent(del.dataset.del), { method: 'DELETE' })
-        .then(r => r.json()).then(d => {
-          if (d.buildError) alert('已删除，但构建失败：' + d.buildError);
-          loadList();
-        });
+    if (confirm('确定删除「' + del.dataset.del + '」？')) {
+      fetch(API + '/articles/' + encodeURIComponent(del.dataset.del), { method: 'DELETE', credentials: 'include' })
+        .then(r => r.json()).then(d => { if (d.buildError) alert('已删除，但构建失败：' + d.buildError); loadList(); });
     }
   } else if (title) openArticle(title.dataset.name);
 });
@@ -278,15 +691,11 @@ $('btn-save').addEventListener('click', async () => {
   const title = $('f-title').value.trim();
   if (!title) { alert('请填写标题'); return; }
   if (!name) { alert('请填写文件名（如 my-post.md）'); return; }
-  if (!name.toLowerCase().endsWith('.md')) {
-    $('f-name').value = name + '.md';
-  }
+  if (!name.toLowerCase().endsWith('.md')) $('f-name').value = name + '.md';
   const tags = $('f-tags').value.split(',').map(t => t.trim()).filter(Boolean);
   const body = $('f-content').value;
-  const btn = $('btn-save');
-  btn.disabled = true;
-  $('save-status').textContent = '保存中…';
-  $('save-status').className = 'status';
+  const btn = $('btn-save'); btn.disabled = true;
+  $('save-status').textContent = '保存中…'; $('save-status').className = 'status';
 
   const exists = list.some(it => it.name === $('f-name').value);
   const url = API + '/articles' + (exists ? '/' + encodeURIComponent($('f-name').value) : '');
@@ -294,36 +703,224 @@ $('btn-save').addEventListener('click', async () => {
   const payload = { content: body };
   if (!exists) payload.name = $('f-name').value;
   payload.meta = {
-    title,
-    published: $('f-published').value.trim(),
-    tags,
-    category: $('f-category').value.trim(),
-    description: $('f-description').value.trim(),
+    title, published: $('f-published').value.trim(), tags,
+    category: $('f-category').value.trim(), description: $('f-description').value.trim(),
     draft: $('f-draft').checked,
   };
 
   try {
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), credentials: 'include' });
     const data = await res.json();
     if (!res.ok) { alert(data.error || '保存失败'); return; }
-    $('save-status').textContent = data.buildError
-      ? ('已保存，但构建失败：' + data.buildError)
-      : '已保存，站点构建完成';
+    $('save-status').textContent = data.buildError ? ('已保存，但构建失败：' + data.buildError) : '已保存，站点构建完成';
     $('save-status').className = 'status ' + (data.buildError ? 'err' : 'ok');
     showList();
   } catch (e) {
-    $('save-status').textContent = '保存出错：' + e.message;
+    $('save-status').textContent = '保存出错: ' + e.message;
     $('save-status').className = 'status err';
-  } finally {
-    btn.disabled = false;
+  } finally { btn.disabled = false; }
+});
+
+/* ============ Settings ============ */
+async function loadSettings() {
+  try {
+    const res = await fetch(API + '/settings', { credentials: 'include' });
+    if (res.status === 401) { checkLogin(); return; }
+    const s = await res.json();
+    if (!res.ok) return;
+    $('s-title').value = s.site.title || ''; $('s-subtitle').value = s.site.subtitle || '';
+    $('s-lang').value = s.site.lang || 'zh_CN';
+    const hue = s.site.themeHue || 9; $('s-hue').value = hue; $('s-hue-num').value = hue;
+    $('s-fixed').checked = s.site.themeFixed !== false; updateColorSwatch(hue);
+    const presetNames = (s.navLinks || []).filter(l => l.type === 'preset').map(l => l.id);
+    document.querySelectorAll('#nav-presets .nav-preset').forEach(el => {
+      const cb = el.querySelector('input[type=checkbox]');
+      cb.checked = presetNames.includes(el.dataset.preset);
+    });
+    $('s-profile-name').value = s.profile.name || ''; $('s-profile-bio').value = s.profile.bio || '';
+    renderLinks(s.profile.links || []);
+    $('s-toc-enable').checked = s.toc.enable !== false; $('s-toc-depth').value = String(s.toc.depth || 2);
+    $('s-banner-enable').checked = !!s.banner.enable; $('s-banner-src').value = s.banner.src || '';
+    $('s-banner-position').value = s.banner.position || 'center';
+    $('s-license-enable').checked = !!s.license.enable; $('s-license-name').value = s.license.name || '';
+    $('s-license-url').value = s.license.url || '';
+  } catch (e) { console.error(e); }
+}
+
+function updateColorSwatch(hue) { $('color-swatch').style.background = `hsl(${hue}, 70%, 45%)`; }
+$('s-hue').addEventListener('input', () => { $('s-hue-num').value = $('s-hue').value; updateColorSwatch($('s-hue').value); });
+$('s-hue-num').addEventListener('input', () => { let v = Math.max(0, Math.min(360, parseInt($('s-hue-num').value) || 0)); $('s-hue').value = v; updateColorSwatch(v); });
+
+document.querySelectorAll('#nav-presets .nav-preset').forEach(el => {
+  el.querySelector('input').addEventListener('change', () => el.classList.toggle('checked', el.querySelector('input').checked));
+  el.classList.toggle('checked', el.querySelector('input').checked);
+});
+
+let profileLinks = [];
+function renderLinks(links) {
+  profileLinks = links || [];
+  const tbody = document.querySelector('#links-tbody tbody');
+  tbody.innerHTML = '';
+  for (let i = 0; i < profileLinks.length; i++) {
+    const l = profileLinks[i];
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="text" value="${escHtml(l.name)}" data-idx="${i}" data-field="name"></td>
+      <td><input type="text" value="${escHtml(l.icon)}" data-idx="${i}" data-field="icon"></td>
+      <td><input type="url" value="${escHtml(l.url)}" data-idx="${i}" data-field="url"></td>
+      <td><button class="btn danger small del-link" data-idx="${i}">删除</button></td>`;
+    tbody.appendChild(tr);
+  }
+}
+document.querySelector('#links-tbody tbody').addEventListener('input', e => {
+  const input = e.target.closest('input'); if (!input) return;
+  const idx = parseInt(input.dataset.idx), field = input.dataset.field;
+  if (idx >= 0 && idx < profileLinks.length) profileLinks[idx][field] = input.value;
+});
+document.querySelector('#links-tbody tbody').addEventListener('click', e => {
+  const btn = e.target.closest('.del-link'); if (!btn) return;
+  profileLinks.splice(parseInt(btn.dataset.idx), 1); renderLinks(profileLinks);
+});
+$('btn-add-link').addEventListener('click', () => { profileLinks.push({ name: '', icon: '', url: '' }); renderLinks(profileLinks); });
+
+$('btn-settings-save').addEventListener('click', async () => {
+  const btn = $('btn-settings-save'), status = $('settings-status');
+  btn.disabled = true; status.textContent = '保存中…'; status.className = 'status';
+  const navPresets = [];
+  document.querySelectorAll('#nav-presets .nav-preset input').forEach(cb => {
+    if (cb.checked) navPresets.push({ type: 'preset', id: cb.closest('.nav-preset').dataset.preset });
+  });
+  const payload = {
+    site: {
+      title: $('s-title').value.trim(), subtitle: $('s-subtitle').value.trim(),
+      lang: $('s-lang').value, themeHue: parseInt($('s-hue').value), themeFixed: $('s-fixed').checked,
+    },
+    banner: { enable: $('s-banner-enable').checked, src: $('s-banner-src').value.trim(), position: $('s-banner-position').value, creditEnable: false },
+    toc: { enable: $('s-toc-enable').checked, depth: parseInt($('s-toc-depth').value) },
+    profile: { name: $('s-profile-name').value.trim(), bio: $('s-profile-bio').value.trim() },
+    license: { enable: $('s-license-enable').checked, name: $('s-license-name').value.trim(), url: $('s-license-url').value.trim() },
+  };
+  try {
+    const res = await fetch(API + '/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), credentials: 'include' });
+    const data = await res.json();
+    if (!res.ok) { status.textContent = '错误: ' + (data.error || '未知'); status.className = 'status err'; return; }
+    status.textContent = '设置已保存，站点正在重新构建…'; status.className = 'status ok';
+  } catch (e) { status.textContent = '保存出错: ' + e.message; status.className = 'status err'; }
+  finally { btn.disabled = false; }
+});
+
+/* ============ Account ============ */
+$('btn-change-pw').addEventListener('click', async () => {
+  const oldPw = $('pw-old').value, newPw = $('pw-new').value, confirm = $('pw-confirm').value;
+  $('pw-err').style.display = 'none'; $('pw-ok').style.display = 'none';
+  if (!oldPw || !newPw || !confirm) { $('pw-err').textContent = '请填写所有字段'; $('pw-err').style.display = 'block'; return; }
+  if (newPw !== confirm) { $('pw-err').textContent = '两次新密码不一致'; $('pw-err').style.display = 'block'; return; }
+  if (newPw.length < 6) { $('pw-err').textContent = '新密码至少 6 位'; $('pw-err').style.display = 'block'; return; }
+  $('btn-change-pw').disabled = true;
+  try {
+    const res = await fetch(API + '/auth/password', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ oldPassword: oldPw, newPassword: newPw }),
+      credentials: 'include',
+    });
+    const data = await res.json();
+    if (!res.ok) { $('pw-err').textContent = data.error; $('pw-err').style.display = 'block'; return; }
+    $('pw-ok').textContent = '密码已修改，即将跳转到登录页…'; $('pw-ok').style.display = 'block';
+    $('pw-old').value = ''; $('pw-new').value = ''; $('pw-confirm').value = '';
+    setTimeout(() => { checkLogin(); }, 1500);
+  } catch (e) { $('pw-err').textContent = '网络错误'; $('pw-err').style.display = 'block'; }
+  finally { $('btn-change-pw').disabled = false; }
+});
+
+/* ============ User Management ============ */
+async function loadUserList() {
+  try {
+    const res = await fetch(API + '/auth/users', { credentials: 'include' });
+    if (res.status === 401) { checkLogin(); return; }
+    const data = await res.json();
+    const tbody = $('user-list-tbody');
+    tbody.innerHTML = '';
+    for (const u of (data.users || [])) {
+      const tr = document.createElement('tr');
+      const isMe = u.username === currentUser;
+      tr.innerHTML = `
+        <td>${escHtml(u.username)}${isMe ? ' <span style="color:var(--cinnabar);font-size:11px">(你)</span>' : ''}</td>
+        <td style="font-size:12px">${escHtml(u.email || '')}<button class="btn small set-email" data-user="${escHtml(u.username)}" data-email="${escHtml(u.email||'')}" style="margin-left:6px">设置邮箱</button></td>
+        <td style="color:var(--muted);font-size:12px">${u.created_at || ''}</td>
+        <td style="text-align:right">
+          ${!isMe ? `<button class="btn danger small reset-pw" data-user="${escHtml(u.username)}">重置密码</button>
+          <button class="btn danger small del-user" data-user="${escHtml(u.username)}">删除</button>` : ''}
+        </td>`;
+      tbody.appendChild(tr);
+    }
+  } catch (e) { console.error(e); }
+}
+
+$('user-list-tbody').addEventListener('click', async e => {
+  const del = e.target.closest('.del-user');
+  const reset = e.target.closest('.reset-pw');
+  const setEmail = e.target.closest('.set-email');
+  if (setEmail) {
+    const username = setEmail.dataset.user;
+    const current = setEmail.dataset.email;
+    const email = prompt('请输入「' + username + '」的邮箱地址（留空则清除）：', current);
+    if (email === null) return; // 取消
+    const res = await fetch(API + '/auth/email', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email: email.trim() || null }),
+      credentials: 'include',
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error); return; }
+    loadUserList();
+    return;
+  }
+  if (del) {
+    const username = del.dataset.user;
+    if (!confirm(`确定删除管理员「${username}」？`)) return;
+    const res = await fetch(API + '/auth/users/' + encodeURIComponent(username), { method: 'DELETE', credentials: 'include' });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error); return; }
+    loadUserList();
+  }
+  if (reset) {
+    const username = reset.dataset.user;
+    if (!confirm(`确定重置「${username}」的密码？系统将生成随机密码。`)) return;
+    const res = await fetch(API + '/auth/users/' + encodeURIComponent(username) + '/reset', { method: 'POST', credentials: 'include' });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error); return; }
+    alert(`「${username}」的密码已重置为：${data.password}\n\n请告知该用户尽快登录并修改密码。`);
+    loadUserList();
   }
 });
 
-loadList();
+$('btn-add-user').addEventListener('click', async () => {
+  const username = $('new-username').value.trim();
+  const password = $('new-password').value;
+  $('add-err').style.display = 'none'; $('add-ok').style.display = 'none';
+  if (!username || !password) { $('add-err').textContent = '请填写用户名和密码'; $('add-err').style.display = 'block'; return; }
+  $('btn-add-user').disabled = true;
+  try {
+    const res = await fetch(API + '/auth/users', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+      credentials: 'include',
+    });
+    const data = await res.json();
+    if (!res.ok) { $('add-err').textContent = data.error; $('add-err').style.display = 'block'; return; }
+    $('add-ok').textContent = `管理员「${data.username}」已创建`;
+    $('add-ok').style.display = 'block';
+    $('new-username').value = ''; $('new-password').value = '';
+    loadUserList();
+  } catch (e) { $('add-err').textContent = '网络错误'; $('add-err').style.display = 'block'; }
+  finally { $('btn-add-user').disabled = false; }
+});
+
+/* ============ Helpers ============ */
+function escHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+/* ============ Init ============ */
+checkLogin();
 </script>
 </body>
 </html>

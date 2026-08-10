@@ -10,6 +10,9 @@ Environment=PROJECT_DIR=/srv/fuwari
 Environment="BUILD_CMD=pnpm build"
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 Environment=CI=true
+# === Linux.do OAuth 配置（在 https://connect.linux.do/ 创建应用获取）===
+# Environment=LINUXDO_CLIENT_ID=你的ClientID
+# Environment=LINUXDO_CLIENT_SECRET=你的ClientSecret
 ExecStart=/usr/local/bin/node /srv/fuwari/admin/server.cjs
 Restart=always
 RestartSec=3

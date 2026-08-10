@@ -44,6 +44,11 @@ export const navBarConfig: NavBarConfig = {
 		LinkPreset.Home,
 		LinkPreset.Archive,
 		LinkPreset.About,
+		{
+			name: "管理",
+			url: "/dev/admin/",
+			external: true,
+		},
 	],
 };
 
