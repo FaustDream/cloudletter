@@ -38,8 +38,9 @@ yarn.lock
 *.db-wal
 *.db-shm
 
-# tsx / TypeScript 编译缓存
+# tsx / TypeScript 编译缓存（tsx 的 node-compile-cache + tsx-<user> 缓存目录）
 **/node-compile-cache/
+**/tsx-*/
 tsconfig.tsbuildinfo
 *.tsbuildinfo
 
