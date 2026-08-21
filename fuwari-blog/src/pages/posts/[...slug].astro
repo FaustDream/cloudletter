@@ -1,5 +1,7 @@
 ---
 import path from "node:path";
+import ApiSidebar from "@components/ApiSidebar.astro";
+import ImmersiveReading from "@components/ImmersiveReading.astro";
 import License from "@components/misc/License.astro";
 import Markdown from "@components/misc/Markdown.astro";
 import I18nKey from "@i18n/i18nKey";
@@ -7,6 +9,7 @@ import { i18n } from "@i18n/translation";
 import MainGridLayout from "@layouts/MainGridLayout.astro";
 import { getSortedPosts } from "@utils/content-utils";
 import { getDir, getPostUrlBySlug } from "@utils/url-utils";
+import { getBacklinks } from "@utils/backlinks.mjs";
 import { Icon } from "astro-icon/components";
 import { licenseConfig } from "src/config";
 import ImageWrapper from "../../components/misc/ImageWrapper.astro";
@@ -26,6 +29,9 @@ const { entry } = Astro.props;
 const { Content, headings } = await entry.render();
 
 const { remarkPluginFrontmatter } = await entry.render();
+
+// 构建期反链（§5.2.4 / N9）：扫描全部 [[...]] 生成"谁引用了我"
+const backlinks = getBacklinks(entry.slug);
 
 const jsonLd = {
 	"@context": "https://schema.org",
@@ -47,6 +53,8 @@ const jsonLd = {
 ---
 <MainGridLayout banner={entry.data.image} title={entry.data.title} description={entry.data.description} lang={entry.data.lang} setOGTypeArticle={true} headings={headings}>
     <script is:inline slot="head" type="application/ld+json" set:html={JSON.stringify(jsonLd)}></script>
+    <ApiSidebar />
+    <ImmersiveReading />
     <div class="flex w-full rounded-[var(--radius-large)] overflow-hidden relative mb-4">
         <div id="post-container" class:list={["card-base z-10 px-6 md:px-9 pt-6 pb-4 relative w-full ",
             {}
@@ -107,6 +115,23 @@ const jsonLd = {
             </Markdown>
 
             {licenseConfig.enable && <License title={entry.data.title} slug={entry.slug} pubDate={entry.data.published} class="mb-6 rounded-xl license-container onload-animation"></License>}
+
+            {backlinks.length > 0 && (
+                <div class="mb-6 rounded-xl card-base p-4 onload-animation" id="backlinks-panel">
+                    <div class="text-sm font-bold mb-2 flex items-center gap-2 text-black/70 dark:text-white/70">
+                        <Icon name="fa6-solid:link" class="text-[0.9rem] text-[var(--primary)]"></Icon>
+                        反向链接 · {backlinks.length}
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        {backlinks.map((b) => (
+                            <a href={getPostUrlBySlug(b.slug)}
+                               class="btn-card rounded-lg px-3 py-1.5 text-sm transition active:scale-95">
+                                {b.title}
+                            </a>
+                        ))}
+                    </div>
+                </div>
+            )}
 
         </div>
     </div>

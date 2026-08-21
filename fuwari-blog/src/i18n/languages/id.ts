@@ -26,6 +26,17 @@ export const id: Translation = {
 
 	[Key.themeColor]: "Warna Tema",
 
+	[Key.backgroundImage]: "Gambar Latar Belakang",
+	[Key.uploadImage]: "Unggah Gambar",
+	[Key.imageUrl]: "URL Gambar",
+	[Key.backgroundImageEnable]: "Aktifkan Gambar Latar",
+	[Key.effect]: "Efek Latar",
+	[Key.effectNone]: "Tidak Ada",
+	[Key.effectNebula]: "Nebula",
+	[Key.effectSakura]: "Sakura",
+	[Key.effectSnow]: "Salju",
+	[Key.effectFirefly]: "Kunang-kunang",
+
 	[Key.lightMode]: "Terang",
 	[Key.darkMode]: "Gelap",
 	[Key.systemMode]: "Sistem",

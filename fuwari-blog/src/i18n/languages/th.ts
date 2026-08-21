@@ -26,6 +26,17 @@ export const th: Translation = {
 
 	[Key.themeColor]: "สีของธีม",
 
+	[Key.backgroundImage]: "ภาพพื้นหลัง",
+	[Key.uploadImage]: "อัปโหลดภาพ",
+	[Key.imageUrl]: "ลิงก์ภาพ",
+	[Key.backgroundImageEnable]: "เปิดใช้ภาพพื้นหลัง",
+	[Key.effect]: "เอฟเฟกต์พื้นหลัง",
+	[Key.effectNone]: "ไม่มี",
+	[Key.effectNebula]: "เนบิวลา",
+	[Key.effectSakura]: "ซากุระ",
+	[Key.effectSnow]: "หิมะ",
+	[Key.effectFirefly]: "หิ่งห้อย",
+
 	[Key.lightMode]: "สว่าง",
 	[Key.darkMode]: "มืด",
 	[Key.systemMode]: "ตามระบบ",

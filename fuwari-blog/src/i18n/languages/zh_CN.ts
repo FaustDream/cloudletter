@@ -26,6 +26,17 @@ export const zh_CN: Translation = {
 
 	[Key.themeColor]: "主题色",
 
+	[Key.backgroundImage]: "背景图片",
+	[Key.uploadImage]: "上传图片",
+	[Key.imageUrl]: "图片链接",
+	[Key.backgroundImageEnable]: "启用背景图片",
+	[Key.effect]: "背景特效",
+	[Key.effectNone]: "无",
+	[Key.effectNebula]: "星云",
+	[Key.effectSakura]: "樱花",
+	[Key.effectSnow]: "雪花",
+	[Key.effectFirefly]: "萤火虫",
+
 	[Key.lightMode]: "亮色",
 	[Key.darkMode]: "暗色",
 	[Key.systemMode]: "跟随系统",

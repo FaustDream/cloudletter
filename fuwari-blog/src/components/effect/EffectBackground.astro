@@ -1,0 +1,26 @@
+---
+/**
+ * 全局背景特效容器（与背景图片分层解耦）：
+ * - 背景图片：body CSS 背景（最底层，完整背景）
+ * - 特效层 A：#effect-bg 固定在内容之下（z-index:-1），承载半透明发光特效（星云），叠加在背景图之上
+ * - 特效层 B：ParticleEffect 固定在内容之上（z-index:1），承载粒子飘落特效（樱花/雪花/萤火虫）
+ * - 特效单选：一次只渲染一个（各组件内部按 bg-effect 门控）
+ * - reduced-motion 门控在各特效组件内部
+ */
+import Starfield from './Starfield'
+import ParticleEffect from './ParticleEffect.svelte'
+---
+
+<div id="effect-bg" aria-hidden="true">
+	<Starfield client:idle />
+</div>
+<ParticleEffect client:idle />
+
+<style is:global>
+#effect-bg {
+	position: fixed;
+	inset: 0;
+	z-index: -1;
+	pointer-events: none;
+}
+</style>

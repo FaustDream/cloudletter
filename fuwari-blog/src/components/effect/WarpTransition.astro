@@ -1,0 +1,132 @@
+---
+/**
+ * 曲速过场（§7 / N7）：站内链接切换时播放"星点拉线 → 覆盖 → 消散"的超光速转场。
+ * - 原生 Canvas，无框架岛开销
+ * - 双门控：prefers-reduced-motion 时直接跳转（无动画）
+ * - 拦截站内链接（/ 开头、同源、非下载/锚点/新窗口）
+ */
+---
+
+<canvas id="warp-layer" aria-hidden="true"></canvas>
+
+<script>
+	(function () {
+		const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+		const canvas = document.getElementById("warp-layer");
+		const ctx = canvas.getContext("2d");
+		const DURATION = 620; // 出站/入站动画时长 ms
+
+		// 仅内部页面间导航才过场
+		function isInternal(anchor) {
+			const href = anchor.getAttribute("href");
+			if (!href) return false;
+			if (!href.startsWith("/") || href.startsWith("//")) return false;
+			if (href.startsWith("/dev")) return false; // 写作空间/控制台不做过场
+			if (anchor.target && anchor.target !== "_self") return false;
+			if (anchor.hasAttribute("download")) return false;
+			const url = new URL(anchor.href);
+			if (url.hash && url.pathname === window.location.pathname) return false; // 页内锚点
+			return true;
+		}
+
+		let active = false;
+
+		function fit() {
+			canvas.width = window.innerWidth;
+			canvas.height = window.innerHeight;
+		}
+
+		/** 在 (cx,cy) 处绘制一束星点拉线（径向条纹） */
+		function drawWarp(progress) {
+			// progress: 0 → 正常；1 → 完全覆盖（白/青条纹充满）
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+			ctx.fillStyle = "rgba(6, 9, 18, 0.96)";
+			ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+			const cx = canvas.width / 2;
+			const cy = canvas.height / 2;
+			const count = 220;
+			const maxR = Math.hypot(cx, cy) * 1.2;
+			ctx.lineWidth = 2;
+
+			for (let i = 0; i < count; i++) {
+				const angle = (i / count) * Math.PI * 2 + (i % 3) * 0.37;
+				const baseR = ((i * 61) % 100) / 100;
+				// 随 progress 从中心向外拉伸
+				const r = maxR * (0.12 + baseR * 1.15 * progress);
+				const len = maxR * (0.3 + progress * 1.4);
+				const x0 = cx + Math.cos(angle) * r;
+				const y0 = cy + Math.sin(angle) * r;
+				const x1 = cx + Math.cos(angle) * (r + len);
+				const y1 = cy + Math.sin(angle) * (r + len);
+				const hue = 195 + (i % 5) * 9; // 青蓝
+				ctx.strokeStyle = `hsla(${hue}, 85%, ${60 + progress * 20}%, ${0.15 + progress * 0.7})`;
+				ctx.beginPath();
+				ctx.moveTo(x0, y0);
+				ctx.lineTo(x1, y1);
+				ctx.stroke();
+			}
+		}
+
+		function animate(out, done) {
+			if (active) return;
+			active = true;
+			canvas.style.opacity = "1";
+			canvas.style.pointerEvents = "all";
+			const t0 = performance.now();
+			function frame(now) {
+				const t = Math.min((now - t0) / DURATION, 1);
+				// 出站：0→1 覆盖；入站：1→0 消散
+				const p = out ? t : 1 - t;
+				drawWarp(p);
+				if (t < 1) {
+					requestAnimationFrame(frame);
+				} else {
+					if (out) {
+						done();
+					} else {
+						canvas.style.opacity = "0";
+						canvas.style.pointerEvents = "none";
+						active = false;
+						ctx.clearRect(0, 0, canvas.width, canvas.height);
+					}
+				}
+			}
+			requestAnimationFrame(frame);
+		}
+
+		if (!reduced) {
+			fit();
+			window.addEventListener("resize", fit);
+
+			// 拦截站内链接：出站过场后导航
+			document.addEventListener("click", (e) => {
+				const anchor = e.target.closest("a");
+				if (!anchor || !isInternal(anchor)) return;
+				if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+				e.preventDefault();
+				const href = anchor.href;
+				animate(true, () => {
+					window.location.href = href;
+				});
+			});
+
+			// 入站过场：从覆盖态消散
+			window.addEventListener("pageshow", (e) => {
+				if (e.persisted) return;
+				animate(false);
+			});
+		}
+	})();
+</script>
+
+<style>
+#warp-layer {
+	position: fixed;
+	inset: 0;
+	z-index: 9999;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.15s;
+}
+</style>

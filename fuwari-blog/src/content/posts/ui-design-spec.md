@@ -2,7 +2,7 @@
 title: 通用 UI 设计规范 v1.0
 published: 2026-08-10
 tags: [设计, 规范]
-category: 设计
+category: 项目
 description: 适用于所有类型项目的通用 UI/UX 设计基准规范。
 draft: false
 ---

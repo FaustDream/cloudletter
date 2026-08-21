@@ -7,3 +7,23 @@
         font-family: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
 }
+
+/* ===== M3 程序员风 IDE 外壳：红黄绿窗口点 + 连字（§5.2.5 / §7） ===== */
+.expressive-code .frame .header {
+    gap: 0.75rem;
+}
+.expressive-code .frame .header::before {
+    content: "";
+    flex: none;
+    width: 11px;
+    height: 11px;
+    border-radius: 9999px;
+    background: #ff5f57;
+    box-shadow: 17px 0 0 #febc2e, 34px 0 0 #28c840;
+    margin-right: 1.25rem;
+}
+/* 连字字体（JetBrains Mono Variable 支持 fi/fl/=> 等） */
+.expressive-code pre,
+.expressive-code code {
+    font-variant-ligatures: contextual;
+}

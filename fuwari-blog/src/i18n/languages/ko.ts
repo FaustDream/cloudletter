@@ -26,6 +26,17 @@ export const ko: Translation = {
 
 	[Key.themeColor]: "테마 색상",
 
+	[Key.backgroundImage]: "배경 이미지",
+	[Key.uploadImage]: "이미지 업로드",
+	[Key.imageUrl]: "이미지 URL",
+	[Key.backgroundImageEnable]: "배경 이미지 활성화",
+	[Key.effect]: "배경 효과",
+	[Key.effectNone]: "없음",
+	[Key.effectNebula]: "성운",
+	[Key.effectSakura]: "벚꽃",
+	[Key.effectSnow]: "눈",
+	[Key.effectFirefly]: "반딧불",
+
 	[Key.lightMode]: "밝은 모드",
 	[Key.darkMode]: "어두운 모드",
 	[Key.systemMode]: "시스템 모드",

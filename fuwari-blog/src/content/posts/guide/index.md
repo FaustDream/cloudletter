@@ -4,7 +4,7 @@ published: 2024-04-01
 description: "How to use this blog template."
 image: "./cover.jpeg"
 tags: ["Fuwari", "Blogging", "Customization"]
-category: Guides
+category: 指南
 draft: false
 ---
 
@@ -21,7 +21,7 @@ published: 2023-09-09
 description: This is the first post of my new Astro blog.
 image: ./cover.jpg
 tags: [Foo, Bar]
-category: Front-end
+category: 指南
 draft: false
 ---
 ```

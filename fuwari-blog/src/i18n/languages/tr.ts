@@ -26,6 +26,17 @@ export const tr: Translation = {
 
 	[Key.themeColor]: "Tema Rengi",
 
+	[Key.backgroundImage]: "Arka Plan Görseli",
+	[Key.uploadImage]: "Görsel Yükle",
+	[Key.imageUrl]: "Görsel URL",
+	[Key.backgroundImageEnable]: "Arka Plan Görselini Etkinleştir",
+	[Key.effect]: "Arka Plan Efekti",
+	[Key.effectNone]: "Yok",
+	[Key.effectNebula]: "Nebula",
+	[Key.effectSakura]: "Sakura",
+	[Key.effectSnow]: "Kar",
+	[Key.effectFirefly]: "Ateşböceği",
+
 	[Key.lightMode]: "Aydınlık",
 	[Key.darkMode]: "Koyu",
 	[Key.systemMode]: "Sistem",

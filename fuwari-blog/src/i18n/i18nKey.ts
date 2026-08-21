@@ -23,6 +23,17 @@ enum I18nKey {
 
 	themeColor = "themeColor",
 
+	backgroundImage = "backgroundImage",
+	uploadImage = "uploadImage",
+	imageUrl = "imageUrl",
+	backgroundImageEnable = "backgroundImageEnable",
+	effect = "effect",
+	effectNone = "effectNone",
+	effectNebula = "effectNebula",
+	effectSakura = "effectSakura",
+	effectSnow = "effectSnow",
+	effectFirefly = "effectFirefly",
+
 	lightMode = "lightMode",
 	darkMode = "darkMode",
 	systemMode = "systemMode",

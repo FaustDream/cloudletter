@@ -36,6 +36,12 @@ export type SiteConfig = {
 	};
 
 	favicon: Favicon[];
+
+	umami?: {
+		enable: boolean;
+		src: string;
+		websiteId: string;
+	};
 };
 
 export type Favicon = {

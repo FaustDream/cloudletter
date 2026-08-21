@@ -37,6 +37,15 @@ export const siteConfig: SiteConfig = {
 		//   sizes: '32x32',              // (Optional) Size of the favicon, set only if you have favicons of different sizes
 		// }
 	],
+	// 可选：Umami 隐私分析（https://umami.is）。配置后仅在生产构建注入脚本。
+	// 通过环境变量覆盖：UMAMI_URL（脚本地址，默认 https://analytics.umami.is/script.js）、UMAMI_WEBSITE_ID、UMAMI_ENABLED
+	umami: {
+		enable: import.meta.env.UMAMI_ENABLED === "true",
+		// 脚本地址（含 /script.js 结尾）。自托管时改为你的域名，如 https://stats.example.com/script.js
+		src: import.meta.env.UMAMI_URL || "https://analytics.umami.is/script.js",
+		// Umami 后台该站点的 website id（必填，否则不注入）
+		websiteId: import.meta.env.UMAMI_WEBSITE_ID || "",
+	},
 };
 
 export const navBarConfig: NavBarConfig = {

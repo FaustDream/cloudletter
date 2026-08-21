@@ -26,6 +26,17 @@ export const en: Translation = {
 
 	[Key.themeColor]: "Theme Color",
 
+	[Key.backgroundImage]: "Background Image",
+	[Key.uploadImage]: "Upload Image",
+	[Key.imageUrl]: "Image URL",
+	[Key.backgroundImageEnable]: "Enable Background Image",
+	[Key.effect]: "Background Effect",
+	[Key.effectNone]: "None",
+	[Key.effectNebula]: "Nebula",
+	[Key.effectSakura]: "Sakura",
+	[Key.effectSnow]: "Snow",
+	[Key.effectFirefly]: "Firefly",
+
 	[Key.lightMode]: "Light",
 	[Key.darkMode]: "Dark",
 	[Key.systemMode]: "System",

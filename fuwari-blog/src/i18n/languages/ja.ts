@@ -26,6 +26,17 @@ export const ja: Translation = {
 
 	[Key.themeColor]: "テーマカラー",
 
+	[Key.backgroundImage]: "背景画像",
+	[Key.uploadImage]: "画像をアップロード",
+	[Key.imageUrl]: "画像URL",
+	[Key.backgroundImageEnable]: "背景画像を有効化",
+	[Key.effect]: "背景エフェクト",
+	[Key.effectNone]: "なし",
+	[Key.effectNebula]: "星雲",
+	[Key.effectSakura]: "桜",
+	[Key.effectSnow]: "雪",
+	[Key.effectFirefly]: "蛍",
+
 	[Key.lightMode]: "ライト",
 	[Key.darkMode]: "ダーク",
 	[Key.systemMode]: "システム",

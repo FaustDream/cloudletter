@@ -1,4 +1,6 @@
+import { fileURLToPath } from "node:url";
 import sitemap from "@astrojs/sitemap";
+import react from "@astrojs/react";
 import svelte from "@astrojs/svelte";
 import tailwind from "@astrojs/tailwind";
 import { pluginCollapsibleSections } from "@expressive-code/plugin-collapsible-sections";
@@ -19,8 +21,13 @@ import { expressiveCodeConfig } from "./src/config.ts";
 import { pluginLanguageBadge } from "./src/plugins/expressive-code/language-badge.ts";
 import { AdmonitionComponent } from "./src/plugins/rehype-component-admonition.mjs";
 import { GithubCardComponent } from "./src/plugins/rehype-component-github-card.mjs";
+import { remarkRichBlocks } from "./src/plugins/remark-rich-blocks.mjs";
+import { remarkWikilink } from "./src/plugins/remark-wikilink.mjs";
 import { parseDirectiveNode } from "./src/plugins/remark-directive-rehype.js";
 import { remarkExcerpt } from "./src/plugins/remark-excerpt.js";
+
+// 项目根（astro.config.mjs 不被 Vite bundle，import.meta.url 可靠），传给依赖文件扫描的 remark 插件
+const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 import { remarkReadingTime } from "./src/plugins/remark-reading-time.mjs";
 import { pluginCustomCopyButton } from "./src/plugins/expressive-code/custom-copy-button.js";
 
@@ -100,6 +107,7 @@ export default defineConfig({
 			}
 		}),
         svelte(),
+		react(),
 		sitemap(),
 	],
 	markdown: {
@@ -111,6 +119,8 @@ export default defineConfig({
 			remarkDirective,
 			remarkSectionize,
 			parseDirectiveNode,
+			remarkRichBlocks,
+			[remarkWikilink, { projectRoot }],
 		],
 		rehypePlugins: [
 			rehypeKatex,
@@ -125,6 +135,7 @@ export default defineConfig({
 						important: (x, y) => AdmonitionComponent(x, y, "important"),
 						caution: (x, y) => AdmonitionComponent(x, y, "caution"),
 						warning: (x, y) => AdmonitionComponent(x, y, "warning"),
+						danger: (x, y) => AdmonitionComponent(x, y, "caution"),
 					},
 				},
 			],

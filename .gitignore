@@ -30,3 +30,26 @@ yarn.lock
 *.iml
 
 .vercel
+
+# --- 云笺集 · 运行时产物 / 数据（§10 排除项） ---
+# SQLite 数据库与 WAL 日志
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# tsx / TypeScript 编译缓存
+**/node-compile-cache/
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# 本地启动日志（开发辅助）
+.dev-*.log
+.dev-*.err
+
+# 备份文件
+*.tar.gz
+
+# 项目数据（AI 助手记忆 / 本地状态，非源码）
+.codebuddy/
+.workbuddy/

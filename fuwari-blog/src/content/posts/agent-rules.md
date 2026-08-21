@@ -2,7 +2,7 @@
 title: 全局 Agent 规则
 published: 2026-08-10
 tags: [规范, 工作流]
-category: 工作流
+category: 项目
 description: 编码用 UTF-8，Shell 用 PowerShell 7，路径用相对路径。先理解项目再动手，不改任务范围外代码。
 draft: false
 ---

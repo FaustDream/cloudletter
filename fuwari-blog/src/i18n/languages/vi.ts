@@ -26,6 +26,17 @@ export const vi: Translation = {
 
 	[Key.themeColor]: "Màu giao diện",
 
+	[Key.backgroundImage]: "Ảnh nền",
+	[Key.uploadImage]: "Tải ảnh lên",
+	[Key.imageUrl]: "URL ảnh",
+	[Key.backgroundImageEnable]: "Bật ảnh nền",
+	[Key.effect]: "Hiệu ứng nền",
+	[Key.effectNone]: "Không",
+	[Key.effectNebula]: "Tinh vân",
+	[Key.effectSakura]: "Hoa anh đào",
+	[Key.effectSnow]: "Tuyết",
+	[Key.effectFirefly]: "Đom đóm",
+
 	[Key.lightMode]: "Sáng",
 	[Key.darkMode]: "Tối",
 	[Key.systemMode]: "Hệ thống",
