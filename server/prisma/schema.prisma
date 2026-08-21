@@ -1,0 +1,132 @@
+// 云笺集 · Prisma Schema（设计稿 §4 / §20.5）
+// 磁盘文件为唯一真相源；本库承载用户/会话/目录结构与设置。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  totpSecret   String? // 已启用2FA时存在
+  totpEnabled  Boolean    @default(false)
+  role         String     @default("author") // admin|editor|author|viewer（SQLite 无 enum，用 String 约束值域）
+  createdAt    DateTime   @default(now())
+  sessions     Session[]
+  audits       AuditLog[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Post {
+  id          String     @id @default(cuid())
+  slug        String     @unique
+  type        String // blog | note
+  title       String
+  rawMarkdown String // 唯一真相源（§5 格式）
+  html        String     @default("") // 构建期生成缓存
+  frontmatter String     @default("{}") // JSON：category/tags/date/summary/cover
+  status      String     @default("draft") // draft | published | trashed
+  folderId    String?
+  folder      Folder?    @relation(fields: [folderId], references: [id])
+  categoryId  String?
+  category    Category?  @relation(fields: [categoryId], references: [id])
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  publishedAt DateTime?
+  tags        PostTag[]
+  revisions   Revision[]
+  media       Media[]
+}
+
+model Folder {
+  // 知识库树（物化路径）
+  id       String   @id @default(cuid())
+  name     String
+  parentId String?
+  parent   Folder?  @relation("FolderTree", fields: [parentId], references: [id])
+  children Folder[] @relation("FolderTree")
+  path     String // 物化路径，如 /a/b/c
+  posts    Post[]
+}
+
+model Category {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  description String?
+  posts       Post[]
+}
+
+model Tag {
+  id    String   @id @default(cuid())
+  name  String   @unique
+  slug  String   @unique
+  posts PostTag[]
+}
+
+model PostTag {
+  postId String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tagId  String
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+}
+
+model Revision {
+  // 版本快照
+  id          String   @id @default(cuid())
+  postId      String
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  version     Int
+  rawMarkdown String
+  createdAt   DateTime @default(now())
+}
+
+model Media {
+  id        String   @id @default(cuid())
+  filename  String
+  path      String
+  mime      String
+  size      Int
+  postId    String?
+  post      Post?    @relation(fields: [postId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model SiteSetting {
+  // 键值对；修改触发 build
+  id        String   @id @default("global")
+  value     String // JSON：外观/布局/内容/阅读/交互 全部设置（§9）
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String // login|post.create|settings.update|build|backup...
+  detail    String // JSON
+  createdAt DateTime @default(now())
+}
+
+model Backup {
+  id        String   @id @default(cuid())
+  filename  String
+  type      String // full|db|media
+  createdAt DateTime @default(now())
+}

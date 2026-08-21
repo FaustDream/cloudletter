@@ -1,0 +1,12 @@
+# 代码审查负责人：相关目录的改动需经对应 Owner 批准方可合并。
+# 当前为单人维护，主要依赖 ci.yml 的 required checks 作自动门禁 + 自审清单。
+# 多人协作时把下方账号改为实际评审人，并在分支保护中开启 "Require review"。
+
+*                 @Lynn
+/server/          @Lynn
+/apps/            @Lynn
+/e2e/             @Lynn
+/docs/            @Lynn
+
+# 第三方模板：对其任何改动需额外谨慎，避免破坏 Astro 构建管线。
+/fuwari-blog/     @Lynn

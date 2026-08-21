@@ -1,0 +1,21 @@
+[Unit]
+Description=Cloudletter Server (Express + Prisma, /api/v2)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/cloudletter/server
+Environment=PORT=3012
+Environment=NODE_ENV=production
+# Fuwari 站点根目录（磁盘同步 + 构建触发，N3）
+Environment=PROJECT_DIR=/srv/fuwari
+Environment="BUILD_CMD=pnpm build"
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=CI=true
+Environment=DATABASE_URL=file:/srv/cloudletter/server/data/cloudletter.db
+ExecStart=/usr/local/bin/node /srv/cloudletter/server/node_modules/.bin/tsx src/index.ts
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

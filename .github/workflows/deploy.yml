@@ -1,0 +1,129 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: |
+            fuwari-blog/pnpm-lock.yaml
+            server/pnpm-lock.yaml
+            apps/write/pnpm-lock.yaml
+            apps/console/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: fuwari-blog
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        working-directory: fuwari-blog
+        run: pnpm build
+
+      # ===== 云笺集新栈：server + apps/write + apps/console（M5） =====
+      - name: Install server dependencies
+        working-directory: server
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm db:generate
+
+      - name: Build write app
+        working-directory: apps/write
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Build console app
+        working-directory: apps/console
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Install SSH key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
+
+      - name: Deploy to server
+        run: |
+          # 打包需要部署的文件（Fuwari 静态站；旧 admin 已下线，见 D4）
+          tar -czf deploy.tar.gz \
+            -C fuwari-blog \
+            --exclude='node_modules' \
+            --exclude='.git' \
+            dist/ astro.config.mjs package.json pnpm-lock.yaml src/config.ts src/content/ src/plugins/
+
+          # 打包云笺集新栈：server 源码(tsx 直跑) + 两前端构建产物
+          tar -czf deploy-v2.tar.gz \
+            -C . \
+            --exclude='server/node_modules' \
+            --exclude='server/data' \
+            server/package.json server/pnpm-lock.yaml server/tsconfig.json server/prisma/ server/src/ \
+            apps/write/dist/ apps/console/dist/
+
+          # 上传到服务器
+          scp -o StrictHostKeyChecking=no deploy.tar.gz root@${{ secrets.SERVER_IP }}:/tmp/
+          scp -o StrictHostKeyChecking=no deploy-v2.tar.gz root@${{ secrets.SERVER_IP }}:/tmp/
+
+          # 远程部署
+          ssh -o StrictHostKeyChecking=no root@${{ secrets.SERVER_IP }} << 'EOF'
+            set -e
+            cd /srv/fuwari
+
+            # 备份当前版本
+            mkdir -p /srv/fuwari/.backups
+            cp -r dist /srv/fuwari/.backups/dist-$(date +%Y%m%d-%H%M%S) 2>/dev/null || true
+
+            # 解压新文件
+            tar -xzf /tmp/deploy.tar.gz -C /srv/fuwari/
+            rm /tmp/deploy.tar.gz
+
+            # 安装依赖
+            cd /srv/fuwari
+            pnpm install --frozen-lockfile
+
+            # 旧 admin 已下线（D4），如服务器上仍存在旧 systemd 单元则停用
+            systemctl stop fuwari-admin 2>/dev/null || true
+            systemctl disable fuwari-admin 2>/dev/null || true
+
+            # 构建站点
+            cd /srv/fuwari
+            pnpm build
+
+            # ===== 云笺集新栈部署（/srv/cloudletter） =====
+            mkdir -p /srv/cloudletter
+            tar -xzf /tmp/deploy-v2.tar.gz -C /srv/cloudletter/
+            rm /tmp/deploy-v2.tar.gz
+
+            # server 依赖 + Prisma Client
+            cd /srv/cloudletter/server
+            pnpm install --frozen-lockfile
+            pnpm db:generate
+
+            # 前端产物就位（nginx /dev/write/ 与 /dev/console/ 指向）
+            rm -rf /srv/cloudletter/write /srv/cloudletter/console
+            mkdir -p /srv/cloudletter/write /srv/cloudletter/console
+            cp -r /srv/cloudletter/apps/write/dist/* /srv/cloudletter/write/
+            cp -r /srv/cloudletter/apps/console/dist/* /srv/cloudletter/console/
+
+            # systemd 重启 Node 服务（M5）
+            systemctl restart cloudletter-server
+
+            # 重载 nginx（M6：/dev/write/ /dev/console/ /api/ 反代）
+            nginx -t && systemctl reload nginx
+
+            echo "部署完成"
+          EOF
