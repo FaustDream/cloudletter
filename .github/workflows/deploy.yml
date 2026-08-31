@@ -72,6 +72,14 @@ jobs:
             pnpm install --frozen-lockfile
             pnpm db:generate
 
+            # 生产环境变量（与 systemd 单元口径一致；本会话非 systemd，必须显式注入，
+            # 否则 backup/drop-fts 会默认落到 data/dev，备份不到真实生产数据）
+            export NODE_ENV=production
+            export DATA_ROOT=/srv/cloudletter/server/data
+            export DATABASE_URL=file:/srv/cloudletter/server/data/cloudletter.db
+            export POSTS_ROOT=/srv/cloudletter/server/data/posts
+            export SETTINGS_ROOT=/srv/cloudletter/server/data/settings
+
             # ===== 数据无价：先备份再动库结构 =====
             # SQLite + 文章真相源 + 上传资源 → <DATA_ROOT>/backups/<时间戳>/
             pnpm backup
@@ -89,8 +97,13 @@ jobs:
             mkdir -p /srv/cloudletter/workbench
             cp -r /srv/cloudletter/apps/workbench/dist/* /srv/cloudletter/workbench/
 
-            # nginx 配置以仓库为准（server/deploy/nginx-cloudletter.conf），覆盖服务器副本后校验
-            cp -f /srv/cloudletter/server/deploy/nginx-cloudletter.conf /etc/nginx/conf.d/cloudletter.conf
+            # systemd 单元以仓库为准（ExecStart 指向 .bin/tsx 等），更新后重启生效
+            cp -f /srv/cloudletter/server/deploy/cloudletter-server.service /etc/systemd/system/cloudletter-server.service
+            systemctl daemon-reload
+
+            # nginx 配置以仓库为准：服务器站点文件为 sites-enabled/arcade；清理旧 conf.d 残留防双 server 块
+            rm -f /etc/nginx/conf.d/cloudletter.conf
+            cp -f /srv/cloudletter/server/deploy/nginx-cloudletter.conf /etc/nginx/sites-enabled/arcade
 
             # systemd 重启 Node 服务
             systemctl restart cloudletter-server
