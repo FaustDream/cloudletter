@@ -48,12 +48,19 @@ jobs:
 
       - name: Deploy to server
         run: |
-          # 打包：server 源码(tsx 直跑) + 工作台构建产物
+          # 打包：server 源码(tsx 直跑) + 工作台构建产物。
+          # 排除清单：node_modules(服务器 install)、data(生产数据)、测试/开发配置(*.test.ts、vitest、eslint、tsconfig)
           tar -czf deploy-v2.tar.gz \
             -C . \
             --exclude='server/node_modules' \
             --exclude='server/data' \
-            server/package.json server/pnpm-lock.yaml server/tsconfig.json server/prisma/ server/src/ server/scripts/ server/deploy/ \
+            --exclude='server/*.test.ts' \
+            --exclude='server/**/*.test.ts' \
+            --exclude='server/vitest.config.ts' \
+            --exclude='server/eslint.config.js' \
+            --exclude='server/tsconfig.json' \
+            --exclude='server/tsconfig.tsbuildinfo' \
+            server/package.json server/pnpm-lock.yaml server/prisma/ server/src/ server/scripts/ server/deploy/ \
             apps/workbench/dist/
 
           # 上传到服务器（主机指纹由 SSH_KNOWN_HOSTS 校验，不再跳过严格检查）
