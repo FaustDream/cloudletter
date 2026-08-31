@@ -24,13 +24,15 @@ async function main(): Promise<void> {
 
   const existing = await prisma.user.findUnique({ where: { email } })
   if (existing) {
-    console.log(`管理员已存在: ${email} (role=${existing.role})`)
+    console.log(`管理员已存在: ${email}`)
     return
   }
   const user = await prisma.user.create({
-    data: { email, passwordHash: hashPassword(password), role: 'admin' },
+    data: { email, passwordHash: hashPassword(password) },
   })
   console.log(`已创建管理员: ${email} (id=${user.id})`)
+  // 口令已以加盐散列写入数据库，.env 中的明文 ADMIN_PASSWORD 使命完成，建议移除
+  console.log('[security] 初始口令已完成使命（仅以加盐散列存于数据库）。建议现在从 .env 中移除 ADMIN_PASSWORD 明文配置。')
 }
 
 main()

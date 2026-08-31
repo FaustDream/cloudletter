@@ -4,6 +4,10 @@ on:
   push:
     branches: [master]
 
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -19,34 +23,19 @@ jobs:
           node-version: 20
           cache: pnpm
           cache-dependency-path: |
-            fuwari-blog/pnpm-lock.yaml
             server/pnpm-lock.yaml
-            apps/write/pnpm-lock.yaml
-            apps/console/pnpm-lock.yaml
+            apps/workbench/pnpm-lock.yaml
 
-      - name: Install dependencies
-        working-directory: fuwari-blog
-        run: pnpm install --frozen-lockfile
-
-      - name: Build
-        working-directory: fuwari-blog
-        run: pnpm build
-
-      # ===== 云笺集新栈：server + apps/write + apps/console（M5） =====
+      # ===== 云笺集单体：server + apps/workbench（写作空间编辑器与站点设置已并入工作台；
+      # 独立的 apps/write、apps/console 已下线，博客前台更早下线） =====
       - name: Install server dependencies
         working-directory: server
         run: |
           pnpm install --frozen-lockfile
           pnpm db:generate
 
-      - name: Build write app
-        working-directory: apps/write
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm build
-
-      - name: Build console app
-        working-directory: apps/console
+      - name: Build workbench app
+        working-directory: apps/workbench
         run: |
           pnpm install --frozen-lockfile
           pnpm build
@@ -59,51 +48,21 @@ jobs:
 
       - name: Deploy to server
         run: |
-          # 打包需要部署的文件（Fuwari 静态站；旧 admin 已下线，见 D4）
-          tar -czf deploy.tar.gz \
-            -C fuwari-blog \
-            --exclude='node_modules' \
-            --exclude='.git' \
-            dist/ astro.config.mjs package.json pnpm-lock.yaml src/config.ts src/content/ src/plugins/
-
-          # 打包云笺集新栈：server 源码(tsx 直跑) + 两前端构建产物
+          # 打包：server 源码(tsx 直跑) + 工作台构建产物
           tar -czf deploy-v2.tar.gz \
             -C . \
             --exclude='server/node_modules' \
             --exclude='server/data' \
-            server/package.json server/pnpm-lock.yaml server/tsconfig.json server/prisma/ server/src/ \
-            apps/write/dist/ apps/console/dist/
+            server/package.json server/pnpm-lock.yaml server/tsconfig.json server/prisma/ server/src/ server/scripts/ server/deploy/ \
+            apps/workbench/dist/
 
-          # 上传到服务器
-          scp -o StrictHostKeyChecking=no deploy.tar.gz root@${{ secrets.SERVER_IP }}:/tmp/
-          scp -o StrictHostKeyChecking=no deploy-v2.tar.gz root@${{ secrets.SERVER_IP }}:/tmp/
+          # 上传到服务器（主机指纹由 SSH_KNOWN_HOSTS 校验，不再跳过严格检查）
+          scp deploy-v2.tar.gz root@${{ secrets.SERVER_IP }}:/tmp/
 
           # 远程部署
-          ssh -o StrictHostKeyChecking=no root@${{ secrets.SERVER_IP }} << 'EOF'
+          ssh root@${{ secrets.SERVER_IP }} << 'EOF'
             set -e
-            cd /srv/fuwari
-
-            # 备份当前版本
-            mkdir -p /srv/fuwari/.backups
-            cp -r dist /srv/fuwari/.backups/dist-$(date +%Y%m%d-%H%M%S) 2>/dev/null || true
-
-            # 解压新文件
-            tar -xzf /tmp/deploy.tar.gz -C /srv/fuwari/
-            rm /tmp/deploy.tar.gz
-
-            # 安装依赖
-            cd /srv/fuwari
-            pnpm install --frozen-lockfile
-
-            # 旧 admin 已下线（D4），如服务器上仍存在旧 systemd 单元则停用
-            systemctl stop fuwari-admin 2>/dev/null || true
-            systemctl disable fuwari-admin 2>/dev/null || true
-
-            # 构建站点
-            cd /srv/fuwari
-            pnpm build
-
-            # ===== 云笺集新栈部署（/srv/cloudletter） =====
+            # ===== 云笺集单体部署（/srv/cloudletter） =====
             mkdir -p /srv/cloudletter
             tar -xzf /tmp/deploy-v2.tar.gz -C /srv/cloudletter/
             rm /tmp/deploy-v2.tar.gz
@@ -113,16 +72,37 @@ jobs:
             pnpm install --frozen-lockfile
             pnpm db:generate
 
-            # 前端产物就位（nginx /dev/write/ 与 /dev/console/ 指向）
-            rm -rf /srv/cloudletter/write /srv/cloudletter/console
-            mkdir -p /srv/cloudletter/write /srv/cloudletter/console
-            cp -r /srv/cloudletter/apps/write/dist/* /srv/cloudletter/write/
-            cp -r /srv/cloudletter/apps/console/dist/* /srv/cloudletter/console/
+            # ===== 数据无价：先备份再动库结构 =====
+            # SQLite + 文章真相源 + 上传资源 → <DATA_ROOT>/backups/<时间戳>/
+            pnpm backup
 
-            # systemd 重启 Node 服务（M5）
+            # db push 前必须先删 FTS 表（post_search 由运行时代码创建，不在 schema 内；
+            # 不删则 push 因「表非空要求 drop」必然失败）。服务重启后 initSearchIndex 自动重建并重索引。
+            pnpm exec tsx scripts/drop-fts-tables.ts
+
+            # 按 schema.prisma 同步库结构
+            # （无 migrations 目录，用 db push；升级到 migrate deploy 前不要手工改库）
+            pnpm exec prisma db push --skip-generate
+
+            # 前端产物就位（nginx 指向 /srv/cloudletter/workbench/）
+            rm -rf /srv/cloudletter/workbench
+            mkdir -p /srv/cloudletter/workbench
+            cp -r /srv/cloudletter/apps/workbench/dist/* /srv/cloudletter/workbench/
+
+            # nginx 配置以仓库为准（server/deploy/nginx-cloudletter.conf），覆盖服务器副本后校验
+            cp -f /srv/cloudletter/server/deploy/nginx-cloudletter.conf /etc/nginx/conf.d/cloudletter.conf
+
+            # systemd 重启 Node 服务
             systemctl restart cloudletter-server
 
-            # 重载 nginx（M6：/dev/write/ /dev/console/ /api/ 反代）
+            # 探活：服务起来才算部署成功
+            for i in $(seq 1 15); do
+              if curl -fsS http://localhost:3012/healthz > /dev/null; then break; fi
+              sleep 1
+              if [ "$i" = 15 ]; then echo "healthz 探活失败"; journalctl -u cloudletter-server -n 50 --no-pager; exit 1; fi
+            done
+
+            # 重载 nginx（/ 反代静态产物、/api/ 反代 Node 服务）
             nginx -t && systemctl reload nginx
 
             echo "部署完成"

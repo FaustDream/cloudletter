@@ -12,16 +12,20 @@
 import type { NextFunction, Request, Response } from 'express'
 
 export interface FieldSpec {
-  type?: 'string' | 'number' | 'boolean' | 'object'
+  type?: 'string' | 'number' | 'boolean' | 'object' | 'array'
   required?: boolean
-  min?: number // string: min length; number: min value
-  max?: number // string: max length; number: max value
+  min?: number // string: min length; number: min value; array: min items
+  max?: number // string: max length; number: max value; array: max items
   optional?: boolean
   /** 允许的枚举值（string 时） */
   oneOf?: string[]
+  /** 保留空字符串（'' 视为「清空」语义；默认空串按缺失丢弃） */
+  keepEmpty?: boolean
   /** 对象分组：仅校验到已知键，忽略未知键（用于 settings 等） */
   allowUnknownKeys?: boolean
   children?: Record<string, FieldSpec>
+  /** 数组成员规格（array 时，逐项校验；不填则只要求是数组） */
+  item?: FieldSpec
 }
 
 type FieldValue = string | number | boolean | Record<string, unknown> | undefined
@@ -30,6 +34,12 @@ export const v = {
   str: (): FieldSpec => ({ type: 'string' }),
   num: (): FieldSpec => ({ type: 'number' }),
   bool: (): FieldSpec => ({ type: 'boolean' }),
+  arr: (item?: FieldSpec, min?: number, max?: number): FieldSpec => ({
+    type: 'array',
+    item: item ?? { type: 'string' },
+    min,
+    max,
+  }),
   obj: (children?: Record<string, FieldSpec>, allowUnknownKeys = false): FieldSpec => ({
     type: 'object',
     children,
@@ -57,18 +67,28 @@ function checkField(key: string, raw: unknown, spec: FieldSpec): string | null {
   if (spec.type === 'boolean' && typeof raw !== 'boolean') return `字段类型错误: ${key} 应为布尔`
   if (spec.type === 'object' && (typeof raw !== 'object' || raw === null || Array.isArray(raw)))
     return `字段类型错误: ${key} 应为对象`
+  if (spec.type === 'array' && !Array.isArray(raw)) return `字段类型错误: ${key} 应为数组`
   // 长度/范围
   if (spec.min !== undefined) {
     if (typeof raw === 'string' && raw.length < spec.min) return `字段 ${key} 长度不足 ${spec.min}`
     if (typeof raw === 'number' && raw < spec.min) return `字段 ${key} 不能小于 ${spec.min}`
+    if (Array.isArray(raw) && raw.length < spec.min) return `字段 ${key} 至少 ${spec.min} 项`
   }
   if (spec.max !== undefined) {
     if (typeof raw === 'string' && raw.length > spec.max) return `字段 ${key} 超长（上限 ${spec.max}）`
     if (typeof raw === 'number' && raw > spec.max) return `字段 ${key} 不能大于 ${spec.max}`
+    if (Array.isArray(raw) && raw.length > spec.max) return `字段 ${key} 最多 ${spec.max} 项`
   }
   // 枚举
   if (spec.oneOf && typeof raw === 'string' && !spec.oneOf.includes(raw))
     return `字段 ${key} 取值非法（允许: ${spec.oneOf.join(' / ')}）`
+  // 数组成员逐项校验
+  if (spec.type === 'array' && spec.item && Array.isArray(raw)) {
+    for (let i = 0; i < raw.length; i++) {
+      const msg = checkField(`${key}[${i}]`, (raw as unknown[])[i], spec.item)
+      if (msg) return msg
+    }
+  }
   // 嵌套对象
   if (spec.type === 'object' && spec.children && typeof raw === 'object' && raw !== null) {
     for (const [ck, cspec] of Object.entries(spec.children)) {
@@ -102,7 +122,7 @@ export function validateBody<T = Record<string, unknown>>(
       return null
     }
     const val = raw[key]
-    if (val !== undefined && val !== null && val !== '') out[key] = val
+    if (val !== undefined && val !== null && (val !== '' || spec.keepEmpty)) out[key] = val
   }
   // 非空对象仅保留声明键
   req.body = out

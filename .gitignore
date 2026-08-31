@@ -51,6 +51,9 @@ tsconfig.tsbuildinfo
 # 备份文件
 *.tar.gz
 
+# Playwright 失败截图/痕迹（保留被跟踪的 .last-run.json）
+e2e/test-results/*/
+
 # 项目数据（AI 助手记忆 / 本地状态，非源码）
 .codebuddy/
 .workbuddy/

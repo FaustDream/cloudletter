@@ -1,0 +1,345 @@
+/* ============================================================
+ * 云笺集 · 统一设计令牌（Shared Theme Tokens）
+ * 三个前端项目共用：博客前台(Astro) / 写作空间(React) / 控制台(React)
+ * 修改此文件即全局生效，确保风格统一
+ * ============================================================ */
+
+:root {
+  /* ---- 主题色（hue 驱动，云笺冷蓝 220，原型基准） ---- */
+  --hue: 220;
+
+  /* ---- 圆角 ---- */
+  --radius-large: 1rem;
+  --radius-medium: 0.75rem;
+  --radius-small: 0.5rem;
+
+  /* ---- 主色 ---- */
+  --primary: oklch(0.70 0.14 var(--hue));
+
+  /* ---- 背景 ---- */
+  --page-bg: oklch(0.95 0.01 var(--hue));
+  --card-bg: #ffffff;
+  --float-panel-bg: #ffffff;
+
+  /* ---- 文字 ---- */
+  --deep-text: oklch(0.25 0.02 var(--hue));
+  --title-active: oklch(0.6 0.1 var(--hue));
+
+  /* ---- 按钮 ---- */
+  --btn-content: oklch(0.55 0.12 var(--hue));
+
+  --btn-regular-bg: oklch(0.95 0.025 var(--hue));
+  --btn-regular-bg-hover: oklch(0.9 0.05 var(--hue));
+  --btn-regular-bg-active: oklch(0.85 0.08 var(--hue));
+
+  --btn-plain-bg-hover: oklch(0.95 0.025 var(--hue));
+  --btn-plain-bg-active: oklch(0.98 0.01 var(--hue));
+
+  --btn-card-bg-hover: oklch(0.98 0.005 var(--hue));
+  --btn-card-bg-active: oklch(0.9 0.03 var(--hue));
+
+  /* ---- 分割线 ---- */
+  --line-divider: rgba(0, 0, 0, 0.08);
+  --line-color: rgba(0, 0, 0, 0.1);
+  --meta-divider: rgba(0, 0, 0, 0.2);
+
+  /* ---- 链接 ---- */
+  --link-underline: oklch(0.93 0.04 var(--hue));
+  --link-hover: oklch(0.95 0.025 var(--hue));
+  --link-active: oklch(0.90 0.05 var(--hue));
+
+  /* ---- 代码块 ---- */
+  --selection-bg: oklch(0.90 0.05 var(--hue));
+  --codeblock-selection: oklch(0.40 0.08 var(--hue));
+  --codeblock-bg: oklch(0.17 0.015 var(--hue));
+  --codeblock-topbar-bg: oklch(0.3 0.02 var(--hue));
+  --inline-code-bg: var(--btn-regular-bg);
+  --inline-code-color: var(--btn-content);
+
+  /* ---- 许可证块 ---- */
+  --license-block-bg: rgba(0, 0, 0, 0.03);
+
+  /* ---- 滚动条 ---- */
+  --scrollbar-bg: rgba(0, 0, 0, 0.4);
+  --scrollbar-bg-hover: rgba(0, 0, 0, 0.5);
+  --scrollbar-bg-active: rgba(0, 0, 0, 0.6);
+
+  /* ---- TOC ---- */
+  --toc-badge-bg: oklch(0.89 0.050 var(--hue));
+  --toc-btn-hover: oklch(0.926 0.015 var(--hue));
+  --toc-btn-active: oklch(0.90 0.015 var(--hue));
+  --toc-item-active: oklch(0.70 0.13 var(--hue));
+
+  /* ---- 提示框颜色 ---- */
+  --admonitions-color-tip: oklch(0.7 0.14 180);
+  --admonitions-color-note: oklch(0.7 0.14 250);
+  --admonitions-color-important: oklch(0.7 0.14 310);
+  --admonitions-color-warning: oklch(0.7 0.14 60);
+  --admonitions-color-caution: oklch(0.6 0.2 25);
+
+  /* ---- 状态色（写作空间/控制台用） ---- */
+  --status-ok: oklch(0.7 0.15 150);
+  --status-warn: oklch(0.75 0.13 70);
+  --status-bad: oklch(0.65 0.18 25);
+  --status-info: oklch(0.7 0.13 230);
+
+  /* ---- 字体 ---- */
+  --font-sans: 'Roboto', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-serif: 'Playfair Display', 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+
+  /* ---- 页面宽度 ---- */
+  --page-width: 75rem;
+
+  /* ---- 动画 ---- */
+  --content-delay: 150ms;
+}
+
+/* ---- 深色模式 ---- */
+:root.dark {
+  --primary: oklch(0.75 0.14 var(--hue));
+
+  --page-bg: oklch(0.16 0.014 var(--hue));
+  --card-bg: oklch(0.23 0.015 var(--hue));
+  --float-panel-bg: oklch(0.19 0.015 var(--hue));
+
+  --btn-content: oklch(0.75 0.1 var(--hue));
+
+  --btn-regular-bg: oklch(0.33 0.035 var(--hue));
+  --btn-regular-bg-hover: oklch(0.38 0.04 var(--hue));
+  --btn-regular-bg-active: oklch(0.43 0.045 var(--hue));
+
+  --btn-plain-bg-hover: oklch(0.30 0.035 var(--hue));
+  --btn-plain-bg-active: oklch(0.27 0.025 var(--hue));
+
+  --btn-card-bg-hover: oklch(0.3 0.03 var(--hue));
+  --btn-card-bg-active: oklch(0.35 0.035 var(--hue));
+
+  --line-divider: rgba(255, 255, 255, 0.08);
+  --line-color: rgba(255, 255, 255, 0.1);
+  --meta-divider: rgba(255, 255, 255, 0.2);
+
+  --link-underline: oklch(0.40 0.08 var(--hue));
+  --link-hover: oklch(0.40 0.08 var(--hue));
+  --link-active: oklch(0.35 0.07 var(--hue));
+
+  --selection-bg: oklch(0.40 0.08 var(--hue));
+  --codeblock-topbar-bg: oklch(0.12 0.015 var(--hue));
+  --license-block-bg: var(--codeblock-bg);
+
+  --scrollbar-bg: rgba(255, 255, 255, 0.4);
+  --scrollbar-bg-hover: rgba(255, 255, 255, 0.5);
+  --scrollbar-bg-active: rgba(255, 255, 255, 0.6);
+
+  --toc-badge-bg: var(--btn-regular-bg);
+  --toc-btn-hover: oklch(0.22 0.02 var(--hue));
+  --toc-btn-active: oklch(0.25 0.02 var(--hue));
+  --toc-item-active: oklch(0.35 0.07 var(--hue));
+
+  --admonitions-color-tip: oklch(0.75 0.14 180);
+  --admonitions-color-note: oklch(0.75 0.14 250);
+  --admonitions-color-important: oklch(0.75 0.14 310);
+  --admonitions-color-warning: oklch(0.75 0.14 60);
+  --admonitions-color-caution: oklch(0.65 0.2 25);
+}
+
+/* ============================================================
+ * 通用组件样式（三个项目共用）
+ * ============================================================ */
+
+/* 卡片基础 */
+.cl-card {
+  background: var(--card-bg);
+  border-radius: var(--radius-large);
+  overflow: hidden;
+  transition: background-color 0.2s ease;
+}
+
+/* 导航栏（统一顶栏样式） */
+.cl-navbar {
+  max-width: var(--page-width);
+  height: 4.5rem;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  background: var(--card-bg);
+  border-radius: 0 0 var(--radius-large) var(--radius-large);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+/* 品牌标识 */
+.cl-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--primary);
+  text-decoration: none;
+  letter-spacing: 0.02em;
+}
+
+/* 普通按钮 */
+.cl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-small);
+  border: none;
+  background: var(--btn-regular-bg);
+  color: var(--btn-content);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  text-decoration: none;
+}
+.cl-btn:hover { background: var(--btn-regular-bg-hover); }
+.cl-btn:active { background: var(--btn-regular-bg-active); }
+.cl-btn.primary {
+  background: var(--primary);
+  color: #fff;
+}
+.cl-btn.primary:hover { filter: brightness(1.1); }
+
+/* 朴素按钮（文字按钮） */
+.cl-btn-plain {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-small);
+  background: transparent;
+  color: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+  border: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  text-decoration: none;
+}
+.cl-btn-plain:hover {
+  background: var(--btn-plain-bg-hover);
+  color: var(--primary);
+}
+.cl-btn-plain:active { background: var(--btn-plain-bg-active); }
+
+/* 用户头像区域（右上角） */
+.cl-user-area {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cl-avatar {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: var(--btn-regular-bg);
+  color: var(--btn-content);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color 0.15s ease;
+}
+.cl-avatar:hover { border-color: var(--primary); }
+
+/* 用户下拉菜单 */
+.cl-user-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  min-width: 180px;
+  background: var(--float-panel-bg);
+  border-radius: var(--radius-medium);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 0.5rem;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.cl-user-menu .menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-small);
+  font-size: 0.875rem;
+  cursor: pointer;
+  color: inherit;
+  text-decoration: none;
+  transition: background-color 0.15s ease;
+}
+.cl-user-menu .menu-item:hover {
+  background: var(--btn-plain-bg-hover);
+  color: var(--primary);
+}
+.cl-user-menu .menu-divider {
+  height: 1px;
+  background: var(--line-divider);
+  margin: 0.25rem 0;
+}
+
+/* 快捷入口卡片 */
+.cl-quick-links {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.cl-quick-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius-small);
+  background: var(--btn-regular-bg);
+  color: var(--btn-content);
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+.cl-quick-link:hover {
+  background: var(--btn-regular-bg-hover);
+  color: var(--primary);
+  transform: translateY(-1px);
+}
+.cl-quick-link svg { width: 1rem; height: 1rem; }
+
+/* 输入框 */
+.cl-input {
+  background: var(--btn-regular-bg);
+  border: 1px solid var(--line-divider);
+  border-radius: var(--radius-small);
+  color: inherit;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.15s ease;
+  font-family: inherit;
+}
+.cl-input:focus { border-color: var(--primary); }
+.cl-input::placeholder { color: var(--meta-divider); }
+
+/* 标签 */
+.cl-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: var(--btn-regular-bg);
+  color: var(--btn-content);
+}
+.cl-badge.ok { background: rgba(61, 220, 151, 0.12); color: var(--status-ok); }
+.cl-badge.warn { background: rgba(255, 180, 84, 0.12); color: var(--status-warn); }
+.cl-badge.bad { background: rgba(255, 93, 108, 0.12); color: var(--status-bad); }

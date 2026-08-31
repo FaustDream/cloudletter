@@ -1,5 +1,19 @@
 # 云笺集 · 系统架构设计方案
 
+> ## ⚠️ 架构现状更新（2026-08-29 · 单体收敛）
+>
+> 本文档撰写于 2026-08-21，其下文描述的「双前端 + 博客前台」结构**已演进为单体架构**，以下为现行事实：
+>
+> - **前端仅存 `apps/workbench`（个人工作台，:3015）**。原 `apps/write`（写作空间）与 `apps/console`（控制台）已下线：
+>   - 写作空间的编辑器（CodeMirror 源码模式 + 分屏预览 + 版本历史）并入工作台「文章」模块，路由 `/posts/new`、`/posts/:id/edit`；
+>   - 控制台的站点外观设置并入工作台「设置 · 站点设置」分组；分类/标签管理在「组织」页；
+>   - 两者的独立登录页随之删除，全站只有工作台一个登录入口。
+> - **`fuwari-blog` 博客前台与旧 `admin/` 均已下线**，`/api/v2/*` 的消费方只有工作台（检索等接口因此已收归登录后使用）。
+> - **生产部署形态**：nginx 把站点根路径指向 `/srv/cloudletter/workbench`（SPA，`server/deploy/nginx-cloudletter.conf` 已版本化），`/api/*` 反代 `cloudletter-server`（systemd，端口 3012）。
+> - **新增能力**：`POST /api/v2/uploads`（图片直传 + 静态托管）、`/api/v2/battle/*`（讨伐系统：任务映射怪物）、`pnpm backup`（数据备份脚本）。
+>
+> 下文的分层模型、依赖规则（§3 前后端仅经 `/api/v2` 通信、禁止跨包 import 等约束）仍然有效，只需把「apps/write 与 apps/console」理解为「apps/workbench 的各页面模块」。涉及双前端路径（`/dev/write/`、`/dev/console/`）与博客构建队列的章节仅作历史参考。
+
 > 文档性质：架构基线设计（Architecture Baseline）
 > 适用对象：云笺集（Cloudletter）全仓库
 > 制定依据：

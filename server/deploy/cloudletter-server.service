@@ -7,15 +7,27 @@ Type=simple
 WorkingDirectory=/srv/cloudletter/server
 Environment=PORT=3012
 Environment=NODE_ENV=production
-# Fuwari 站点根目录（磁盘同步 + 构建触发，N3）
-Environment=PROJECT_DIR=/srv/fuwari
-Environment="BUILD_CMD=pnpm build"
+# 时区显式固定为东八区：业务按本地时区记账日/打卡日（util-date.ts），不依赖服务器系统时区
+Environment=TZ=Asia/Shanghai
+# 数据根目录：SQLite 库(data/cloudletter.db)、revisions/、uploads/、backups/ 均在其下
+Environment=DATA_ROOT=/srv/cloudletter/server/data
+# 文章真相源与站点设置（博客前台已下线）：独立于数据根，避免与上传/备份混放
+Environment=POSTS_ROOT=/srv/cloudletter/server/data/posts
+Environment=SETTINGS_ROOT=/srv/cloudletter/server/data/settings
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
-Environment=CI=true
 Environment=DATABASE_URL=file:/srv/cloudletter/server/data/cloudletter.db
+# SMTP 发信凭据：勿写死在版本化单元里。用 EnvironmentFile 注入（文件权限 0600）：
+#   - 服务器上建 /srv/cloudletter/server/.env.production（chmod 600），填入 SMTP_HOST/PORT/USER/PASS/FROM/SERVERNAME、CORS_ORIGINS 等；
+#   - 生产安全由服务端强制：仅 465(SMTPS) 或 587+SMTP_REQUIRE_TLS=true 允许发信；收件人白名单默认 ADMIN_EMAIL。
+#     （.env.production 中的 ADMIN_EMAIL 同时作为收件人白名单；如需发信给其他邮箱，加 SMTP_ALLOW_TO=,b@example.com）
+#   - 注意：EnvironmentFile 优先级更高，同名变量会覆盖上方 Environment；.env.production 中请勿重复
+#     定义 PORT / NODE_ENV / TZ / DATA_ROOT / DATABASE_URL / POSTS_ROOT / SETTINGS_ROOT。
+EnvironmentFile=-/srv/cloudletter/server/.env.production
 ExecStart=/usr/local/bin/node /srv/cloudletter/server/node_modules/.bin/tsx src/index.ts
 Restart=always
 RestartSec=3
+# SIGTERM 优雅退出最多等 10s（index.ts 内兜底强退），超时由 systemd 强杀
+TimeoutStopSec=20
 
 [Install]
 WantedBy=multi-user.target

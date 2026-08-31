@@ -1,5 +1,5 @@
-// 云笺集 · Prisma Schema（设计稿 §4 / §20.5）
-// 磁盘文件为唯一真相源；本库承载用户/会话/目录结构与设置。
+// Cloudletter V2 · Prisma Schema（内容真相源 = Markdown 文件；SQLite 只存元数据/历史/登录）
+// 已收敛：删除 Folder/Media/AuditLog/BuildJob，去掉 User.role、Post.type/folderId、trashed 状态。
 
 generator client {
   provider = "prisma-client-js"
@@ -11,15 +11,34 @@ datasource db {
 }
 
 model User {
-  id           String     @id @default(cuid())
-  email        String     @unique
-  passwordHash String
-  totpSecret   String? // 已启用2FA时存在
-  totpEnabled  Boolean    @default(false)
-  role         String     @default("author") // admin|editor|author|viewer（SQLite 无 enum，用 String 约束值域）
-  createdAt    DateTime   @default(now())
-  sessions     Session[]
-  audits       AuditLog[]
+  id             String    @id @default(cuid())
+  email          String    @unique
+  passwordHash   String
+  nickname       String    @default("")
+  lastLoginAt    DateTime?
+  lastLoginIp    String    @default("")
+  lastLoginAgent String    @default("")
+  // 登录失败防护：连续失败计数 + 锁定截止时间（服务端强制）
+  loginFailCount Int       @default(0)
+  loginLockedUntil DateTime?
+  // 两步验证（TOTP）：secret 为空=未设置；enabled 才会在登录时要求验证码
+  totpSecret     String    @default("")
+  totpEnabled    Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  sessions       Session[]
+}
+
+// 邮箱验证码 / 重置链接令牌（仅存哈希，链接中的明文密文不落库；过期自动失效）
+model MailCode {
+  id        String    @id @default(cuid())
+  email     String
+  purpose   String // login | reset
+  tokenHash String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([email, purpose])
 }
 
 model Session {
@@ -28,39 +47,36 @@ model Session {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
+  // “记住我”长会话标记：续期时保持 30 天长 TTL
+  remembered Boolean  @default(false)
   createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
+// 文章：SQLite 仅作元数据索引；正文真相源在 Markdown 文件（apps/blog/src/content/posts）。
 model Post {
-  id          String     @id @default(cuid())
-  slug        String     @unique
-  type        String // blog | note
-  title       String
-  rawMarkdown String // 唯一真相源（§5 格式）
-  html        String     @default("") // 构建期生成缓存
-  frontmatter String     @default("{}") // JSON：category/tags/date/summary/cover
-  status      String     @default("draft") // draft | published | trashed
-  folderId    String?
-  folder      Folder?    @relation(fields: [folderId], references: [id])
-  categoryId  String?
-  category    Category?  @relation(fields: [categoryId], references: [id])
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  publishedAt DateTime?
-  tags        PostTag[]
-  revisions   Revision[]
-  media       Media[]
-}
+  id           String     @id @default(cuid())
+  slug         String     @unique
+  title        String
+  summary      String     @default("")
+  rawMarkdown  String // 工作副本（镜像），供编辑/搜索；文件为权威
+  frontmatter  String     @default("{}")
+  status       String     @default("draft") // draft | published
+  categoryId   String?
+  category     Category?  @relation(fields: [categoryId], references: [id])
+  tags         PostTag[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  publishedAt  DateTime?
+  // 正文字符数（列表/统计用，避免全量拉取 rawMarkdown 计算；写入时维护）
+  charCount    Int        @default(0)
+  revisions    Revision[]
 
-model Folder {
-  // 知识库树（物化路径）
-  id       String   @id @default(cuid())
-  name     String
-  parentId String?
-  parent   Folder?  @relation("FolderTree", fields: [parentId], references: [id])
-  children Folder[] @relation("FolderTree")
-  path     String // 物化路径，如 /a/b/c
-  posts    Post[]
+  @@index([status])
+  @@index([publishedAt])
+  @@index([updatedAt])
+  @@index([categoryId])
 }
 
 model Category {
@@ -72,61 +88,106 @@ model Category {
 }
 
 model Tag {
-  id    String   @id @default(cuid())
-  name  String   @unique
-  slug  String   @unique
+  id    String    @id @default(cuid())
+  name  String    @unique
+  slug  String    @unique
   posts PostTag[]
 }
 
 model PostTag {
   postId String
-  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
   tagId  String
-  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag    Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([postId, tagId])
+  @@index([tagId])
 }
 
+// 版本历史：DB 存元数据（version/时间/摘要），正文快照存文件 projects/.revisions/<slug>/<version>.md
 model Revision {
-  // 版本快照
-  id          String   @id @default(cuid())
-  postId      String
-  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  version     Int
-  rawMarkdown String
-  createdAt   DateTime @default(now())
-}
-
-model Media {
   id        String   @id @default(cuid())
-  filename  String
-  path      String
-  mime      String
-  size      Int
-  postId    String?
-  post      Post?    @relation(fields: [postId], references: [id])
+  version   Int
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  summary   String   @default("")
   createdAt DateTime @default(now())
+
+  @@unique([postId, version])
+  @@index([postId])
 }
 
 model SiteSetting {
-  // 键值对；修改触发 build
-  id        String   @id @default("global")
-  value     String // JSON：外观/布局/内容/阅读/交互 全部设置（§9）
+  key       String   @id
+  value     String
   updatedAt DateTime @updatedAt
 }
 
-model AuditLog {
+// ============ 个人工作台（本地数据，单人管理员即可，数据随服务持久化） ============
+
+// 今日计划（待办）
+model PlanItem {
   id        String   @id @default(cuid())
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id])
-  action    String // login|post.create|settings.update|build|backup...
-  detail    String // JSON
+  text      String
+  level     String   @default("P1") // P0 | P1 | P2
+  note      String   @default("")
+  done      Boolean  @default(false)
+  dueDate   String   @default("") // YYYY-MM-DD，空 = 无截止
+  doneAt    String   @default("") // 完成时间（ISO），空 = 未完成
+  order     Int      @default(0)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([dueDate])
+  @@index([done])
 }
 
-model Backup {
+// 习惯打卡（log: {"YYYY-MM-DD": true}，逐日记录）
+model CheckinItem {
   id        String   @id @default(cuid())
-  filename  String
-  type      String // full|db|media
+  name      String
+  emoji     String   @default("✨")
+  log       String   @default("{}")
+  streak    Int      @default(0)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// 记账本（流水）
+model LedgerEntry {
+  id        String   @id @default(cuid())
+  kind      String   // income | expense
+  cat       String   @default("其他")
+  amount    Float
+  note      String   @default("")
+  date      String   // YYYY-MM-DD
+  createdAt DateTime @default(now())
+
+  @@index([date])
+  @@index([kind])
+}
+
+// 长期目标（可关联今日计划/习惯，形成目标 → 拆解 → 每日行动）
+model GoalItem {
+  id               String   @id @default(cuid())
+  name             String
+  emoji            String   @default("🎯")
+  current          Float    @default(0)
+  target           Float
+  unit             String   @default("")
+  relatedPlanIds   String   @default("[]") // JSON 数组：关联的今日计划 id 列表
+  relatedCheckinIds String  @default("[]") // JSON 数组：关联的习惯 id 列表
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+// 灵感笔记
+model NoteItem {
+  id        String   @id @default(cuid())
+  title     String
+  body      String   @default("")
+  mood      String   @default("灵感")
+  date      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

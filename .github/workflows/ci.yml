@@ -39,12 +39,12 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-  # ---------- 前端：apps/write ----------
-  write:
+  # ---------- 前端：apps/workbench（写作空间编辑器与站点设置已并入工作台） ----------
+  workbench:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: apps/write
+        working-directory: apps/workbench
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -54,35 +54,7 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
-          cache-dependency-path: apps/write/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
-      - name: Type check
-        run: pnpm typecheck
-      - name: Unit tests
-        run: pnpm test
-      - name: Install lint tooling
-        run: pnpm add -D eslint@9 @eslint/js@9 typescript-eslint@8 globals eslint-plugin-react eslint-plugin-react-hooks prettier
-      - name: Lint
-        run: pnpm lint
-      - name: Build
-        run: pnpm build
-
-  # ---------- 前端：apps/console ----------
-  console:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/console
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-          cache-dependency-path: apps/console/pnpm-lock.yaml
+          cache-dependency-path: apps/workbench/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - name: Type check
         run: pnpm typecheck

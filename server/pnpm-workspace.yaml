@@ -1,0 +1,7 @@
+packages:
+  - '.'
+dangerouslyAllowAllBuilds: true
+onlyBuiltDependencies:
+  - esbuild
+  - prisma
+  - '@prisma/client'
