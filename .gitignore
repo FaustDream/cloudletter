@@ -1,5 +1,6 @@
-# build output
+# build output（apps/workbench/dist 构建产物随发版提交，便于追溯每次版本产物；其余 dist 目录仍忽略
 dist/
+!apps/workbench/dist/
 
 # generated types
 .astro/
