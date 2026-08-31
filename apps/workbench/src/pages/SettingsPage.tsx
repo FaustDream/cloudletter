@@ -25,6 +25,7 @@ import { timelineLayout, setTimelineLayout, type TimelineLayout } from '../lib/l
 import { noteStyle as readNoteStyle, setNoteStyle as persistNoteStyle, type NoteStyle } from '../lib/layout'
 import { todayYMD } from '../lib/date'
 import { Dropdown } from '../components/framework/Dropdown'
+import { DateCal } from '../components/framework/DateCal'
 
 type GroupId = 'account' | 'prefs' | 'site' | 'notify' | 'privacy' | 'shortcuts' | 'data' | 'integrations' | 'about'
 
@@ -110,6 +111,8 @@ export function SettingsPage() {
   // 日期独立主题：{ ymd: themeId }，未覆盖的日期跟随全局胶囊主题
   const [dayOverrides, setDayOverrides] = useState<Record<string, string>>(() => listDayThemes())
   const [dayPicker, setDayPicker] = useState(todayYMD())
+  // 日期独立主题：月历浮层开合（替代原生 type=date，规避浮窗位置怪癖）
+  const [dayCalOpen, setDayCalOpen] = useState(false)
   // 组件布局风格（骨架不变 · 样式抽离）：各区域独立一组变体
   const [layoutPrefs, setLayoutPrefs] = useState<Record<string, string>>(() => {
     const o: Record<string, string> = {}
@@ -418,7 +421,19 @@ export function SettingsPage() {
                 <Row k="日期独立主题" desc="时间线上每个日期都能单独换主题 · 未设置的日期跟随全局胶囊主题">
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
                     <div className="set-day-pick">
-                      <input type="date" value={dayPicker} onChange={(e) => setDayPicker(e.target.value || todayYMD())} style={{ maxWidth: 172 }} />
+                      <div className="set-day-trigger">
+                        <button className="btn slim" type="button" onClick={() => setDayCalOpen((v) => !v)}>
+                          📅 {dayPicker}
+                        </button>
+                        {dayCalOpen && (
+                          <div className="set-day-cal">
+                            <DateCal
+                              value={dayPicker}
+                              onChange={(ymd) => { setDayPicker(ymd); setDayCalOpen(false) }}
+                            />
+                          </div>
+                        )}
+                      </div>
                       <span className="dim" style={{ fontSize: 12 }}>
                         当前：{themeLabel(dayPickerEff)}{dayOverrides[dayPicker] ? '（独立设置）' : '（跟随全局）'}
                       </span>

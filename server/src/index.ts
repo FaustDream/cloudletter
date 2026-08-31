@@ -9,6 +9,7 @@ import { prisma } from './prisma.js'
 import { uploadsDir } from './config.js'
 import { smtpStatus } from './mailer.js'
 import { initSearchIndex, reindexAllSearch } from './search-index.js'
+import { logInfo, logWarn, logError } from './logger.js'
 
 // 安全提示：ADMIN_PASSWORD 仅 pnpm seed 首次初始化使用，运行期 API 一律不读取明文口令。
 // 若该配置仍留在 .env，说明初始管理员已创建后可将其移除，避免明文口令长期驻留。
@@ -45,13 +46,13 @@ app.use((_req, res, next) => {
   next()
 })
 
-// 极简访问日志（method/path/status/耗时/字节），console 结构化单行，供 journald 采集
+// 极简访问日志（method/path/status/耗时/字节），console 结构化单行 + 落盘日志系统，供 journald/日志目录双端采集
 app.use((req, res, next) => {
   const t0 = Date.now()
   res.on('finish', () => {
     const ms = Date.now() - t0
     const ip = req.ip ?? req.socket.remoteAddress ?? '-'
-    console.log(JSON.stringify({ t: 'req', ts: new Date().toISOString(), m: req.method, p: req.originalUrl, s: res.statusCode, ms, ip }))
+    logInfo('http', `${req.method} ${req.originalUrl} -> ${res.statusCode}`, { m: req.method, p: req.originalUrl, s: res.statusCode, ms, ip })
   })
   next()
 })
@@ -153,49 +154,47 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
     res.status(422).json({ error: { code: 'VALIDATION', message: '关联资源不存在或约束冲突', details: null } })
     return
   }
-  console.error('[unhandled]', err)
+  logError('http', err, { p: `${_req.method} ${_req.originalUrl}`, code })
   if (res.headersSent) return
   res.status(500).json({ error: { code: 'INTERNAL', message: '服务器内部错误', details: null } })
 })
 
 const server = app.listen(PORT, () => {
-  console.log(`[cloudletter-server] listening on :${PORT}`)
-  console.log(`  healthz:  http://localhost:${PORT}/healthz`)
-  console.log(`  api v2:   http://localhost:${PORT}/api/v2/*`)
+  logInfo('boot', `listening on :${PORT}（healthz /api/v2 已就绪）`, { port: PORT })
   // 全文索引就绪：建表 + 索引空时自动全量重建（首次升级/灾难恢复兜底）
   initSearchIndex()
     .then(async (ok) => {
       if (!ok) {
-        console.warn('[search] FTS5 不可用，检索将降级为 LIKE')
+        logWarn('search', 'FTS5 不可用，检索将降级为 LIKE')
         return
       }
       const cnt = await prisma.$queryRawUnsafe(`SELECT count(*) AS n FROM post_search`) as Array<{ n: number | bigint }>
       const postCnt = await prisma.post.count()
       if (Number(cnt[0]?.n ?? 0) === 0 && postCnt > 0) {
         const n = await reindexAllSearch()
-        console.log(`[search] 索引为空，已自动重建 ${n} 篇`)
+        logInfo('search', `索引为空，已自动重建 ${n} 篇`)
       } else {
-        console.log('[search] 全文索引就绪（FTS5 + 中文分词）')
+        logInfo('search', '全文索引就绪（FTS5 + 中文分词）')
       }
     })
     .catch((e) => {
       // 启动期索引初始化失败不应导致进程崩溃：记日志降级，后续可用 reindex 维护
-      console.error('[search] 索引初始化失败，检索将降级:', e instanceof Error ? e.message : e)
+      logError('search', e, { hint: '索引初始化失败，检索将降级' })
     })
   // 生产环境 SMTP 就绪性检查：不可用时验证码/解锁/重置邮件将全部 503
   if (process.env.NODE_ENV === 'production') {
     const smtp = smtpStatus()
     if (!smtp.ok) {
-      console.warn(`[security] 生产环境 SMTP 未就绪：${smtp.reason}（邮箱验证码/账户解锁/密码重置邮件将不可用）`)
+      logWarn('boot', `生产环境 SMTP 未就绪：${smtp.reason}（邮箱验证码/账户解锁/密码重置邮件将不可用）`)
     } else {
-      console.log('[mail]    SMTP 已就绪（TLS 校验通过），验证码/解锁/重置邮件将真实发送')
+      logInfo('boot', 'SMTP 已就绪（TLS 校验通过），验证码/解锁/重置邮件将真实发送')
     }
   }
 })
 
 // 优雅退出：断开 Prisma，避免丢未 flush 的写
 function shutdown(signal: string): void {
-  console.log(`[cloudletter-server] ${signal} 收到，正在优雅退出…`)
+  logInfo('shutdown', `${signal} 收到，正在优雅退出…`)
   server.close(() => {
     prisma
       .$disconnect()

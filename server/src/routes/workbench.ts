@@ -7,12 +7,15 @@
  * - notes  灵感笔记：title/body/mood/date
  */
 import { Router } from 'express'
+import os from 'node:os'
+import fs from 'node:fs'
 import { prisma } from '../prisma'
 import { requireAuth } from '../auth'
 import { ah, err } from './helpers'
 import { ymdLocal } from '../util-date'
 import { planDrop, postDrop } from '../game'
 import { validateBody, v, type FieldSpec } from '../middleware/validate'
+import { log, CLIENT_LOG_LEVELS, type LogLevel } from '../logger'
 
 export const workbench = Router()
 workbench.use(requireAuth)
@@ -86,6 +89,101 @@ workbench.get('/week-stats', ah(async (req, res) => {
   })
 }))
 
+/** ============ 前端客户端日志上报（时间长河/节点宇宙异常与错误统一落盘排查） ============ */
+
+workbench.post('/client-log', ah(async (req, res) => {
+  const b = (req.body ?? {}) as { level?: unknown; src?: unknown; message?: unknown; extra?: unknown }
+  const level = String(b.level ?? 'info')
+  if (!CLIENT_LOG_LEVELS.has(level)) return err(res, 422, 'VALIDATION', 'level 非法')
+  const src = String(b.src ?? 'client').slice(0, 60)
+  const message = String(b.message ?? '').slice(0, 2000)
+  const extra = b.extra && typeof b.extra === 'object' ? (b.extra as Record<string, unknown>) : undefined
+  log(level as LogLevel, src, message || '(空)', extra)
+  res.json({ ok: true })
+}))
+
+/** ============ 服务器实时状态（节点宇宙左下角 CPU/内存/网络监控） ============ */
+
+interface NetSample { rx: number; tx: number }
+interface StatusSnapshot {
+  cpu: number
+  mem: { used: number; total: number; percent: number }
+  net: { up: number; down: number } | null
+}
+
+/** CPU 采样：tick 计数差值 / 总差值（两次采样间隔 sleep 保证分辨率） */
+function sysCpuSample(): { idle: number; total: number } {
+  let idle = 0, total = 0
+  for (const c of os.cpus()) {
+    idle += c.times.idle
+    for (const t of Object.values(c.times)) total += t
+  }
+  return { idle, total }
+}
+
+/** 网络字节计数（Linux /proc/net/dev；非 Linux 返回 null） */
+function sysNetBytes(): NetSample | null {
+  try {
+    const raw = fs.readFileSync('/proc/net/dev', 'utf-8')
+    let rx = 0, tx = 0
+    for (const line of raw.split('\n').slice(2)) {
+      // 每行格式: iface: rx_bytes rx_packets ... tx_bytes ...（rx 第1个数字，tx 第9个数字）
+      const m = line.match(/:\s*(\d+)\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+(\d+)/)
+      if (!m) continue
+      rx += Number(m[1]); tx += Number(m[2])
+    }
+    return { rx, tx }
+  } catch {
+    return null
+  }
+}
+
+/** 状态采样缓存：TTL 1.1s，避免多前端轮询时重复做耗时采样 */
+let statusCache: { data: StatusSnapshot; t: number } | null = null
+
+async function sampleSnapshot(): Promise<StatusSnapshot> {
+  const now = Date.now()
+  if (statusCache && now - statusCache.t < 1100) return statusCache.data
+
+  const aCpu = sysCpuSample()
+  const aNet = sysNetBytes()
+  await new Promise((r) => setTimeout(r, 120))
+  const bCpu = sysCpuSample()
+  const bNet = sysNetBytes()
+
+  const cpuIdle = bCpu.idle - aCpu.idle
+  const cpuTotal = bCpu.total - aCpu.total
+  const mem = os.totalmem() - os.freemem()
+
+  let net: { up: number; down: number } | null = null
+  if (aNet && bNet && bNet.tx >= aNet.tx && bNet.rx >= aNet.rx) {
+    const dt = 0.12 // 采样间隔秒
+    net = { up: (bNet.rx - aNet.rx) / dt / 1024, down: (bNet.tx - aNet.tx) / dt / 1024 } // KB/s
+  }
+
+  const data: StatusSnapshot = {
+    cpu: cpuTotal > 0 ? Math.min(100, Math.max(0, ((cpuTotal - cpuIdle) / cpuTotal) * 100)) : 0,
+    mem: { used: mem, total: os.totalmem(), percent: Math.round((mem / os.totalmem()) * 100) },
+    net,
+  }
+  statusCache = { data, t: Date.now() }
+  return data
+}
+
+// 定时清理状态缓存（避免常驻，但上限就一个条目，仅防极端场景）
+setInterval(() => { statusCache = null }, 60_000).unref?.()
+
+// GET /server-status —— 服务器实时状态（须在 /:scope 通配之前声明）
+workbench.get('/server-status', ah(async (_req, res) => {
+  const snap = await sampleSnapshot()
+  res.json({
+    cpu: Math.round(snap.cpu * 10) / 10,
+    mem: { used: snap.mem.used, total: snap.mem.total, percent: snap.mem.percent },
+    net: snap.net ? { up: Math.round(snap.net.up), down: Math.round(snap.net.down) } : null,
+    ts: Date.now(),
+  })
+}))
+
 /** ============ 双视图时间轴聚合（按天混排：文章/笔记/计划/习惯/记账/目标） ============ */
 
 type TNodeType = 'journal' | 'note' | 'plan' | 'checkin' | 'ledger' | 'goal'
@@ -105,12 +203,33 @@ function safeJson(s: string): string[] {
   try { const v = JSON.parse(s || '[]'); return Array.isArray(v) ? v : [] } catch { return [] }
 }
 
-// GET /timeline —— 首屏双视图数据源（默认最近 30 天，最多 90 天）
+// GET /timeline —— 首屏双视图数据源
+// 两种用法：
+//   ?limit=N            最近 N 天（默认 30，上限 90）
+//   ?from=YYYY-MM-DD&to=YYYY-MM-DD   自定义时间范围（与 limit 互斥优先；范围上限 366 天）
 workbench.get('/timeline', ah(async (req, res) => {
   const limit = Math.min(90, Math.max(5, Number((req.query as any).limit) || 30))
-  // 文章是唯一含大字段（rawMarkdown 镜像）的表：按 90 天窗口过滤 + 投影列，
+  const q = req.query as Record<string, string | undefined>
+  const fromRaw = String(q.from ?? '').trim()
+  const toRaw = String(q.to ?? '').trim()
+  const hasRange = !!(fromRaw && toRaw)
+  if (hasRange) {
+    const re = /^\d{4}-\d{2}-\d{2}$/
+    if (!re.test(fromRaw) || !re.test(toRaw)) {
+      return err(res, 422, 'VALIDATION', 'from/to 格式须为 YYYY-MM-DD')
+    }
+    if (fromRaw > toRaw) {
+      return err(res, 422, 'VALIDATION', 'from 不能晚于 to')
+    }
+    // 防滥用：范围跨度上限 366 天
+    const span = (new Date(toRaw + 'T00:00:00').getTime() - new Date(fromRaw + 'T00:00:00').getTime()) / 864e5
+    if (span > 366) {
+      return err(res, 422, 'VALIDATION', '时间范围最多 366 天')
+    }
+  }
+  // 文章是唯一含大字段（rawMarkdown 镜像）的表：按窗口过滤 + 投影列，
   // 正文改用 charCount，不再把整篇镜像拉进内存
-  const since = new Date(Date.now() - 90 * 864e5)
+  const since = hasRange ? new Date(fromRaw + 'T00:00:00') : new Date(Date.now() - 90 * 864e5)
   const [posts, plans, checkins, ledgers, goals, notes] = await Promise.all([
     prisma.post.findMany({
       where: { OR: [{ publishedAt: { gte: since } }, { updatedAt: { gte: since } }] },
@@ -239,12 +358,13 @@ workbench.get('/timeline', ah(async (req, res) => {
     }
   }
 
-  const days = [...dayMap.values()]
+  const allDays = [...dayMap.values()]
     .map(d => ({ ...d, items: d.items.sort((a, b) => (b.ts || b.date).localeCompare(a.ts || a.date)) }))
     .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, limit)
+    .filter((d) => (hasRange ? d.date >= fromRaw && d.date <= toRaw : true))
+  const days = hasRange ? allDays : allDays.slice(0, limit)
 
-  res.json({ days })
+  res.json({ days, range: hasRange ? { from: fromRaw, to: toRaw } : undefined })
 }))
 
 /** 白名单字段：每种模型的允许更新键 */

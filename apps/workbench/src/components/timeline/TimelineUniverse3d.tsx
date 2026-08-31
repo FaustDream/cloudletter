@@ -13,6 +13,8 @@ import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeome
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { TL_COLOR, TL_DESC, TL_TYPES, dayLabel, daysAgo, filterNodes, type TimelineDay, type TimelineNode, type TimelineType } from './timeline'
 import { EmptyState } from '../framework/EmptyState'
+import { ServerStatusPanel } from '../framework/ServerStatusPanel'
+import { logClient } from '../../api'
 
 const SKY = 0xdcebfa
 /** 中心太阳（暖色） */
@@ -120,7 +122,8 @@ export function TimelineUniverse3d({ days, filter, avatar, onBack, onOpenGame }:
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
     renderer.setClearColor(0x000000, 0)
     renderer.setSize(box.clientWidth, box.clientHeight)
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75))
+    // 初始像素比上限 1.5（高 DPI 屏也别顶全档，给 GPU 留余量；极端负载下会自动降级到 1）
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5))
     box.appendChild(renderer.domElement)
 
     const controls = new OrbitControls(camera, renderer.domElement)
@@ -328,18 +331,20 @@ export function TimelineUniverse3d({ days, filter, avatar, onBack, onOpenGame }:
         rt[r2++] = m.position.x; rt[r2++] = m.position.y; rt[r2++] = m.position.z
       })
       radialGeo.attributes.position.needsUpdate = true
-      // 高亮宽线：只画隔离态中的关联线段（加粗暖金，快速定位）
-      const hlArr: number[] = []
+      // 高亮宽线：只在隔离态时重建（非隔离态直接隐藏，不再每帧分配空数组）
       if (isolatedPairs) {
+        const hlArr: number[] = []
         isolatedPairs.forEach((i) => {
           const pi = pairInfos[i]
           if (!pi) return
           hlArr.push(pi.a.position.x, pi.a.position.y, pi.a.position.z)
           hlArr.push(pi.b.position.x, pi.b.position.y, pi.b.position.z)
         })
+        hlGeo.setPositions(hlArr)
+        hl.visible = hlArr.length > 0
+      } else if (hl.visible) {
+        hl.visible = false
       }
-      hlGeo.setPositions(hlArr)
-      hl.visible = hlArr.length > 0
     }
 
     /** 重绘连线颜色：相关 pair 用语义亮色，其余统一降光 */
@@ -577,49 +582,85 @@ export function TimelineUniverse3d({ days, filter, avatar, onBack, onOpenGame }:
       })
     }
 
-    // ── 渲染循环 ──
+    // ── 渲染循环（含自适应降质 + 异常续帧，防"用着用着卡死"） ──
     const clock = new THREE.Clock()
     let raf = 0
     let bubbleTimer = 1500
+    // 性能自适应：EMA 帧耗时评估，超阈值降质（先降像素比，再隔帧重绘）
+    const frameStat = { ema: 0, count: 0, degrade: 0, lastPick: 0, frame: 0, errCount: 0 }
+    const DPR_FULL = Math.min(devicePixelRatio, 1.5)
+    const applyDegrade = (lv: number) => {
+      frameStat.degrade = lv
+      renderer.setPixelRatio(lv >= 1 ? Math.min(devicePixelRatio, 1) : DPR_FULL)
+      renderer.setSize(box.clientWidth, box.clientHeight)
+      logClient('warn', 'universe', lv >= 1 ? `画面过载，已降级渲染${lv >= 2 ? '（隔帧绘制）' : '（低分辨率）'}` : '负载恢复，渲染质量已回升', { degrade: lv })
+    }
     const step = () => {
-      const dt = clock.getDelta()
-      const t = clock.getElapsedTime()
-      const now = performance.now()
-      allNodes.forEach((m) => {
-        m.position.copy(nodePos(m))
-        const u = m.userData
-        const mat = m.material as THREE.MeshStandardMaterial
-        mat.opacity = (u.baseOp ?? 0.95) * nodeFadeOf(u.it as TimelineNode) * (u.dim ? (u.dimF ?? 0.35) : 1)
-        mat.emissiveIntensity = u.boost ? 1.7 : 0.55 + 0.4 * Math.sin(t * 1.7 + u.phase0)
-        if (u.spr) u.spr.position.copy(m.position)
-      })
-      sun.rotation.y += 0.01
-      sun.scale.setScalar(1 + Math.sin(t * 1.5) * 0.045)
-      glow.scale.setScalar(1 + Math.sin(t * 1.1) * 0.06)
-      controls.autoRotateSpeed = 0.35 * speedRef.current
-      writeGeo()
-      // 选中关系：相机平滑拉近到关系中心（跟随节点移动），快速定位
-      if (focusNodes && focusNodes.size) {
-        const c = new THREE.Vector3()
-        focusNodes.forEach((m) => { c.add(m.position) })
-        c.divideScalar(focusNodes.size)
-        controls.target.lerp(c, 0.09)
-        // 通过 OrbitControls 的 dolly 控制视距（避开 damping 覆盖）
-        const dist = camera.position.distanceTo(controls.target)
-        if (dist > focusDist * 1.06) controls.dollyIn(1.04)
-        else if (dist < focusDist * 0.94) controls.dollyOut(1.04)
-        // 脉冲标记：关系中心呼吸发光，一眼锁定
-        pulse.position.copy(c)
-        pulse.scale.setScalar(2.6 + Math.sin(t * 5) * 1.1)
-        pulseMat.opacity = 0.5 + 0.3 * Math.sin(t * 5)
-        pulse.visible = true
+      try {
+        const dt = clock.getDelta()
+        const t = clock.getElapsedTime()
+        const now = performance.now()
+        // 帧耗时 EMA（覆盖 dt，含渲染耗时近似）
+        frameStat.ema = frameStat.ema === 0 ? dt : frameStat.ema * 0.92 + dt * 0.08
+        frameStat.frame++
+        // 每 60 帧评估一次负载（EMA 太粗在慢帧后收敛）
+        if (frameStat.frame % 60 === 0) {
+          if (frameStat.ema > 0.05 && frameStat.degrade < 2) applyDegrade(frameStat.degrade + 1)
+          else if (frameStat.ema < 0.02 && frameStat.degrade > 0) applyDegrade(frameStat.degrade - 1)
+        }
+        // 降质 L2：隔帧才做重型步骤（位置推进保持每帧，writeGeo/材质/渲染隔帧做，大幅降 GPU 带宽）
+        const heavy = frameStat.degrade < 2 || frameStat.frame % 2 === 0
+        allNodes.forEach((m) => {
+          m.position.copy(nodePos(m))
+          if (!heavy) return
+          const u = m.userData
+          const mat = m.material as THREE.MeshStandardMaterial
+          mat.opacity = (u.baseOp ?? 0.95) * nodeFadeOf(u.it as TimelineNode) * (u.dim ? (u.dimF ?? 0.35) : 1)
+          mat.emissiveIntensity = u.boost ? 1.7 : 0.55 + 0.4 * Math.sin(t * 1.7 + u.phase0)
+          if (u.spr) u.spr.position.copy(m.position)
+        })
+        sun.rotation.y += 0.01
+        sun.scale.setScalar(1 + Math.sin(t * 1.5) * 0.045)
+        glow.scale.setScalar(1 + Math.sin(t * 1.1) * 0.06)
+        controls.autoRotateSpeed = 0.35 * speedRef.current
+        if (heavy) {
+          writeGeo()
+          // 选中关系：相机平滑拉近到关系中心（跟随节点移动），快速定位
+          if (focusNodes && focusNodes.size) {
+            const c = new THREE.Vector3()
+            focusNodes.forEach((m) => { c.add(m.position) })
+            c.divideScalar(focusNodes.size)
+            controls.target.lerp(c, 0.09)
+            const dist = camera.position.distanceTo(controls.target)
+            if (dist > focusDist * 1.06) controls.dollyIn(1.04)
+            else if (dist < focusDist * 0.94) controls.dollyOut(1.04)
+            pulse.position.copy(c)
+            pulse.scale.setScalar(2.6 + Math.sin(t * 5) * 1.1)
+            pulseMat.opacity = 0.5 + 0.3 * Math.sin(t * 5)
+            pulse.visible = true
+          }
+        }
+        bubbleTimer += (dt || 0.016) * 1000
+        if (bubbleTimer > 3800) { bubbleTimer = 0; spawnBubble(now) }
+        updateBubbles(now)
+        // 拾取节流：帧间至少间隔 60ms 才做一次 raycaster，且指针每动一次只拾取一次
+        if (needsPick.current) {
+          needsPick.current = false
+          if (now - frameStat.lastPick > 60) { pick(); frameStat.lastPick = now }
+        }
+        controls.update()
+        if (heavy) renderer.render(scene, camera)
+      } catch (e) {
+        // 单帧异常不中断循环：记日志续下一帧，连续异常则提示并退到隔帧低耗模式
+        frameStat.errCount++
+        if (frameStat.errCount <= 3) {
+          logClient('error', 'universe', '渲染帧异常', { err: e instanceof Error ? e.message : String(e), errCount: frameStat.errCount })
+        }
+        if (frameStat.errCount === 5) {
+          logClient('error', 'universe', '连续渲染异常，自动进入低耗模式', { errCount: frameStat.errCount })
+          applyDegrade(2)
+        }
       }
-      bubbleTimer += (dt || 0.016) * 1000
-      if (bubbleTimer > 3800) { bubbleTimer = 0; spawnBubble(now) }
-      updateBubbles(now)
-      if (needsPick.current) { pick(); needsPick.current = false }
-      controls.update()
-      renderer.render(scene, camera)
       raf = requestAnimationFrame(step)
     }
     if (reduced) {
@@ -629,6 +670,8 @@ export function TimelineUniverse3d({ days, filter, avatar, onBack, onOpenGame }:
     } else {
       raf = requestAnimationFrame(step)
     }
+    // 挂载日志：供服务器日志目录排查节点宇宙性能与稳定性
+    logClient('info', 'universe', '节点宇宙已挂载', { nodes: allNodes.length, pairs: pairInfos.length, reduced: !!reduced })
 
     const ro = new ResizeObserver(() => {
       const w = box.clientWidth, h = box.clientHeight
@@ -670,6 +713,7 @@ export function TimelineUniverse3d({ days, filter, avatar, onBack, onOpenGame }:
       renderer.dispose()
       camRef.current = null
       winClearRef.current = null
+      logClient('info', 'universe', '节点宇宙已卸载')
       setTip(null); setSelNode(null); setSelPair(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -753,6 +797,8 @@ export function TimelineUniverse3d({ days, filter, avatar, onBack, onOpenGame }:
           <em>{cursor === 0 ? '全部' : `近 ${cursor} 天`}</em>
         </span>
       </div>
+      {/* 服务器实时状态（左下角）：CPU / 内存 / 网络，感知节点宇宙对服务器的负载 */}
+      <ServerStatusPanel />
       {/* 悬停信息卡 */}
       {tip && (
         <div ref={tipRef} className="uni3d-tip" style={{ left: tip.x + 14, top: tip.y + 14 }}>

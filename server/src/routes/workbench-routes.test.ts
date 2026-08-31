@@ -189,3 +189,48 @@ describe('week-stats（本周聚合）', () => {
     expect(r.body.week.start).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 })
+
+describe('timeline 自定义时间范围（from/to）', () => {
+  it('from/to 过滤窗口内日期，且返回 range 字段', async () => {
+    await inject('POST', '/workbench/notes', { title: '范围验证旧笔记', mood: '灵感', date: TODAY })
+    const r = await inject('GET', `/workbench/timeline?from=${TODAY}&to=${TODAY}`)
+    expect(r.status).toBe(200)
+    expect(r.body.range).toEqual({ from: TODAY, to: TODAY })
+    const dates = r.body.days.map((d: any) => d.date)
+    expect(dates.every((x: string) => x === TODAY)).toBe(true)
+    const hit = r.body.days.find((d: any) => d.date === TODAY)
+    expect(hit?.items.some((x: any) => x.title === '范围验证旧笔记')).toBe(true)
+  })
+
+  it('非法格式 / from 晚于 to / 跨度超 366 天 → 422', async () => {
+    expect((await inject('GET', '/workbench/timeline?from=2026-31-01&to=2026-02-01')).status).toBe(422)
+    expect((await inject('GET', '/workbench/timeline?from=2026-02-01&to=2026-01-01')).status).toBe(422)
+    expect((await inject('GET', '/workbench/timeline?from=2020-01-01&to=2026-02-01')).status).toBe(422)
+  })
+})
+
+describe('客户端日志上报 / 服务器状态', () => {
+  it('client-log：合法级别写日志成功；非法级别 422', async () => {
+    const ok = await inject('POST', '/workbench/client-log', {
+      level: 'error', src: 'universe', message: '渲染异常', extra: { nodes: 12 },
+    })
+    expect(ok.status).toBe(200)
+    expect(ok.body.ok).toBe(true)
+    const bad = await inject('POST', '/workbench/client-log', { level: 'fatal', message: 'x' })
+    expect(bad.status).toBe(422)
+  })
+
+  it('server-status：返回 cpu/mem/net 字段', async () => {
+    const r = await inject('GET', '/workbench/server-status')
+    expect(r.status).toBe(200)
+    expect(typeof r.body.cpu).toBe('number')
+    expect(r.body.mem.total).toBeGreaterThan(0)
+    expect(typeof r.body.mem.percent).toBe('number')
+    expect(r.body.mem.percent).toBeGreaterThanOrEqual(0)
+    // net 在非 Linux 下可能为 null，其余环境为对象
+    if (r.body.net !== null) {
+      expect(typeof r.body.net.up).toBe('number')
+      expect(typeof r.body.net.down).toBe('number')
+    }
+  })
+})

@@ -79,6 +79,33 @@ export const api = {
   del: <T>(path: string) => request<T>('DELETE', path),
 }
 
+/* ===== 日志上报 + 服务器实时状态（时间长河/节点宇宙排查与监控用） ===== */
+
+export type ClientLogLevel = 'info' | 'warn' | 'error' | 'debug'
+
+/**
+ * 客户端日志上报：火并忘（fire-and-forget），绝不因日志失败打断业务。
+ * src 建议用模块名（universe / timeline / overview …），方便按源过滤日志目录。
+ */
+export function logClient(level: ClientLogLevel, src: string, message: string, extra?: Record<string, unknown>): void {
+  try {
+    void request('POST', '/workbench/client-log', { level, src, message, extra }).catch(() => {})
+  } catch {
+    /* 忽略上报异常 */
+  }
+}
+
+export interface ServerStatus {
+  cpu: number
+  mem: { used: number; total: number; percent: number }
+  net: { up: number; down: number } | null
+  ts: number
+}
+
+export async function serverStatus(): Promise<ServerStatus> {
+  return request<ServerStatus>('GET', '/workbench/server-status')
+}
+
 /** 图片直传（二进制 body，非 JSON；服务端 POST /uploads 兜底类型与大小校验） */
 export async function uploadImage(file: Blob): Promise<{ url: string; bytes: number }> {
   const headers: Record<string, string> = { 'Content-Type': file.type || 'application/octet-stream' }

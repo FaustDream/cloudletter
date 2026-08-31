@@ -16,6 +16,9 @@ import { Icon } from '../framework/Icon'
 import { EmptyState } from '../framework/EmptyState'
 import { CAPSULE_THEMES, readTheme, listDayThemes, writeDayTheme, themeLabel, DAY_THEME_PREFIX } from '../../lib/componentTheme'
 import { Capsule } from '../framework/Capsule'
+import { DateCal } from '../framework/DateCal'
+import { todayYMD } from '../../lib/date'
+import { logClient } from '../../api'
 import {
   SEG_LABEL, TL_COLOR, TL_DESC, TL_TYPES, dayLabel, daysAgo, filterNodes, segOf,
   type SegKey, type TimelineDay, type TimelineNode, type TimelineType,
@@ -97,6 +100,7 @@ export function TimelineBubbles({ days, filter, split, onMoved, active = true }:
   const [editDate, setEditDate] = useState<string | null>(null)
   const [editText, setEditText] = useState('')
   const [jumpDate, setJumpDate] = useState('')
+  const [jumpCalOpen, setJumpCalOpen] = useState(false)
   const [layout, setLayout] = useState<TimelineLayout>(timelineLayout)
   // 日期胶囊主题（组件主题系统：骨架不变 · 样式可切换）
   const [capsuleTheme, setCapsuleTheme] = useState(() => readTheme('capsule', CAPSULE_THEMES, 'glass'))
@@ -105,7 +109,24 @@ export function TimelineBubbles({ days, filter, split, onMoved, active = true }:
   // 当前展开「本日主题」拾色器的日期
   const [themePop, setThemePop] = useState<string | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
-  const jumpRef = useRef<HTMLInputElement>(null)
+
+  // 自绘月历浮层：打开时点击外部关闭（拖拽/滚动不受影响）
+  useEffect(() => {
+    if (!jumpCalOpen) return
+    const onDoc = (e: MouseEvent) => {
+      const w = document.querySelector('.tb-jump-wrap')
+      if (w && !w.contains(e.target as Node)) setJumpCalOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [jumpCalOpen])
+
+  // 挂载日志：记录渲染天数与条数（供服务器日志排查时间长河问题）
+  useEffect(() => {
+    logClient('info', 'timeline', '时光长河已挂载', { days: days.length, items: days.reduce((s, d) => s + d.items.length, 0), filter, layout })
+    return () => { logClient('info', 'timeline', '时光长河已卸载') }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days])
 
   // 悬浮日期定位：随页面滚动常驻 + 可拖拽换位（点击/拖动通过位移阈值区分）
   const [jumpPos, setJumpPos] = useState<{ x: number; y: number } | null>(() => {
@@ -144,11 +165,10 @@ export function TimelineBubbles({ days, filter, split, onMoved, active = true }:
     }
   }
 
-  /** 一键呼出原生日期选择器（解决点击不灵敏，需多次点击的问题） */
-  const openJumpPicker = () => {
-    const el = jumpRef.current
-    if (!el) return
-    try { el.showPicker?.() } catch { el.focus() }
+  /** 点击胶囊：切自绘月历浮层（替代原生 date 弹层，彻底解决浮窗位置怪癖与浏览器差异） */
+  const onJumpClick = () => {
+    if (jumpMovedRef.current) return
+    setJumpCalOpen((v) => !v)
   }
 
   /** 悬浮日期定位 · 拖拽
@@ -162,10 +182,6 @@ export function TimelineBubbles({ days, filter, split, onMoved, active = true }:
     dragRef.current = { baseX: rect.left, baseY: rect.top, grabX: e.clientX, grabY: e.clientY }
     jumpMovedRef.current = false
     try { e.currentTarget.setPointerCapture?.(e.pointerId) } catch { /* 捕获失败不影响窗口级监听 */ }
-  }
-  const onJumpClick = () => {
-    if (jumpMovedRef.current) return
-    openJumpPicker()
   }
 
   useEffect(() => {
@@ -319,6 +335,7 @@ export function TimelineBubbles({ days, filter, split, onMoved, active = true }:
       onMoved?.()
     } catch (e: any) {
       toast(e?.message || '移动失败', 'err')
+      logClient('error', 'timeline', '改期失败', { id: p.id, scope: p.scope, targetDate, err: e?.message })
     }
   }
 
@@ -505,9 +522,12 @@ export function TimelineBubbles({ days, filter, split, onMoved, active = true }:
   return (
     <div className="tb" ref={rootRef} data-style={layout}>
       {layout === 'river' ? <RiverSpine /> : layout === 'axis' ? <div className="tb-spine" aria-hidden="true" /> : null}
-      {/* 悬浮日期定位：随页面滚动常驻（portal 到 body），可拖拽换位；非可见时隐藏 */}
+      {/* 悬浮日期定位：随页面滚动常驻（portal 到 body），可拖拽换位；点击展开自绘月历。非可见时隐藏 */}
       {active && createPortal(
-        <>
+        <div
+          className="tb-jump-wrap"
+          style={jumpPos ? { left: jumpPos.x, top: jumpPos.y, right: 'auto' } : undefined}
+        >
           <Capsule
             className="tb-jump"
             theme={capsuleTheme}
@@ -515,20 +535,21 @@ export function TimelineBubbles({ days, filter, split, onMoved, active = true }:
             value={jumpDate || '选择日期'}
             extra={<span className="cap-grip">⠿</span>}
             title="拖拽可移动位置 · 点击打开日期选择"
-            style={jumpPos ? { left: jumpPos.x, top: jumpPos.y, right: 'auto' } : undefined}
             onClick={onJumpClick}
             onPointerDown={onJumpDown}
           />
-          <input
-            ref={jumpRef}
-            className="tb-jump-native"
-            type="date"
-            value={jumpDate}
-            onChange={(e) => { setJumpDate(e.target.value); jumpTo(e.target.value) }}
-            aria-label="跳转到日期"
-            tabIndex={-1}
-          />
-        </>,
+          {jumpCalOpen && (
+            <div className="tb-jump-cal">
+              <div className="tb-jump-cal-quick">
+                <button type="button" className="btn slim" onClick={() => { setJumpDate(todayYMD()); jumpTo(todayYMD()); setJumpCalOpen(false) }}>今天</button>
+              </div>
+              <DateCal
+                value={jumpDate}
+                onChange={(ymd) => { setJumpDate(ymd); jumpTo(ymd); setJumpCalOpen(false) }}
+              />
+            </div>
+          )}
+        </div>,
         document.body,
       )}
       {body}

@@ -1698,12 +1698,22 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 .capsule .cap-val { color: var(--cap-val, var(--text)); font-variant-numeric: tabular-nums; letter-spacing: .02em; }
 .capsule .cap-ext { display: inline-flex; font-size: 10px; color: var(--cap-grip, var(--text-tertiary)); opacity: .7; letter-spacing: -2px; }
 
-/* 悬浮日期定位胶囊：悬浮常驻 + 可拖拽换位 + 点击弹日期（showPicker） */
-.tb-jump { position: fixed; top: 104px; right: 24px; z-index: 45;
-  padding: 3px; cursor: grab; touch-action: none; }
-.tb-jump:active { cursor: grabbing; }
-.tb-jump-native { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none;
-  border: 0; padding: 0; margin: 0; }
+/* 悬浮日期定位胶囊：悬浮常驻 + 可拖拽换位 + 点击展开自绘月历浮层 */
+.tb-jump-wrap { position: fixed; top: 104px; right: 24px; z-index: 45; }
+.tb-jump-wrap .tb-jump { position: static; padding: 3px; cursor: grab; touch-action: none; }
+.tb-jump-wrap .tb-jump:active { cursor: grabbing; }
+/* 月历浮层（跟随胶囊，右对齐向下展开） */
+.tb-jump-cal { position: absolute; top: calc(100% + 10px); right: 0; z-index: 60;
+  background: var(--surface-solid); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 24px 60px -18px rgba(20, 40, 80, .35); padding: 10px 12px 12px; min-width: 264px; }
+.tb-jump-cal-quick { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.tb-jump-cal-quick .btn { font-size: 12px; padding: 4px 12px; }
+
+/* 设置页「日期独立主题」触发按钮 + 月历浮层 */
+.set-day-trigger { position: relative; display: inline-block; }
+.set-day-cal { position: absolute; top: calc(100% + 8px); left: 0; z-index: 60;
+  background: var(--surface-solid); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 24px 60px -18px rgba(20, 40, 80, .35); padding: 10px 12px 12px; min-width: 264px; }
 
 /* 设置页实时预览（静态展示，复用同一变量体系） */
 .capsule-demo { cursor: default; }
@@ -1965,8 +1975,10 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 .nactions .btn { flex: 1; justify-content: center; margin-top: 0; }
 .fab { position: fixed; right: 26px; bottom: 26px; z-index: 40; display: flex; align-items: center; gap: 8px;
   background: linear-gradient(135deg, var(--accent), var(--accent-deep)); color: var(--on-accent);
-  border: none; cursor: pointer; padding: 13px 20px; border-radius: 999px; font-size: 14px; font-weight: 700;
+  border: none; cursor: grab; touch-action: none; user-select: none;
+  padding: 13px 20px; border-radius: 999px; font-size: 14px; font-weight: 700;
   box-shadow: 0 16px 40px -12px rgba(27, 79, 160, .6); transition: transform .15s; }
+.fab:active { cursor: grabbing; }
 .fab:hover { transform: translateY(-2px); }
 
 /* 滚动入场 */
@@ -2363,6 +2375,89 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
   display: grid; place-items: center; position: relative;
   background: conic-gradient(var(--pomo-accent, var(--accent)) calc(var(--pct, 0) * 1%), var(--track, var(--surface-nested)) 0);
   box-shadow: var(--shadow-card), 0 0 30px color-mix(in srgb, var(--pomo-accent, var(--accent)) 40%, transparent); }
+.focus-ring::before { content: ""; position: absolute; inset: 9px; border-radius: 50%; background: var(--surface-solid); }
+
+/* ============================================================
+   总览增强（2026-08-31）：加载动画 / 时间范围选择器 / 月历浮层 /
+   服务器实时状态面板 / 节点宇宙监控
+   ============================================================ */
+
+/* 加载动画 */
+.tl-loading { min-height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; color: var(--text-secondary); font-size: 13px; }
+.ld-spinner { width: 34px; height: 34px; border-radius: 50%;
+  border: 3px solid var(--border); border-top-color: var(--accent);
+  animation: ld-rot .9s linear infinite; }
+@keyframes ld-rot { to { transform: rotate(360deg); } }
+.tl-loading i { font-style: normal; animation: ld-breathe 1.4s ease-in-out infinite; }
+@keyframes ld-breathe { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+
+/* 时间范围选择器（快捷档位 + 自定义起止） */
+.rp-wrap { position: relative; }
+.rp-trigger { gap: 6px; }
+.rp-trigger.on { border-color: var(--accent); color: var(--accent); }
+.rp-caret { opacity: .6; font-size: 10px; }
+.rp-popup { position: absolute; top: calc(100% + 8px); right: 0; z-index: 70; width: 288px;
+  background: var(--surface-solid); border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: 0 24px 64px -18px rgba(20, 40, 80, .4); padding: 12px; }
+.rp-popup.up { top: auto; bottom: calc(100% + 8px); }
+.rp-seg { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.rp-seg-btn { flex: 1 0 42%; border: 1px solid var(--border); background: transparent; color: var(--text-secondary);
+  font-size: 12px; padding: 6px 8px; border-radius: 9px; cursor: pointer; transition: all .12s; }
+.rp-seg-btn.on { border-color: var(--accent); color: var(--accent); background: var(--accent-muted); font-weight: 600; }
+.rp-custom-cap { display: block; font-size: 11px; color: var(--text-tertiary); margin-bottom: 8px; }
+.rp-ends { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.rp-end { flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  border: 1px solid var(--border); background: var(--surface); border-radius: 9px; padding: 7px 10px;
+  font-size: 12px; cursor: pointer; color: var(--text-secondary); }
+.rp-end.editing { border-color: var(--accent); color: var(--accent); background: var(--accent-muted); }
+.rp-end em { font-style: normal; font-size: 10px; color: var(--text-tertiary); }
+.rp-end b { font-family: var(--mono); font-size: 12px; color: inherit; font-weight: 600; }
+.rp-tilde { color: var(--text-tertiary); }
+.rp-cal .calshell { border: none; box-shadow: none; padding: 0; }
+.rp-apply { display: flex; justify-content: flex-end; margin-top: 10px; }
+.rp-apply .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* 月历浮层（DateCal 通用） */
+.calshell { background: var(--surface-solid); border: 1px solid var(--border); border-radius: 12px;
+  padding: 10px; min-width: 262px; user-select: none; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.cal-head b { font-size: 13px; color: var(--text); }
+.cal-nav { width: 26px; height: 26px; border-radius: 8px; border: 1px solid var(--border);
+  background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 16px; line-height: 1; }
+.cal-nav:hover { border-color: var(--accent); color: var(--accent); }
+.cal-week { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center;
+  font-size: 10px; color: var(--text-tertiary); margin-bottom: 4px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-cell { height: 30px; border: none; background: transparent; color: var(--text-secondary);
+  font-size: 12px; border-radius: 8px; cursor: pointer; transition: all .1s; }
+.cal-cell:hover:not(:disabled) { background: var(--accent-muted); color: var(--accent); }
+.cal-cell.today { outline: 1px solid var(--accent); outline-offset: -1px; }
+.cal-cell.sel { background: var(--accent); color: var(--on-accent); font-weight: 700; }
+.cal-cell.off { color: var(--text-tertiary); opacity: .4; cursor: not-allowed; }
+.cal-cell:disabled { cursor: not-allowed; }
+
+/* 服务器实时状态面板（节点宇宙左下角） */
+.stp-panel { position: absolute; left: 14px; bottom: 52px; z-index: 30; width: 190px;
+  background: color-mix(in srgb, var(--surface-solid) 82%, transparent);
+  backdrop-filter: blur(8px); border: 1px solid var(--border); border-radius: 12px;
+  padding: 8px 10px; font-size: 11px; color: var(--text-secondary);
+  box-shadow: 0 12px 32px -12px rgba(20, 40, 80, .3); }
+.stp-panel.dead { border-color: var(--warn); }
+.stp-title { font-size: 10.5px; font-weight: 700; color: var(--text); margin-bottom: 6px;
+  display: flex; align-items: center; gap: 4px; }
+.stp-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.stp-k { width: 26px; color: var(--text-tertiary); flex: 0 0 auto; }
+.stp-v { font-family: var(--mono); font-size: 11px; color: var(--text); min-width: 78px; }
+.stp-v.warn { color: var(--warn); }
+.stp-v.hot { color: var(--danger); }
+.dim-row { color: var(--text-tertiary); }
+.stp-bar { flex: 1; height: 5px; border-radius: 999px; background: var(--border); overflow: hidden; min-width: 30px; }
+.stp-bar i { display: block; height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--ok), var(--accent)); transition: width .6s var(--ease-out); }
+.stp-bar.warn i { background: linear-gradient(90deg, var(--warn), var(--warn)); }
+.stp-bar.hot i { background: linear-gradient(90deg, var(--danger), var(--danger)); }
+.stp-blank { flex: 1; }
 .focus-ring::before { content: ""; position: absolute; inset: 9px; border-radius: 50%; background: var(--surface-solid); }
 .focus-time { position: relative; font-family: var(--mono); font-size: 31px; font-weight: 800; color: var(--text);
   letter-spacing: .01em; }

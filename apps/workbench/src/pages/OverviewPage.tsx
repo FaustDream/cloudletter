@@ -2,7 +2,7 @@
  *  顶部层次：视图切换器独立一行(最高优先级) · 类型筛选+时间范围并排一行 · HUD 独立浮窗右上 */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { api, type TimelineDay, type TimelineType } from '../api'
+import { api, logClient, type TimelineDay, type TimelineType } from '../api'
 import { useAuth } from '../auth'
 import { TL_TYPES } from '../components/timeline/timeline'
 import { TimelineBubbles, type SplitMode } from '../components/timeline/TimelineBubbles'
@@ -12,16 +12,28 @@ import { BattleCard } from '../components/battle/BattleCard'
 import { LevelUpOverlay } from '../components/battle/LevelUpOverlay'
 import { filterNodes } from '../components/timeline/timeline'
 import { AvatarMenu } from '../components/framework/AvatarMenu'
-import { Dropdown } from '../components/framework/Dropdown'
 import { EmptyState } from '../components/framework/EmptyState'
+import { Loading } from '../components/framework/Loading'
+import { RangePicker, DEFAULT_RANGE, quickToRange, type RangeState } from '../components/timeline/RangePicker'
 
 type View = 'fish' | 'uni'
 
-const RANGES = [
-  { v: 7, l: '近 7 天' },
-  { v: 30, l: '近 30 天' },
-  { v: 60, l: '近 60 天' },
-]
+const RANGE_KEY = 'cl_tl_range'
+
+function loadRangePref(): RangeState {
+  try {
+    const raw = localStorage.getItem(RANGE_KEY)
+    if (raw) {
+      const p = JSON.parse(raw) as RangeState
+      if (p && (p.mode === 'quick' || p.mode === 'custom')) {
+        if (p.mode === 'custom' && p.from && p.to) return { ...DEFAULT_RANGE, mode: 'custom', from: p.from, to: p.to }
+        const q = Number(p.quick) || 30
+        return { ...quickToRange(q), mode: 'quick', quick: q }
+      }
+    }
+  } catch { /* 忽略损坏偏好 */ }
+  return DEFAULT_RANGE
+}
 
 export function OverviewPage() {
   const { user } = useAuth()
@@ -29,17 +41,31 @@ export function OverviewPage() {
   const [view, setView] = useState<View>(() => (localStorage.getItem('cl_default_view') === 'universe' ? 'uni' : 'fish'))
   const [filter, setFilter] = useState<TimelineType | 'all'>('all')
   const [split, setSplit] = useState<SplitMode>('time')
-  const [range, setRange] = useState(30)
+  const [range, setRange] = useState<RangeState>(loadRangePref)
+  const [loading, setLoading] = useState(true)
   const [loadErr, setLoadErr] = useState(false)
   /** 讨伐卡打开信号（时间线/宇宙的游戏入口点击时间戳） */
   const [gameSignal, setGameSignal] = useState(0)
 
   const load = () => {
-    api.get<{ days: TimelineDay[] }>(`/workbench/timeline?limit=${range}`)
+    setLoading(true)
+    setLoadErr(false)
+    const qs = range.mode === 'custom'
+      ? `?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`
+      : `?limit=${range.quick}`
+    api.get<{ days: TimelineDay[] }>(`/workbench/timeline${qs}`)
       .then((r) => setDays(r.days))
-      .catch(() => setLoadErr(true))
+      .catch((e: Error) => {
+        setLoadErr(true)
+        logClient('error', 'timeline', '时间轴数据加载失败', { qs, err: e.message })
+      })
+      .finally(() => setLoading(false))
   }
   useEffect(load, [range])
+  // 记忆上次范围（仅在用户主动改过时写入，避免每次加载就覆盖）
+  useEffect(() => {
+    try { localStorage.setItem(RANGE_KEY, JSON.stringify(range)) } catch { /* 忽略 */ }
+  }, [range])
 
   // HUD 游戏化：按当前筛选折算（筛选时显示「筛选后等级」；数据来自时间轴真实沉淀）
   const hud = useMemo(() => {
@@ -107,14 +133,7 @@ export function OverviewPage() {
               <button className={`vtab${split === 'time' ? ' on' : ''}`} onClick={() => setSplit('time')}>按时间</button>
               <button className={`vtab${split === 'type' ? ' on' : ''}`} onClick={() => setSplit('type')}>按类型</button>
             </div>
-            <Dropdown
-              value={String(range)}
-              align="right"
-              width={128}
-              options={RANGES.map((r) => ({ value: String(r.v), label: r.l }))}
-              onChange={(v) => setRange(Number(v))}
-              ariaLabel="时间范围"
-            />
+            <RangePicker value={range} onChange={setRange} />
           </div>
         </>
       )}
@@ -132,11 +151,16 @@ export function OverviewPage() {
         document.body,
       )}
 
-      {/* 视图容器 */}
-      {loadErr ? (
-        <EmptyState variant="hero" icon="☁️">时间轴加载失败，请稍后重试</EmptyState>
+      {/* 视图容器：加载中显动画；失败给可重试空态；无数据给引导；否则渲染双视图 */}
+      {loading ? (
+        <Loading label="时光沉淀加载中…" />
+      ) : loadErr ? (
+        <EmptyState variant="hero" icon="☁️">
+          时间轴加载失败，请稍后重试
+          <button className="btn slim" style={{ marginTop: 10 }} onClick={load}>重试</button>
+        </EmptyState>
       ) : days.length === 0 ? (
-        <EmptyState variant="hero" icon="🌱">还没有任何沉淀 · 点右下角「⚡ 速记」写下第一条</EmptyState>
+        <EmptyState variant="hero" icon="🌱">当前时间范围内还没有任何沉淀 · 点右下角「⚡ 速记」写下第一条</EmptyState>
       ) : (
         <>
           <div className="view-slot" style={{ display: view === 'fish' ? '' : 'none' }}>
