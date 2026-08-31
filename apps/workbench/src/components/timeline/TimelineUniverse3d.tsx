@@ -773,14 +773,11 @@ export function TimelineUniverse3d({ days, filter, avatar, onBack, onOpenGame }:
                 <span className="rl-item hot" title="选中后：暖金加粗 + 相机自动聚焦"><i style={{ background: '#ffd76a' }} />选中</span>
               </div>
             </div>
-            <div className="lg-hint">点击节点 / 连线高亮关系 · 相机自动聚焦 · Esc 取消</div>
           </div>
         )}
       </div>
-      {/* 底部辅助栏 */}
+      {/* 底部辅助栏（纯功能控件；进入专注模式后整体隐藏） */}
       <div className="uni3d-bar">
-        <span className="ub-label">拖拽转视角 · 滚轮缩放 · 点击节点/连线高亮 · Esc 取消</span>
-        <span className="ub-div" />
         <span className="ub-label">转速</span>
         {SPEED_LABEL.map((l, i) => (
           <button key={l} className={`ub-btn${speedIdx === i ? ' on' : ''}`} onClick={() => { setSpeedIdx(i); speedRef.current = SPEED_STEPS[i] }}>{l}</button>
@@ -799,6 +796,8 @@ export function TimelineUniverse3d({ days, filter, avatar, onBack, onOpenGame }:
       </div>
       {/* 服务器实时状态（左下角）：CPU / 内存 / 网络，感知节点宇宙对服务器的负载 */}
       <ServerStatusPanel />
+      {/* 专注模式浮层提示（进入后其余控件全部隐藏，仅此一条 + Esc 退出） */}
+      {focusMode && <div className="uni3d-focus-hint">专注中 · Esc 退出</div>}
       {/* 悬停信息卡 */}
       {tip && (
         <div ref={tipRef} className="uni3d-tip" style={{ left: tip.x + 14, top: tip.y + 14 }}>
@@ -814,13 +813,13 @@ export function TimelineUniverse3d({ days, filter, avatar, onBack, onOpenGame }:
             <>
               <div className="uh"><span className="udot" style={{ background: TL_COLOR[selNode.t] }} />{TYPE_EMOJI[selNode.t]} {selNode.title}</div>
               <div className="us">{selNode.sub || TL_DESC[selNode.t]}</div>
-              <div className="um">{dayLabel(selNode.date).d} · {TL_TYPES.find(([k]) => k === selNode.t)?.[1]}{selNode.xp ? ` · +${selNode.xp} XP` : ''}{selNode.gold ? ` · +${selNode.gold} 金币` : ''} · 点击空白取消高亮 · 相机已自动聚焦</div>
+              <div className="um">{dayLabel(selNode.date).d} · {TL_TYPES.find(([k]) => k === selNode.t)?.[1]}{selNode.xp ? ` · +${selNode.xp} XP` : ''}{selNode.gold ? ` · +${selNode.gold} 金币` : ''} · Esc 取消高亮</div>
             </>
           ) : selPair && (
             <>
               <div className="uh"><span className="udot" style={{ background: selPair.kind === 'date' ? '#6db8ff' : '#ffb066' }} />{selPair.kind === 'date' ? '同日期连接' : '同类型连接'}</div>
               <div className="us">{selPair.a.title} ⇄ {selPair.b.title}</div>
-              <div className="um">{dayLabel(selPair.a.date).d} ↔ {dayLabel(selPair.b.date).d} · 点击空白取消高亮 · 相机已自动聚焦</div>
+              <div className="um">{dayLabel(selPair.a.date).d} ↔ {dayLabel(selPair.b.date).d} · Esc 取消高亮</div>
             </>
           )}
         </div>
