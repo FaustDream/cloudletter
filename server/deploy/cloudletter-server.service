@@ -23,7 +23,7 @@ Environment=DATABASE_URL=file:/srv/cloudletter/server/data/cloudletter.db
 #   - 注意：EnvironmentFile 优先级更高，同名变量会覆盖上方 Environment；.env.production 中请勿重复
 #     定义 PORT / NODE_ENV / TZ / DATA_ROOT / DATABASE_URL / POSTS_ROOT / SETTINGS_ROOT。
 EnvironmentFile=-/srv/cloudletter/server/.env.production
-ExecStart=/usr/local/bin/node /srv/cloudletter/server/node_modules/.bin/tsx src/index.ts
+ExecStart=/srv/cloudletter/server/node_modules/.bin/tsx src/index.ts
 Restart=always
 RestartSec=3
 # SIGTERM 优雅退出最多等 10s（index.ts 内兜底强退），超时由 systemd 强杀
