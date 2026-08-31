@@ -1,6 +1,5 @@
-# build output（apps/workbench/dist 构建产物随发版提交，便于追溯每次版本产物；其余 dist 目录仍忽略
+# build output（构建产物不入库：源码 + lockfile 可再生；发版留档用 git tag 记录版本）
 dist/
-!apps/workbench/dist/
 
 # generated types
 .astro/
