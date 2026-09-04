@@ -290,6 +290,8 @@ export interface TimelineNode {
   xp?: number
   gold?: number
   tags?: string[]
+  /** 精确时间（ISO），用于跨天排序/实时流 */
+  ts?: string
 }
 
 export interface TimelineDay {
@@ -297,4 +299,17 @@ export interface TimelineDay {
   xp: number
   gold: number
   items: TimelineNode[]
+}
+
+/** 数据核心 / 数字城市：真实数据聚合统计（GET /workbench/dashboard） */
+export interface DashboardStats {
+  totals: Record<TimelineType | 'posts' | 'worktask', number>
+  chars: number
+  plan: { total: number; done: number }
+  worktask: { total: number; done: number }
+  checkin: { total: number; today: number; checkedDays: number; maxStreak: number }
+  goal: { total: number; pct: number }
+  ledger: { total: number; income: number; expense: number; monthIncome: number; monthExpense: number }
+  posts: { total: number; published: number }
+  asOf: string
 }

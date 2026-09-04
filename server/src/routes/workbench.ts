@@ -171,6 +171,67 @@ workbench.get('/week-stats', ah(async (req, res) => {
   })
 }))
 
+/** ============ 数据核心 / 数字城市 聚合统计（GET /dashboard）：真实数据，不虚构 ============ */
+
+workbench.get('/dashboard', ah(async (_req, res) => {
+  const today = ymdLocal(new Date())
+  const month = today.slice(0, 7)
+  const [posts, plans, checkins, ledgers, goals, notes, worktasks] = await Promise.all([
+    prisma.post.findMany({ select: { id: true, status: true, charCount: true } }),
+    prisma.planItem.findMany(),
+    prisma.checkinItem.findMany(),
+    prisma.ledgerEntry.findMany(),
+    prisma.goalItem.findMany(),
+    prisma.noteItem.findMany(),
+    prisma.workTask.findMany(),
+  ])
+  // X X 习惯：逐日打卡总量 + 今日打卡 + 最大连续
+  let checkedDays = 0
+  let todayCheckins = 0
+  let maxStreak = 0
+  for (const c of checkins) {
+    maxStreak = Math.max(maxStreak, c.streak || 0)
+    try {
+      const log = JSON.parse(c.log || '{}') as Record<string, boolean>
+      for (const [d, v] of Object.entries(log)) if (v === true) checkedDays++
+      if (log[today] === true) todayCheckins++
+    } catch { /* 忽略损坏 log */ }
+  }
+  // 记账：收入 / 支出（本月 + 累计）
+  const sum = (rows: typeof ledgers, k: 'income' | 'expense', filter?: (d: string) => boolean) =>
+    rows.filter((r) => r.kind === k && (!filter || filter(r.date))).reduce((a, r) => a + (r.amount || 0), 0)
+  const inMonth = (d: string) => String(d).slice(0, 7) === month
+  const goalsPct = goals.length
+    ? Math.round(goals.reduce((a, g) => a + g.current / (g.target || 1), 0) / goals.length * 100)
+    : 0
+  res.json({
+    totals: {
+      journal: posts.filter((p) => p.status === 'published').length,
+      posts: posts.length,
+      note: notes.length,
+      plan: plans.length,
+      checkin: checkins.length,
+      ledger: ledgers.length,
+      goal: goals.length,
+      worktask: worktasks.length,
+    },
+    chars: posts.reduce((a, p) => a + (p.charCount || 0), 0),
+    plan: { total: plans.length, done: plans.filter((p) => p.done).length },
+    worktask: { total: worktasks.length, done: worktasks.filter((w) => w.done).length },
+    checkin: { total: checkins.length, today: todayCheckins, checkedDays, maxStreak },
+    goal: { total: goals.length, pct: goalsPct },
+    ledger: {
+      total: ledgers.length,
+      income: sum(ledgers, 'income'),
+      expense: sum(ledgers, 'expense'),
+      monthIncome: sum(ledgers, 'income', inMonth),
+      monthExpense: sum(ledgers, 'expense', inMonth),
+    },
+    posts: { total: posts.length, published: posts.filter((p) => p.status === 'published').length },
+    asOf: new Date().toISOString(),
+  })
+}))
+
 /** ============ 前端客户端日志上报（时间长河/节点宇宙异常与错误统一落盘排查） ============ */
 
 workbench.post('/client-log', ah(async (req, res) => {
