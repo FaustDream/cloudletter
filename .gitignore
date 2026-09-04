@@ -62,3 +62,5 @@ e2e/test-results/*/
 .zcode/
 # e2e 临时测试内容
 e2e/content/posts/
+
+docs/
