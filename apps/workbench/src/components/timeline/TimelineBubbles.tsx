@@ -84,11 +84,13 @@ function parseMove(id: string, date: string) {
   return null
 }
 
-export function TimelineBubbles({ days, filter, split, onMoved, active = true }: {
+export function TimelineBubbles({ days, filter, split, onMoved, onOpenDetail, active = true }: {
   days: TimelineDay[]
   filter: TimelineType | 'all'
   split: SplitMode
   onMoved?: () => void
+  /** 打开节点完整详情侧栏（统一的详情查看入口） */
+  onOpenDetail?: (node: TimelineNode) => void
   /** 是否可见（总览页切换视图时仍挂载但隐藏 → 悬浮日期定位需同步隐藏） */
   active?: boolean
 }) {
@@ -307,7 +309,15 @@ export function TimelineBubbles({ days, filter, split, onMoved, active = true }:
         }
       }
     }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 })
-    els.forEach((el) => io.observe(el))
+    els.forEach((el) => {
+      // 首屏行立即入场：IntersectionObserver 首帧回调存在时延，先到的内容短暂 opacity:0 会被误读为空白
+      const r = el.getBoundingClientRect()
+      if (r.top < window.innerHeight && r.bottom > 0) {
+        el.classList.add('in')
+      } else {
+        io.observe(el)
+      }
+    })
     return () => io.disconnect()
   }, [days, filter, split, expanded, sumPins])
 
@@ -390,6 +400,13 @@ export function TimelineBubbles({ days, filter, split, onMoved, active = true }:
               <span className="td-title">{it.title}</span>
               <span className="td-sub">{it.sub || TL_DESC[it.t]}</span>
               <span className="mt">{TL_TYPES.find(([k]) => k === it.t)?.[1]} · {TL_DESC[it.t]}<span className="dot-sep" />{dayLabel(dateKey).d}{it.tags?.length ? <span className="cat">#{it.tags.join(' #')}</span> : null}</span>
+              {onOpenDetail && (
+                <button
+                  className="tld-open"
+                  onClick={(e) => { e.stopPropagation(); onOpenDetail(it) }}
+                  title="查看全部内容与关联数据"
+                >查看完整详情 →</button>
+              )}
             </span>
           </div>
           {/* 连接线：接到中轴（L 靠中轴在右，R 靠中轴在左） */}

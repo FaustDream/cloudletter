@@ -1,11 +1,13 @@
 /**
  * 文章编辑页（写作空间并入工作台后的编辑视图，编辑内核 = BlockNote：ProseMirror/Tiptap 内核的 Notion 式块编辑器）：
  * 打开 PostsPage 列表中的文章进入本页；/posts/new 新建草稿后跳转。
- * - 斜杠菜单（/）唤起块类型、拖拽手柄移动块、选中浮动格式工具栏，全 TypeScript 组件
+ * - 现代交互范式：无鼠标工具栏，格式入口 = 斜杠菜单(/) / 选中浮动工具栏 / 块拖拽菜单；[[ 唤起双链补全
+ * - 标题在画布内（Notion 式首行大字），纸面画布 + 阅读宽度；右栏属性面板可收起（cl_ed_side）
+ * - 导出：Markdown / 自包含 HTML / 打印·PDF（见 lib/exporters.ts）
  * - 防抖 1s 自动保存 + Ctrl/Cmd+S 手动保存 + 路由切换（卸载）时 flush 一次保存
  * - baseVersion 乐观锁冲突处理；发布前存在未解决冲突即中止（避免静默覆盖他人修改）
  * - 图片粘贴/拖拽/上传统一走 /uploads（客户端先压缩略图：长边 ≤2000px / JPEG q0.85）
- * - 右栏：文档信息（slug 可编辑）/ 大纲统计 / 双链列表（点击跳转对应文章）
+ * - 右栏：文档属性（分类下拉/标签chip/封面上传）/ 大纲统计 / 双链列表（点击跳转对应文章）
  */
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -13,8 +15,10 @@ import { api, ApiError, uploadImage, type Category, type PostDetail } from '../a
 import { useToast } from '../components/framework/Toast'
 import { EmptyState } from '../components/framework/EmptyState'
 import { confirmDialog } from '../components/framework/Modal'
+import { Icon } from '../components/framework/Icon'
+import { exportHtmlFile, exportMarkdownFile, printPost } from '../lib/exporters'
 import { RevisionPanel } from '../components/editor/RevisionPanel'
-import { FrontmatterPanel, Outline, WikiLinks, type Frontmatter } from '../components/editor/Outline'
+import { EdMetaBar, Outline, WikiLinks, type Frontmatter } from '../components/editor/Outline'
 import { clearDraft, isOnline, loadDraft, saveDraft, subscribeNetwork, type EditorDraft } from '../lib/offline'
 // BlockNote 体积大（ProseMirror 全家桶），独立 chunk 按需加载
 const BlockNoteEditor = lazy(() => import('../components/editor/BlockNoteEditor').then((m) => ({ default: m.BlockNoteEditor })))
@@ -52,14 +56,18 @@ export function EditorPage() {
 
   const [post, setPost] = useState<PostDetail | null>(null)
   const [loading, setLoading] = useState(true)
-  /** 双链候选：{ id, title }，双链点击时按标题反查文章 id 跳编辑页 */
+  /** 双链候选：{ id, title }，[[ 补全与双链跳转共用 */
   const [linkTargets, setLinkTargets] = useState<Array<{ id: string; title: string }>>([])
   const [categories, setCategories] = useState<Category[]>([])
+  /** 全站标签名（右栏标签 chip 候选） */
+  const [tagNames, setTagNames] = useState<string[]>([])
   const [content, setContent] = useState<Content>({ markdown: '', title: '', fm: {} })
   const [slug, setSlug] = useState('')
   const [baseVersion, setBaseVersion] = useState<number | null>(null)
   const [saveState, setSaveState] = useState<SaveState>('saved')
   const [showHistory, setShowHistory] = useState(false)
+  /** 右栏（属性/大纲）显隐：写作时可收起获得沉浸画布，记忆在 localStorage */
+  const [sideOpen, setSideOpen] = useState(() => localStorage.getItem('cl_ed_side') !== '0')
   /** 在线状态（离线时本地草稿兜底，重连自动同步） */
   const [online, setOnline] = useState(isOnline)
   /** 本地草稿恢复条：'newer'=服务器版本比本地旧；'offline'=断网时在离线编辑中 */
@@ -138,6 +146,9 @@ export function EditorPage() {
       .catch(() => {})
     api.get<{ items: Category[] }>('/categories')
       .then((r) => setCategories(r.items))
+      .catch(() => {})
+    api.get<{ items: Array<{ id: string; name: string }> }>('/tags')
+      .then((r) => setTagNames(r.items.map((t) => t.name)))
       .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
@@ -272,6 +283,19 @@ export function EditorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  /** 封面上传（右栏属性面板）：与正文图片同一压缩/上传链路，成功后写回 frontmatter.cover */
+  const handleCoverUpload = useCallback(async (file: File): Promise<string | null> => {
+    try {
+      const blob = await compressImage(file)
+      const r = await uploadImage(blob)
+      return r.url
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : '封面上传失败', 'err')
+      return null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   /** 双链点击：按标题反查文章并跳编辑页 */
   const openWikilink = useCallback((target: string) => {
     const name = target.split('|')[0].trim()
@@ -342,13 +366,6 @@ export function EditorPage() {
     <div className="ed-page">
       <div className="ed-topbar">
         <button className="btn slim ghost" onClick={() => nav('/posts')} title="返回文章列表">← 返回</button>
-        <input
-          className="ed-title"
-          value={content.title}
-          onChange={(e) => patchContent({ title: e.target.value })}
-          placeholder="文章标题"
-          maxLength={200}
-        />
         <span className={`save-state ${saveState}`}>
           {saveState === 'saved' && '✓ 已保存'}
           {saveState === 'dirty' && (online ? '未保存…' : '未保存（离线·已存本机）')}
@@ -359,9 +376,32 @@ export function EditorPage() {
           {post.status === 'published' ? '已发布' : '草稿'}
         </span>
         <div className="spacer" />
+        <ExportMenu
+          disabled={saveState === 'conflict'}
+          meta={{
+            title: content.title || '无标题',
+            summary: content.fm.summary,
+            category: content.fm.category,
+            tags: content.fm.tags,
+            cover: content.fm.cover,
+            date: post.publishedAt || post.updatedAt,
+          }}
+          markdown={content.markdown}
+        />
         <button className="btn slim" onClick={publish} title="Ctrl / ⌘ + S 手动保存">{post.status === 'published' ? '转为草稿' : '发布'}</button>
         <button className="btn slim ghost" onClick={() => setShowHistory(true)}>历史</button>
         <button className="btn slim ghost danger-ghost" onClick={trash}>删除</button>
+        <button
+          className={`btn slim ghost icon-only${sideOpen ? ' on' : ''}`}
+          onClick={() => {
+            const next = !sideOpen
+            setSideOpen(next)
+            localStorage.setItem('cl_ed_side', next ? '1' : '0')
+          }}
+          title={sideOpen ? '收起信息栏' : '展开信息栏'}
+        >
+          <Icon name="panelFold" size={16} />
+        </button>
       </div>
 
       {saveState === 'conflict' && (
@@ -390,33 +430,50 @@ export function EditorPage() {
         <div className="ed-conflict">网络不可用：改动已保存在本机，恢复网络后自动同步。</div>
       )}
 
-      <div className="ed-body">
+      {/* 文档信息（紧凑横条）：置于画布上方，不占用右侧编辑空间 */}
+      <EdMetaBar
+        fm={content.fm}
+        slug={slug}
+        onSlugChange={setSlug}
+        onChange={(fm) => patchContent({ fm })}
+        categories={categories.map((c) => ({ id: c.id, name: c.name }))}
+        tagSuggestions={tagNames}
+        onUploadCover={handleCoverUpload}
+      />
+
+      <div className="ed-body" data-side={sideOpen ? 'open' : 'closed'}>
         <div className="ed-main">
-          <div className="center-panes blocknote-host">
+          <div className="ed-paper">
+            <input
+              className="ed-canvas-title"
+              value={content.title}
+              onChange={(e) => patchContent({ title: e.target.value })}
+              placeholder="无标题"
+              maxLength={200}
+            />
             <Suspense fallback={<div className="ed-loading">编辑器载入中…</div>}>
               <BlockNoteEditor
+                key={post.id}
                 value={content.markdown}
                 onChange={(v) => patchContent({ markdown: v })}
                 onPasteImage={handlePasteImage}
+                wikilinkTargets={linkTargets}
+                onOpenWikilink={openWikilink}
               />
             </Suspense>
           </div>
         </div>
 
-        <aside className="ed-side">
-          <FrontmatterPanel
-            fm={content.fm}
-            slug={slug}
-            onSlugChange={(s) => setSlug(s)}
-            onChange={(fm) => patchContent({ fm })}
-          />
-          <Outline markdown={content.markdown} />
-          <WikiLinks
-            markdown={content.markdown}
-            currentTitle={content.title}
-            onOpen={openWikilink}
-          />
-        </aside>
+        {sideOpen && (
+          <aside className="ed-side">
+            <Outline markdown={content.markdown} />
+            <WikiLinks
+              markdown={content.markdown}
+              currentTitle={content.title}
+              onOpen={openWikilink}
+            />
+          </aside>
+        )}
       </div>
 
       {showHistory && (
@@ -430,6 +487,39 @@ export function EditorPage() {
           }}
           onClose={() => setShowHistory(false)}
         />
+      )}
+    </div>
+  )
+}
+
+/** 顶栏导出菜单：Markdown / 自包含 HTML / 打印·PDF */
+function ExportMenu({ meta, markdown, disabled }: {
+  meta: Parameters<typeof exportMarkdownFile>[0]
+  markdown: string
+  disabled?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const run = (fn: () => void) => { setOpen(false); try { fn() } catch (e) { console.error(e) } }
+  return (
+    <div className="ed-export">
+      <button className="btn slim ghost" disabled={disabled} onClick={() => setOpen((v) => !v)}>
+        <Icon name="download" size={15} /> 导出 <span className="ed-export-caret">▾</span>
+      </button>
+      {open && (
+        <>
+          <div className="ed-export-mask" onClick={() => setOpen(false)} />
+          <div className="ed-export-menu">
+            <button onClick={() => run(() => exportMarkdownFile(meta, markdown))}>
+              <b>Markdown</b><em>.md 原文，零转换</em>
+            </button>
+            <button onClick={() => run(() => exportHtmlFile(meta, markdown))}>
+              <b>HTML 文件</b><em>自包含网页，可分享/存档</em>
+            </button>
+            <button onClick={() => run(() => printPost(meta, markdown))}>
+              <b>打印 · PDF</b><em>经系统打印另存为 PDF</em>
+            </button>
+          </div>
+        </>
       )}
     </div>
   )

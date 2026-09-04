@@ -8,13 +8,16 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTimer } from 'react-timer-hook'
-import { api, type NoteItem, type TimelineDay } from '../api'
+import { api, type NoteItem, type TimelineDay, type WorkTask } from '../api'
 import { useToast } from '../components/framework/Toast'
 import { PageHeader } from '../components/framework/PageHeader'
+import { WorkTimeBanner } from '../components/framework/WorkTimeBanner'
 import { todayYMD } from '../lib/date'
+import { fetchSchedule, isWorkTime, type Schedule } from '../lib/schedule'
 import { celebrate, praise } from '../lib/celebrate'
 import { readPomodoroPrefs, playChime, type PomodoroPrefs } from '../lib/pomodoro'
 import { readLayoutTheme, DAILY_CARD_THEMES, POMODORO_THEMES } from '../lib/componentTheme'
+import { Icon } from '../components/framework/Icon'
 
 type Phase = 'focus' | 'short' | 'long'
 
@@ -47,6 +50,38 @@ export function DailyPage() {
   const [notes, setNotes] = useState<NoteItem[]>([])
   const [phase, setPhase] = useState<Phase>('focus')
   const [cycle, setCycle] = useState(0) // 本会话已完成的专注轮数
+
+  /* ── 工作时段与今日工作计划（工作时间优先展示） ── */
+  const [schedule, setSchedule] = useState<Schedule | null>(null)
+  const [workTasks, setWorkTasks] = useState<WorkTask[]>([])
+  const nowTick = useMemo(() => new Date(), []) // 进入页面时判定一次即可（横幅组件内部自行续跳）
+  const working = schedule ? isWorkTime(nowTick, schedule).working : false
+  const todayWorkTasks = useMemo(
+    () => workTasks
+      .filter((t) => t.date === today)
+      .sort((a, b) => (a.done === b.done ? a.createdAt.localeCompare(b.createdAt) : a.done ? 1 : -1)),
+    [workTasks, today],
+  )
+
+  const loadWork = useCallback(() => {
+    fetchSchedule().then(setSchedule).catch(() => {})
+    api.get<{ items: WorkTask[] }>('/workbench/worktask')
+      .then((r) => setWorkTasks(r.items.filter((t) => t.date === today)))
+      .catch(() => {})
+  }, [today])
+  useEffect(loadWork, [loadWork])
+
+  const toggleWorkTask = async (t: WorkTask) => {
+    try {
+      const now = !t.done
+      await api.put(`/workbench/worktask/${t.id}`, { done: now, doneAt: now ? new Date().toISOString() : '' })
+      if (now) {
+        celebrate(window.innerWidth / 2, window.innerHeight / 2, 26)
+        toast(`✅ 完成工作计划「${t.text}」· ${praise()}`)
+      }
+      loadWork()
+    } catch (e: any) { toast(e?.message || '操作失败', 'err') }
+  }
 
   const loadNotes = useCallback(() => {
     api.get<{ items: NoteItem[] }>('/workbench/notes').then((r) => setNotes(r.items)).catch(() => {})
@@ -224,7 +259,28 @@ export function DailyPage() {
         actions={<span className="dim">今天 · {today}</span>}
       />
 
+      {/* 工作时间 / 个人时间横幅：按设置自动判定 */}
+      {schedule && <WorkTimeBanner schedule={schedule} />}
+
       <div className="daily-grid" data-daily={dailyCard}>
+        {/* 工作时间优先展示今日工作计划（个人时间则不置顶，不打扰休息） */}
+        {working && todayWorkTasks.length > 0 && (
+          <div className="card daily-workplan">
+            <div className="focus-side-head">
+              <div className="sec-title">💼 今日工作计划</div>
+              <span className="focus-phase focus">{todayWorkTasks.filter((t) => t.done).length} / {todayWorkTasks.length} 完成</span>
+            </div>
+            <div className="wp-tasks" style={{ marginTop: 10 }}>
+              {todayWorkTasks.map((t) => (
+                <div key={t.id} className={`wp-task ${t.done ? 'done' : ''}`} onClick={() => toggleWorkTask(t)} title="点击切换完成状态">
+                  <div className={`wchk ${t.done ? 'on' : ''}`}><Icon name="check" size={14} /></div>
+                  <span className="wp-task-tx">{t.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* 番茄专注：横向紧凑卡片（时间球居中 + 右侧控制区） */}
         <div className="card daily-focus" data-pomo={pomoTheme}>
           <div className="daily-focus-body">

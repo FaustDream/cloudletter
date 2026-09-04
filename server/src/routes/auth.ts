@@ -8,6 +8,9 @@ import { createSession, extractBearer, hashToken, requireAuth } from '../auth'
 import { hashPassword, verifyPassword, generateToken, generateTOTPSecret, generateTOTP, verifyTOTP, otpauthUrl } from '../crypto'
 import { sendMail, smtpStatus } from '../mailer'
 import { ah, err } from './helpers'
+import { requestInfo, logActivity } from '../services/activity'
+import { passwordPolicyError } from '../lib/passwordRule'
+import { recordLoginSession } from './security'
 
 export const auth = Router()
 
@@ -209,6 +212,10 @@ auth.post('/login', ah(async (req, res) => {
   await prisma.user.update({ where: { id: user.id }, data: { loginFailCount: 0, loginLockedUntil: null } })
   const { token } = await createSession(user.id, !!remember)
   await recordLogin(user.id, req)
+  // 登录设备记录（服务器眼中的客户端真实信息：IP / UA / 设备标识 / 地理） + 活动日志
+  const dev = String(req.headers?.['x-device-id'] ?? '').slice(0, 64)
+  await recordLoginSession({ ip: requestInfo(req).ip, ua: requestInfo(req).ua, deviceId: dev, status: 'ok' })
+  logActivity(req, { action: 'login', object: '账户登录', target: user.email, result: 'ok' })
   res.json({ token, email: user.email })
 }))
 
@@ -309,6 +316,9 @@ auth.post('/login-by-code', ah(async (req, res) => {
   if (!ok) return err(res, 401, 'AUTH_REQUIRED', '验证码错误或已过期（输错一次即作废，请重新获取）')
   const { token } = await createSession(user.id)
   await recordLogin(user.id, req)
+  const dev = String(req.headers?.['x-device-id'] ?? '').slice(0, 64)
+  await recordLoginSession({ ip: requestInfo(req).ip, ua: requestInfo(req).ua, deviceId: dev, status: 'ok' })
+  logActivity(req, { action: 'login', object: '账户登录（邮箱验证码）', target: user.email, result: 'ok' })
   res.json({ token, email: user.email })
 }))
 
@@ -367,6 +377,7 @@ auth.put('/profile', requireAuth, ah(async (req, res) => {
   const v = String(nickname ?? '').trim().slice(0, 40)
   await prisma.user.update({ where: { id: req.user!.id }, data: { nickname: v } })
   const user = await prisma.user.findUnique({ where: { id: req.user!.id } })
+  logActivity(req, { action: 'profile_update', object: '个人资料', target: user!.id, detail: { nickname: v } })
   res.json({
     user: {
       id: user!.id, email: user!.email, nickname: user!.nickname,
@@ -378,6 +389,7 @@ auth.put('/profile', requireAuth, ah(async (req, res) => {
 auth.post('/logout', requireAuth, ah(async (req, res) => {
   const token = extractBearer(req) ?? ''
   await prisma.session.deleteMany({ where: { token: hashToken(token) } })
+  logActivity(req, { action: 'logout', object: '账户登出', target: req.user!.email, result: 'ok' })
   res.json({ ok: true })
 }))
 
@@ -402,6 +414,7 @@ auth.post('/2fa/enable', requireAuth, ah(async (req, res) => {
   if (user.totpEnabled) return err(res, 409, 'CONFLICT', '两步验证已开启')
   if (!verifyTOTP(String(token), user.totpSecret)) return err(res, 401, 'TOTP_INVALID', '验证码错误或已过期')
   await prisma.user.update({ where: { id: user.id }, data: { totpEnabled: true } })
+  logActivity(req, { action: 'tfa_enable', object: '两步验证', target: user.id, result: 'ok' })
   res.json({ ok: true })
 }))
 
@@ -442,6 +455,7 @@ auth.post('/email', requireAuth, ah(async (req, res) => {
   // 邮箱是登录凭证：撤销当前之外的全部会话
   const cur = extractBearer(req)
   if (cur) await prisma.session.deleteMany({ where: { userId: user.id, NOT: { token: hashToken(cur) } } })
+  logActivity(req, { action: 'email_change', object: '登录邮箱', target: user.id, result: 'ok', detail: { from: user.email, to: email } })
   res.json({ ok: true, email })
 }))
 

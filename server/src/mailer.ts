@@ -87,8 +87,9 @@ function redactCredentials(err: unknown): Error {
   return e
 }
 
-/** 发送邮件；生产安全约束失败返回 { sent:false, reason }，绝不抛出网络层细节里的凭据 */
-export async function sendMail(msg: MailMsg): Promise<{ sent: boolean; demoPath?: string; reason?: string }> {
+/** 发送邮件；生产安全约束失败返回 { sent:false, reason }，绝不抛出网络层细节里的凭据。
+ *  allowAnyRecipient：仅限管理员主动发起的一次性授权邀请等场景绕过收件人白名单（仍受路由层频控）。 */
+export async function sendMail(msg: MailMsg, opts?: { allowAnyRecipient?: boolean }): Promise<{ sent: boolean; demoPath?: string; reason?: string }> {
   const status = smtpStatus()
   if (!status.ok) {
     // 非生产且未配置 SMTP：降级为落盘（本地联调）
@@ -103,7 +104,7 @@ export async function sendMail(msg: MailMsg): Promise<{ sent: boolean; demoPath?
     }
     return { sent: false, reason: status.reason }
   }
-  if (!recipientAllowed(msg.to)) {
+  if (!opts?.allowAnyRecipient && !recipientAllowed(msg.to)) {
     return { sent: false, reason: '收件人不在允许列表（生产环境防滥用），可用 SMTP_ALLOW_TO 扩展白名单' }
   }
   try {

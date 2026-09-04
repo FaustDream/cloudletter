@@ -1,12 +1,12 @@
-/** 速记居中弹窗 —— 字段收敛为 3 个（类型 + 正文 + 标签）；保存落灵感笔记（mood=类型标签）并刷新时间轴 */
+/** 速记居中弹窗 —— 全局可用（Shell 挂载）；类型收敛为 灵感/计划，保存落速记（NoteItem.type）并刷新时间轴 */
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../../api'
 import { useToast } from '../framework/Toast'
-import { TL_TYPES } from './timeline'
 import { todayYMD } from '../../lib/date'
 
-const N_TYPE_LABEL: Record<string, string> = Object.fromEntries(TL_TYPES.map(([k, l]) => [k, l]))
+/** 速记类型：灵感 | 计划 */
+const NOTE_TYPES: Array<[string, string]> = [['inspiration', '💡 灵感'], ['plan', '📋 计划']]
 
 /** 速记按钮拖拽位置记忆（localStorage）；null = 默认右下角 */
 const FAB_KEY = 'cl_fab_pos'
@@ -18,9 +18,9 @@ function loadFabPos(): { x: number; y: number } | null {
   return null
 }
 
-export function QuickNoteModal({ avatar, onSaved }: { avatar: string; onSaved: () => void }) {
+export function QuickNoteModal({ onSaved }: { onSaved?: () => void }) {
   const [open, setOpen] = useState(false)
-  const [type, setType] = useState('note')
+  const [type, setType] = useState('inspiration')
   const [text, setText] = useState('')
   const [tags, setTags] = useState('')
   const [saving, setSaving] = useState(false)
@@ -106,15 +106,19 @@ export function QuickNoteModal({ avatar, onSaved }: { avatar: string; onSaved: (
     setSaving(true)
     try {
       const tagLine = tags.split(/[,，]/).map((s) => s.trim()).filter(Boolean).join(',')
+      const typeLabel = NOTE_TYPES.find(([k]) => k === type)?.[1].slice(2) || '灵感'
       await api.post('/workbench/notes', {
-        title: body.slice(0, 80) || '（无标题）',
+        title: body.split('\n')[0].slice(0, 120) || '（无标题）',
         body,
-        mood: N_TYPE_LABEL[type],
+        type,
+        mood: tagLine,
         date: new Date().toISOString().slice(0, 10),
       })
-      toast(`已入时间轴 · ${N_TYPE_LABEL[type]} +10 XP`)
+      toast(`已入时间轴 · ${typeLabel} +10 XP`)
       close()
-      onSaved()
+      onSaved?.()
+      // 全局广播：任意页面保存速记后，时间轴等关心数据的页面自行刷新
+      window.dispatchEvent(new CustomEvent('cl:quicknote:saved'))
     } catch (e: any) {
       toast(e?.message || '保存失败', 'err')
     } finally {
@@ -139,9 +143,9 @@ export function QuickNoteModal({ avatar, onSaved }: { avatar: string; onSaved: (
       {open && createPortal(
         <div className="overlay" onClick={close}>
           <div className="nmodal" onClick={(e) => e.stopPropagation()}>
-            <h3>零成本速记 <span className="kick">写一句就够 · Ctrl/⌘+N 保存 · Esc 关闭</span></h3>
+            <h3>速记 <span className="kick">灵感 / 计划 随手记 · Ctrl/⌘+N 保存 · Esc 关闭</span></h3>
             <div className="type-pills">
-              {TL_TYPES.map(([k, l]) => (
+              {NOTE_TYPES.map(([k, l]) => (
                 <button key={k} className={`tpill-opt${type === k ? ' on' : ''}`} type="button" onClick={() => setType(k)}>{l}</button>
               ))}
             </div>
@@ -159,4 +163,4 @@ export function QuickNoteModal({ avatar, onSaved }: { avatar: string; onSaved: (
   )
 }
 
-export { N_TYPE_LABEL }
+export { NOTE_TYPES }

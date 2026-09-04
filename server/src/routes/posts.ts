@@ -18,6 +18,8 @@ import {
   writePostFile,
   writeRevisionFile,
 } from '../content'
+import { logActivity } from '../services/activity'
+import { emitWebhookEvent } from './integrations'
 
 export const posts = Router()
 posts.use(requireAuth)
@@ -187,6 +189,8 @@ posts.post('/', ah(async (req, res) => {
   if (body.tags?.length) await syncTags(post.id, body.tags)
   writeRevisionFile(post.slug, 1, markdown)
   await indexSearchPost(post.id) // 同步全文索引（不阻断业务）
+  logActivity(req, { action: 'post_create', object: b.title, target: post.id, detail: { slug: post.slug, status: post.status } })
+  void emitWebhookEvent('post.created', { post: { id: post.id, title: b.title, slug: post.slug, status: post.status } })
   res.json({ id: post.id, slug: post.slug, status: post.status })
 }))
 
@@ -324,6 +328,10 @@ posts.post('/batch', ah(async (req, res) => {
   }
   // 状态/分类/标签变更后同步全文索引（草稿属性、分类名、标签参与检索）
   for (const p of targets) await indexSearchPost(p.id)
+  logActivity(req, { action: action === 'publish' || action === 'draft' ? 'post_update' : 'post_update', object: `批量 ${action}（${targets.length} 篇）`, detail: { action, ids: targets.map((t) => t.id) } })
+  if (action === 'publish') {
+    for (const it of committed) void emitWebhookEvent('post.published', { post: { id: it.p.id, title: it.p.title, slug: it.p.slug } })
+  }
   res.json({ ok: true, affected: targets.length })
 }))
 
@@ -510,6 +518,8 @@ posts.delete('/:id', ah(async (req, res) => {
     console.error('[posts/delete] remove file failed:', post.slug, e)
   }
   await removeSearchPost(post.slug)
+  logActivity(req, { action: 'post_delete', object: post.title, target: post.id, result: 'ok' })
+  void emitWebhookEvent('post.deleted', { post: { id: post.id, title: post.title, slug: post.slug } })
   res.json({ ok: true })
 }))
 
@@ -560,5 +570,6 @@ posts.post('/:id/revisions/:vid/restore', ah(async (req, res) => {
   }
   writeRevisionFile(post.slug, version, content)
   await indexSearchPost(post.id) // 恢复后同步全文索引
+  logActivity(req, { action: 'post_restore', object: post.title, target: post.id, detail: { fromVersion: rev.version, toVersion: version } })
   res.json({ ok: true })
 }))

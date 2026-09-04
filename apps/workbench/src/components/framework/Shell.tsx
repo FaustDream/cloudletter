@@ -12,6 +12,7 @@ import { Icon } from './Icon'
 import { FxEngine } from './FxEngine'
 import { AvatarMenu } from './AvatarMenu'
 import { BackToTop } from './BackToTop'
+import { QuickNoteModal } from '../timeline/QuickNoteModal'
 import type { ReactNode } from 'react'
 
 interface NavItem {
@@ -20,30 +21,22 @@ interface NavItem {
   icon: string
 }
 
-const GROUPS: { title: string; items: NavItem[] }[] = [
-  {
-    title: '内容',
-    items: [
-      { to: '/', label: '云笺', icon: 'home' },
-      { to: '/posts', label: '文章', icon: 'file' },
-      { to: '/notes', label: '灵感笔记', icon: 'book' },
-      { to: '/organize', label: '组织', icon: 'grid' },
-      { to: '/search', label: '检索', icon: 'search' },
-    ],
-  },
-  {
-    title: '日常',
-    items: [{ to: '/daily', label: '日常', icon: 'flame' }, { to: '/goals-home', label: '目标', icon: 'target' }],
-  },
-  {
-    title: '记账',
-    items: [{ to: '/ledger', label: '记账本', icon: 'wallet' }],
-  },
-  {
-    title: '系统',
-    items: [{ to: '/settings', label: '设置', icon: 'setting' }],
-  },
+/** 导航平铺（去掉分组标题，减少层级干扰，功能本身即入口）。
+ *  需求调整：统一顺序 = 云笺 / 灵感笔记 / 日常 / 文章 / 目标 / 组织 / 检索 / 记账本 / 设置。 */
+const NAV_ITEMS: NavItem[] = [
+  { to: '/', label: '云笺', icon: 'home' },
+  { to: '/notes', label: '灵感笔记', icon: 'book' },
+  { to: '/daily', label: '日常', icon: 'flame' },
+  { to: '/posts', label: '文章', icon: 'file' },
+  { to: '/goals-home', label: '目标', icon: 'target' },
+  { to: '/organize', label: '组织', icon: 'grid' },
+  { to: '/search', label: '检索', icon: 'search' },
+  { to: '/ledger', label: '记账本', icon: 'wallet' },
+  { to: '/settings', label: '设置', icon: 'setting' },
 ]
+
+/** 项目开源仓库：点击侧边栏 GitHub 入口 → 应用内 iframe 抽屉打开 */
+const GITHUB_URL = 'https://github.com/FaustDream/cloudletter'
 
 type SbMode = 'pinned' | 'collapsed'
 const SB_KEY = 'cl_sidebar'
@@ -54,10 +47,16 @@ export function Shell({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const inLogin = loc.pathname === '/login'
 
-  // ---- 需求 1：侧边栏三态 ----
-  const [mode, setMode] = useState<SbMode>(() => (localStorage.getItem(SB_KEY) === 'collapsed' ? 'collapsed' : 'pinned'))
+  // ---- 需求 3：侧边栏默认折叠；仅当用户在设置中主动选择「展开」后持久保持展开 ----
+  const [mode, setMode] = useState<SbMode>(() => {
+    const v = localStorage.getItem(SB_KEY)
+    if (v === 'pinned' || v === 'collapsed') return v
+    return 'collapsed' // 未设置过偏好 → 默认折叠
+  })
   const [narrow, setNarrow] = useState(window.innerWidth < NARROW_W)
   const [peek, setPeek] = useState(false)
+  /** GitHub 快捷入口：应用内 iframe 抽屉 */
+  const [ghOpen, setGhOpen] = useState(false)
   const enterTimer = useRef<number | undefined>(undefined)
   const leaveTimer = useRef<number | undefined>(undefined)
 
@@ -110,23 +109,18 @@ export function Shell({ children }: { children: ReactNode }) {
   const nav = useMemo(
     () => (
       <nav className="nav" aria-label="主导航">
-        {GROUPS.map((g, i) => (
-          <div key={i}>
-            <div className="nav-sep">{g.title}</div>
-            {g.items.map((it) => (
-              <NavLink
-                key={it.to}
-                to={it.to}
-                end={it.to === '/'}
-                title={it.label}
-                className={({ isActive }) => `navi ${isActive ? 'active' : ''}`}
-                onClick={() => setPeek(false)}
-              >
-                <Icon name={it.icon} />
-                <span>{it.label}</span>
-              </NavLink>
-            ))}
-          </div>
+        {NAV_ITEMS.map((it) => (
+          <NavLink
+            key={it.to}
+            to={it.to}
+            end={it.to === '/'}
+            title={it.label}
+            className={({ isActive }) => `navi ${isActive ? 'active' : ''}`}
+            onClick={() => setPeek(false)}
+          >
+            <Icon name={it.icon} />
+            <span>{it.label}</span>
+          </NavLink>
         ))}
       </nav>
     ),
@@ -143,14 +137,8 @@ export function Shell({ children }: { children: ReactNode }) {
         onMouseEnter={effective === 'collapsed' ? startPeek : undefined}
         onMouseLeave={effective === 'collapsed' ? stopPeek : undefined}
       >
-        <div className="brand">
-          <div className="logo">
-            <Icon name="pen" size={22} />
-          </div>
-          <div className="brand-tx">
-            <h1>云笺集</h1>
-            <p>CLOUDLETTER</p>
-          </div>
+        <div className="brand" title="云笺集">
+          <h1>云笺集</h1>
         </div>
         {nav}
         <div className="sb-ctrl">
@@ -161,6 +149,10 @@ export function Shell({ children }: { children: ReactNode }) {
           <span className="sb-hotkey">⌘B</span>
           {peek && <span className="sb-peek-hint">松开移出自动收起</span>}
         </div>
+        <button className="sb-gh" onClick={() => setGhOpen(true)} title="GitHub 仓库（应用内打开）">
+          <Icon name="github" size={16} />
+          <span>GitHub</span>
+        </button>
         <div className="foot">
           {user ? (
             <AvatarMenu size={expanded ? 'lg' : 'sm'} align="left" />
@@ -172,8 +164,28 @@ export function Shell({ children }: { children: ReactNode }) {
       <main className="main">
         <div className="screen">{children}</div>
       </main>
+      {/* GitHub 快捷入口：右侧抽屉 iframe，保持当前操作上下文 */}
+      {ghOpen && (
+        <div className="gh-drawer-mask" onClick={() => setGhOpen(false)}>
+          <div className="gh-drawer" onClick={(e) => e.stopPropagation()}>
+            <div className="gh-drawer-head">
+              <b>GitHub · cloudletter</b>
+              <a href={GITHUB_URL} target="_blank" rel="noreferrer noopener">新窗口打开 ↗</a>
+              <button className="gh-drawer-close" onClick={() => setGhOpen(false)} title="关闭">✕</button>
+            </div>
+            <iframe
+              className="gh-drawer-frame"
+              src={GITHUB_URL}
+              title="GitHub 仓库"
+              sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+            />
+          </div>
+        </div>
+      )}
       {/* 全局回到顶部：滚动下滑即出现，内容不足一屏自动隐藏 */}
       <BackToTop />
+      {/* 速记：全局可用（任意页面 ⚡ 按钮唤起，Ctrl/⌘+N 快捷键） */}
+      <QuickNoteModal />
     </div>
   )
 }

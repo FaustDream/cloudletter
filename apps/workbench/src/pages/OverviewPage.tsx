@@ -2,12 +2,12 @@
  *  顶部层次：视图切换器独立一行(最高优先级) · 类型筛选+时间范围并排一行 · HUD 独立浮窗右上 */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { api, logClient, type TimelineDay, type TimelineType } from '../api'
+import { api, logClient, type TimelineDay, type TimelineNode, type TimelineType } from '../api'
 import { useAuth } from '../auth'
 import { TL_TYPES } from '../components/timeline/timeline'
 import { TimelineBubbles, type SplitMode } from '../components/timeline/TimelineBubbles'
 import { TimelineUniverse3d } from '../components/timeline/TimelineUniverse3d'
-import { QuickNoteModal } from '../components/timeline/QuickNoteModal'
+import { TimelineDetailDrawer } from '../components/timeline/TimelineDetailDrawer'
 import { BattleCard } from '../components/battle/BattleCard'
 import { LevelUpOverlay } from '../components/battle/LevelUpOverlay'
 import { filterNodes } from '../components/timeline/timeline'
@@ -46,6 +46,8 @@ export function OverviewPage() {
   const [loadErr, setLoadErr] = useState(false)
   /** 讨伐卡打开信号（时间线/宇宙的游戏入口点击时间戳） */
   const [gameSignal, setGameSignal] = useState(0)
+  /** 时间流节点完整详情（统一的详情查看入口） */
+  const [detailNode, setDetailNode] = useState<TimelineNode | null>(null)
 
   const load = () => {
     setLoading(true)
@@ -62,6 +64,12 @@ export function OverviewPage() {
       .finally(() => setLoading(false))
   }
   useEffect(load, [range])
+  // 速记全局保存广播（速记按钮现已常驻所有页面）：总览页收到后刷新时间轴
+  useEffect(() => {
+    const onSaved = () => load()
+    window.addEventListener('cl:quicknote:saved', onSaved)
+    return () => window.removeEventListener('cl:quicknote:saved', onSaved)
+  }, [])
   // 记忆上次范围（仅在用户主动改过时写入，避免每次加载就覆盖）
   useEffect(() => {
     try { localStorage.setItem(RANGE_KEY, JSON.stringify(range)) } catch { /* 忽略 */ }
@@ -164,7 +172,7 @@ export function OverviewPage() {
       ) : (
         <>
           <div className="view-slot" style={{ display: view === 'fish' ? '' : 'none' }}>
-            <TimelineBubbles days={days} filter={filter} split={split} onMoved={load} active={view === 'fish'} />
+            <TimelineBubbles days={days} filter={filter} split={split} onMoved={load} onOpenDetail={setDetailNode} active={view === 'fish'} />
           </div>
           {/* 3D 场景仅在可见时挂载（避免 display:none 下 canvas 初始化为 0×0） */}
           {view === 'uni' && (
@@ -175,7 +183,8 @@ export function OverviewPage() {
         </>
       )}
 
-      <QuickNoteModal avatar={avatar} onSaved={load} />
+      {/* 时间流节点完整详情（侧栏全文） */}
+      <TimelineDetailDrawer node={detailNode} onClose={() => setDetailNode(null)} />
 
       {/* 升级特效：等级上涨时全屏 LEVEL UP */}
       {levelUp && <LevelUpOverlay level={hud.lv} />}

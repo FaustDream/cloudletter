@@ -57,3 +57,8 @@ e2e/test-results/*/
 # 项目数据（AI 助手记忆 / 本地状态，非源码）
 .codebuddy/
 .workbuddy/
+
+# ZCode CLI 本地缓存（工具状态，非源码）
+.zcode/
+# e2e 临时测试内容
+e2e/content/posts/

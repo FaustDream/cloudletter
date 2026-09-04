@@ -53,6 +53,15 @@ export function AvatarMenu({ size = 'lg', align = 'right', badge }: { size?: 'lg
   ]
 
   const avatar = (user?.nickname?.trim() || user?.email?.slice(0, 1) || '云').slice(0, 1).toUpperCase()
+  /** 头像图片（需求 14）：已上传则显示图片，并叠加装饰（边框/徽章类映射） */
+  const avatarSrc = user?.avatar
+    ? (user.avatar.startsWith('/api') || user.avatar.startsWith('http') ? user.avatar : `/api/v2/avatars/${user.avatar}`)
+    : ''
+  const avatarClass = [
+    'ag-avatar',
+    user?.avatarFrame ? `f-${user.avatarFrame}` : '',
+    user?.avatarBadge ? `b-${user.avatarBadge}` : '',
+  ].filter(Boolean).join(' ')
   const pcol = PRES(presence).color
 
   const close = () => setOpen(false)
@@ -157,7 +166,7 @@ export function AvatarMenu({ size = 'lg', align = 'right', badge }: { size?: 'lg
         >
           {/* 账号区 */}
           <button role="menuitem" className="am-head" onClick={() => { close(); nav('/settings') }}>
-            <span className="am-h-av">{avatar}<i style={{ background: pcol }} /></span>
+            <span className={avatarClass}>{avatarSrc ? <img src={avatarSrc} alt="头像" className="ag-img" /> : avatar}<i style={{ background: pcol }} /></span>
             <span className="am-h-tx">
               <b>{user.nickname || '未设置昵称'}</b>
               <em>{user.email}</em>

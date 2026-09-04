@@ -24,13 +24,14 @@ test.describe('工作台 · 文章编辑页', () => {
     // 文章页 → 新建草稿 → 进入编辑页
     await page.goto(`${BASE}/posts`)
     await page.getByRole('button', { name: /新建草稿/ }).click()
-    await expect(page.locator('.ed-topbar .ed-title')).toBeVisible({ timeout: 15_000 })
+    // 标题已入纸面画布（顶栏仅留操作项）
+    await expect(page.locator('.ed-paper .ed-canvas-title')).toBeVisible({ timeout: 15_000 })
     // BlockNote 编辑内核渲染（contenteditable）
     const editor = page.locator('.ed-blocknote .bn-editor')
     await expect(editor).toBeVisible({ timeout: 15_000 })
 
     // 输入标题与正文 → 未保存状态出现 → 防抖自动保存后回到「已保存」
-    await page.locator('.ed-topbar .ed-title').fill('E2E 编辑器验证文章')
+    await page.locator('.ed-paper .ed-canvas-title').fill('E2E 编辑器验证文章')
     await editor.click()
     await page.keyboard.type('E2E 自动保存正文内容。')
     await expect(page.locator('.save-state.dirty')).toBeVisible({ timeout: 5_000 })
@@ -46,6 +47,8 @@ test.describe('工作台 · 文章编辑页', () => {
     await login(page)
     await page.goto(`${BASE}/settings?g=site`)
     await expect(page.locator('.set-crumb')).toContainText('站点设置')
-    await expect(page.getByText('博客外观', { exact: false })).toBeVisible()
+    // 分组标题（.set-sec-h）与左侧导航 desc 都含「博客外观」，精确到分组标题避免 strict mode
+    const sec = page.locator('.set-sec-h', { hasText: '博客外观（appearance）' })
+    await expect(sec.first()).toBeVisible()
   })
 })

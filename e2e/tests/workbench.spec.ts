@@ -27,7 +27,6 @@ test.describe('工作台 · 核心闭环', () => {
     const pages: Array<{ path: string; text: string }> = [
       { path: '/posts', text: '文章' },
       { path: '/organize?tab=category', text: '组织' },
-      { path: '/search', text: '全站检索' },
       { path: '/goals-home', text: '目标' },
       { path: '/ledger', text: '记账本' },
       { path: '/notes', text: '灵感笔记' },
@@ -36,6 +35,9 @@ test.describe('工作台 · 核心闭环', () => {
       await page.goto(`${BASE}${p.path}`)
       await expect(page.locator('.header h2').first()).toContainText(p.text, { timeout: 10_000 })
     }
+    // 检索页页头结构不同（shead-h）
+    await page.goto(`${BASE}/search`)
+    await expect(page.locator('.shead h2').first()).toContainText('全站检索', { timeout: 10_000 })
     // 站点设置页头结构不同（set-crumb）
     await page.goto(`${BASE}/settings?g=site`)
     await expect(page.locator('.set-crumb')).toContainText('站点设置', { timeout: 10_000 })

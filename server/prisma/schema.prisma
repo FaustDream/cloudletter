@@ -18,6 +18,10 @@ model User {
   lastLoginAt    DateTime?
   lastLoginIp    String    @default("")
   lastLoginAgent String    @default("")
+  // 头像系统：图片地址 + 装饰（边框/徽章/动效），见设置·账户
+  avatar         String    @default("")
+  avatarFrame    String    @default("")
+  avatarBadge    String    @default("")
   // 登录失败防护：连续失败计数 + 锁定截止时间（服务端强制）
   loginFailCount Int       @default(0)
   loginLockedUntil DateTime?
@@ -181,13 +185,173 @@ model GoalItem {
   updatedAt        DateTime @updatedAt
 }
 
-// 灵感笔记
+// 灵感笔记（速记与其同源）：type 为规范类型（inspiration=灵感 | plan=计划），
+// mood 退化为自由标签；done/doneAt 仅计划类速记使用，形成完成闭环
 model NoteItem {
   id        String   @id @default(cuid())
   title     String
   body      String   @default("")
-  mood      String   @default("灵感")
+  type      String   @default("inspiration") // inspiration | plan
+  mood      String   @default("")
   date      String
+  done      Boolean  @default(false)
+  doneAt    String   @default("") // 完成时间（ISO），空 = 未完成
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([type])
+}
+
+// 工作计划任务（周一~周五工作安排为核心）：date 归属工作日，note 为 Markdown 全文
+model WorkTask {
+  id        String   @id @default(cuid())
+  date      String // YYYY-MM-DD
+  text      String
+  note      String   @default("")
+  done      Boolean  @default(false)
+  doneAt    String   @default("") // 完成时间（ISO），空 = 未完成
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+  @@index([done])
+}
+
+// 一次性授权：管理员创建 → 邮件链接 → 访客 redeem 换取受限只读会话
+model AccessGrant {
+  id          String    @id @default(cuid())
+  email       String
+  label       String    @default("")
+  scopes      String    @default("[]") // JSON 数组：timeline | posts | notes | workplan | plan
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  firstUsedAt DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  sessions GuestSession[]
+
+  @@index([email])
+}
+
+// 访客会话（由授权链接 redeem 派生；TTL ≤ 授权有效期）
+model GuestSession {
+  id        String   @id @default(cuid())
+  grantId   String
+  grant     AccessGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([grantId])
+}
+
+// ============ 安全与活动日志（隐私与安全 · 数据留痕，普通用户不可删改） ============
+
+// 活动日志：重大操作必须留痕；服务端仅追加，无更新/删除接口
+model ActivityLog {
+  id        String   @id @default(cuid())
+  action    String // login | logout | password_change | email_change | profile_update | tfa_enable |
+                   // tfa_disable | tfa_reset | post_create | post_update | post_delete | post_restore |
+                   // data_export | data_import | log_export | log_import | site_config |
+                   // api_cred_create | api_cred_revoke | webhook_create | webhook_update | webhook_delete ...
+  object    String   @default("") // 操作对象（文章标题/模块名/凭据名/Webhook 名…）
+  target    String   @default("") // 目标实体 id/slug
+  result    String   @default("ok") // ok | fail
+  detail    String   @default("") // JSON 详情（客户端/IP/摘要等）
+  client    String   @default("") // User-Agent
+  ip        String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([action])
+  @@index([createdAt])
+}
+
+// 登录设备/会话记录：区分「服务器信息」与「用户实际登录客户端信息」
+model LoginRecord {
+  id        String   @id @default(cuid())
+  time      DateTime @default(now())
+  ip        String   @default("")
+  ua        String   @default("")
+  client    String   @default("browser") // 客户端类型
+  os        String   @default("")
+  browser   String   @default("")
+  geo       String   @default("") // 地理位置（尽力而为，失败留空）
+  deviceId  String   @default("") // 客户端设备标识（cl_dev cookie）
+  status    String   @default("ok") // ok | fail
+  detail    String   @default("") // 失败原因等
+
+  @@index([time])
+}
+
+// 发布订阅（RSS）：订阅的其他博客
+model RssSubscription {
+  id            String   @id @default(cuid())
+  url           String   @unique
+  title         String   @default("")
+  siteUrl       String   @default("")
+  description   String   @default("")
+  lastFetchedAt DateTime?
+  createdAt     DateTime @default(now())
+  items         RssItem[]
+}
+
+model RssItem {
+  id          String   @id @default(cuid())
+  subId       String
+  sub         RssSubscription @relation(fields: [subId], references: [id], onDelete: Cascade)
+  guid        String
+  title       String
+  link        String   @default("")
+  author      String   @default("")
+  summary     String   @default("")
+  publishedAt DateTime?
+  fetchedAt   DateTime @default(now())
+
+  @@unique([subId, guid])
+  @@index([fetchedAt])
+}
+
+// API 凭据（集成与链接）：仅存哈希，明文密钥只在创建时展示一次
+model ApiCredential {
+  id         String    @id @default(cuid())
+  name       String
+  prefix     String    @unique // clk_<随机前缀>（展示用）
+  keyHash    String    @unique
+  scopes     String    @default("[]") // JSON 数组：posts.read | posts.write | timeline.read ...
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+// Webhook（集成与链接）：请求体 HMAC 签名；调用留痕
+model Webhook {
+  id         String   @id @default(cuid())
+  name       String
+  url        String
+  events     String   @default("[]") // JSON 数组：post.published | post.created | post.updated ...
+  secret     String   @default("") // 签名密钥（仅存本服务，不对外展示）
+  enabled    Boolean  @default(true)
+  lastStatus Int      @default(0)
+  lastError  String   @default("")
+  lastSentAt DateTime?
+  createdAt  DateTime @default(now())
+  calls      WebhookCall[]
+
+  @@index([enabled])
+}
+
+model WebhookCall {
+  id        String   @id @default(cuid())
+  webhookId String
+  webhook   Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  event     String
+  payload   String   @default("{}")
+  status    Int      @default(0)
+  error     String   @default("")
+  sentAt    DateTime @default(now())
+
+  @@index([webhookId])
+  @@index([sentAt])
 }

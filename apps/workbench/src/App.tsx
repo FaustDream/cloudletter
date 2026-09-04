@@ -1,9 +1,10 @@
 /** 工作台路由：内容(总览/文章/灵感/组织/检索) + 日常(目标三合一) + 记账 + 账号，旧路径重定向 */
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth'
 import { Shell } from './components/framework/Shell'
 import { ToastProvider } from './components/framework/Toast'
 import { QuickActionsProvider } from './components/framework/QuickActions'
+import { ErrorBoundary } from './components/framework/ErrorBoundary'
 import { LoginPage } from './pages/LoginPage'
 import { OverviewPage } from './pages/OverviewPage'
 import { PostsPage } from './pages/PostsPage'
@@ -13,8 +14,11 @@ import { OrganizePage } from './pages/OrganizePage'
 import { SearchPage } from './pages/SearchPage'
 import { GoalsHomePage } from './pages/GoalsHomePage'
 import { DailyPage } from './pages/DailyPage'
+import { QuickNotesPage } from './pages/QuickNotesPage'
+import { WorkPlanPage } from './pages/WorkPlanPage'
 import { LedgerPage } from './pages/LedgerPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { GrantPage } from './pages/GrantPage'
 
 function Guard({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -35,19 +39,29 @@ function Redirect({ to }: { to: string }) {
   return <Navigate to={to} replace />
 }
 
+/** 路由级兜底：按 pathname 重置，页面崩溃只降级当前路由（侧边栏存活），切换路由自动恢复 */
+function RouteBoundary({ children }: { children: React.ReactNode }) {
+  const { pathname } = useLocation()
+  return <ErrorBoundary key={pathname}>{children}</ErrorBoundary>
+}
+
 export default function App() {
   return (
-    <BrowserRouter>
+    <ErrorBoundary kind="app">
+      <BrowserRouter>
       <AuthProvider>
         <ToastProvider>
           <Routes>
             <Route path="/login" element={<LoginRoute />} />
+            {/* 一次性授权访问（公开）：访客经邮件链接进入，只读查看授权范围 */}
+            <Route path="/grant" element={<GrantPage />} />
             <Route
               path="/*"
               element={
                 <Guard>
                   <QuickActionsProvider>
                   <Shell>
+                    <RouteBoundary>
                     <Routes>
                       <Route index element={<OverviewPage />} />
                       {/* 内容 */}
@@ -55,10 +69,12 @@ export default function App() {
                       <Route path="posts/new" element={<NewPostPage />} />
                       <Route path="posts/:id/edit" element={<EditorPage />} />
                       <Route path="notes" element={<NotesPage />} />
+                      <Route path="quick-notes" element={<QuickNotesPage />} />
                       <Route path="organize" element={<OrganizePage />} />
                       <Route path="search" element={<SearchPage />} />
                       {/* 日常 */}
                       <Route path="daily" element={<DailyPage />} />
+                      <Route path="workplan" element={<WorkPlanPage />} />
                       <Route path="goals-home" element={<GoalsHomePage />} />
                       {/* 记账 */}
                       <Route path="ledger" element={<LedgerPage />} />
@@ -73,6 +89,7 @@ export default function App() {
                       <Route path="goals" element={<Redirect to="/goals-home?tab=goal" />} />
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
+                    </RouteBoundary>
                   </Shell>
                   </QuickActionsProvider>
                 </Guard>
@@ -82,5 +99,6 @@ export default function App() {
         </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
+    </ErrorBoundary>
   )
 }

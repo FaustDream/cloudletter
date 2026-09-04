@@ -253,20 +253,25 @@ export function TimelineUniverse3d({ days, filter, avatar, onBack, onOpenGame }:
         lastByType.set(t, m)
       })
     }
-    const pairInfos: PairInfo[] = [
+    let pairInfos: PairInfo[] = [
       ...datePairs.map(([a, b]) => ({ kind: 'date' as const, a, b })),
       ...typePairs.map(([a, b]) => ({ kind: 'type' as const, a, b })),
     ]
+    // ── 限边：连线总量封顶，超出时优先裁掉“同类型”长链尾部（保留同日期与较早关系） ──
+    const MAX_CONN = 240
+    if (pairInfos.length > MAX_CONN) pairInfos = pairInfos.slice(0, MAX_CONN)
     const mergedGeo = new THREE.BufferGeometry()
     mergedGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pairInfos.length * 6), 3))
     mergedGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(pairInfos.length * 6), 3))
-    const merged = new THREE.LineSegments(mergedGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.95 }))
+    // 柔和玻璃风：连线半透明，不再以接近不透明的纯黑压满画面
+    const merged = new THREE.LineSegments(mergedGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.5 }))
     merged.renderOrder = 1
     scene.add(merged)
-    // 辐射线
+    // 辐射线：按节点规模采样绘制，避免“蜘蛛网”式视觉过载
+    const radialNodes = allNodes.length > 60 ? allNodes.filter((_, i) => i % 2 === 0) : allNodes
     const radialGeo = new THREE.BufferGeometry()
-    radialGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(allNodes.length * 6), 3))
-    const radialMat = new THREE.LineBasicMaterial({ color: LINE_RADIAL, transparent: true, opacity: 0.4 })
+    radialGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(radialNodes.length * 6), 3))
+    const radialMat = new THREE.LineBasicMaterial({ color: LINE_RADIAL, transparent: true, opacity: 0.22 })
     const radial = new THREE.LineSegments(radialGeo, radialMat)
     radial.renderOrder = 1
     scene.add(radial)
@@ -292,6 +297,8 @@ export function TimelineUniverse3d({ days, filter, avatar, onBack, onOpenGame }:
     pulse.visible = false
     scene.add(pulse)
     const PAIR_COLOR: Record<'date' | 'type', THREE.Color> = { date: new THREE.Color(LINE_DATE), type: new THREE.Color(LINE_TYPE) }
+    // 初始即写入语义色（同日期=蓝、同类型=琥珀，与图例一致）；此前颜色缓冲全 0 → 连线渲染成纯黑
+    paintPairs(null)
 
     /** 连线隔离态：设置后每帧只绘制集合内的线段（其余收敛原点不可见） */
     let isolatedPairs: Set<number> | null = null
@@ -326,7 +333,7 @@ export function TimelineUniverse3d({ days, filter, avatar, onBack, onOpenGame }:
       mergedGeo.attributes.position.needsUpdate = true
       const rt = radialGeo.attributes.position.array as Float32Array
       let r2 = 0
-      allNodes.forEach((m) => {
+      radialNodes.forEach((m) => {
         rt[r2++] = 0; rt[r2++] = 0; rt[r2++] = 0
         rt[r2++] = m.position.x; rt[r2++] = m.position.y; rt[r2++] = m.position.z
       })
@@ -402,7 +409,7 @@ export function TimelineUniverse3d({ days, filter, avatar, onBack, onOpenGame }:
         delete u.dimF
         m.scale.setScalar(u.size)
       })
-      radialMat.opacity = 0.4
+      radialMat.opacity = 0.22
       isolatedPairs = null
       focusNodes = null
       controls.autoRotate = true // 恢复自转

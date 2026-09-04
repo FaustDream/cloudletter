@@ -49,12 +49,17 @@ export default function globalSetup(): void {
   }
 
   // 2. prisma db push（建表）—— 用 node 直调 + spawnSync 参数组，绕开 corepack/pnpm 与 shell 引号问题
+  //    先 drop FTS5 虚拟表（post_search*，由运行时代码建成、不在 schema 中）：
+  //    db push 会把这类「存在但不在 schema 的表」当作多余表删除，FTS shadow 表非空即报错/告警。
+  //    与 server `db:push`（scripts/drop-fts-tables.ts）同一时序约定，服务启动时 initSearchIndex 自动重建。
   const nodeCmd = process.execPath
   const prismaCli = path.join(serverDir, 'node_modules', 'prisma', 'build', 'index.js')
+  const tsxCli = path.join(serverDir, 'node_modules', 'tsx', 'dist', 'cli.mjs')
+  const dropFts = path.join(serverDir, 'scripts', 'drop-fts-tables.ts')
+  runSync([nodeCmd, tsxCli, dropFts], serverDir, env)
   runSync([nodeCmd, prismaCli, 'db', 'push', '--skip-generate'], serverDir, env)
 
   // 3. seed 管理员
-  const tsxCli = path.join(serverDir, 'node_modules', 'tsx', 'dist', 'cli.mjs')
   const seedFile = path.join(serverDir, 'src', 'seed.ts')
   runSync([nodeCmd, tsxCli, seedFile], serverDir, env)
 }

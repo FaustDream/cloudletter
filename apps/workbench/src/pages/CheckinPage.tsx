@@ -1,35 +1,27 @@
-/** 习惯打卡：今日打卡 / 连续天数 / 新增习惯 */
+/** 习惯打卡：今日打卡 / 连续天数 / 新增习惯；点笔图标可查看并编辑习惯详情（文章编辑器内核） */
 import { useCallback, useEffect, useState } from 'react'
 import { api, type CheckinItem } from '../api'
 import { Icon } from '../components/framework/Icon'
 import { Modal, Field, confirmDialog } from '../components/framework/Modal'
+import { MarkdownEditor } from '../components/editor/MarkdownEditor'
 import { useToast } from '../components/framework/Toast'
 import { PageHeader } from '../components/framework/PageHeader'
 import { EmptyState } from '../components/framework/EmptyState'
 
 import { todayYMD } from '../lib/date'
+import { parseLog, computeStreak } from '../lib/checkin'
 
-function parseLog(log: string): Record<string, boolean> {
-  try { return JSON.parse(log || '{}') as Record<string, boolean> } catch { return {} }
-}
-
-function computeStreak(log: string): number {
-  const map = parseLog(log)
-  let n = 0
-  const d = new Date()
-  while (true) {
-    const k = todayYMD(d)
-    if (map[k]) { n++; d.setDate(d.getDate() - 1) } else break
-  }
-  return n
-}
+interface CkForm { name: string; emoji: string; desc: string }
 
 export function CheckinPage({ withHeader = true }: { withHeader?: boolean }) {
   const [items, setItems] = useState<CheckinItem[]>([])
   const [loading, setLoading] = useState(true)
+  /** creating=true 新建；editing 携带被编辑的习惯 */
+  const [formOpen, setFormOpen] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [name, setName] = useState('')
-  const [emoji, setEmoji] = useState('✨')
+  const [editing, setEditing] = useState<CheckinItem | null>(null)
+  const [form, setForm] = useState<CkForm>({ name: '', emoji: '✨', desc: '' })
+  const [saving, setSaving] = useState(false)
   const toast = useToast()
 
   const load = useCallback(() => {
@@ -43,16 +35,29 @@ export function CheckinPage({ withHeader = true }: { withHeader?: boolean }) {
 
   const todayDone = items.filter((i) => parseLog(i.log)[todayYMD()]).length
 
+  const openCreate = () => { setForm({ name: '', emoji: '✨', desc: '' }); setCreating(true); setEditing(null); setFormOpen(true) }
+  const openEdit = (item: CheckinItem) => {
+    setForm({ name: item.name, emoji: item.emoji || '✨', desc: item.desc || '' })
+    setCreating(false); setEditing(item); setFormOpen(true)
+  }
+
   const submit = async () => {
-    if (!name.trim()) return
+    if (!form.name.trim()) { toast('写一下习惯名称', 'err'); return }
+    setSaving(true)
     try {
-      await api.post('/workbench/checkin', { name: name.trim(), emoji })
-      toast('已创建习惯')
-      setName('')
-      setCreating(false)
+      if (creating) {
+        await api.post('/workbench/checkin', { name: form.name.trim(), emoji: form.emoji, desc: form.desc })
+        toast('已创建习惯')
+      } else if (editing) {
+        await api.put(`/workbench/checkin/${editing.id}`, { name: form.name.trim(), emoji: form.emoji, desc: form.desc })
+        toast('已保存修改')
+      }
+      setFormOpen(false); setEditing(null)
       load()
     } catch (e: any) {
-      toast(e?.message || '创建失败', 'err')
+      toast(e?.message || '保存失败', 'err')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -82,7 +87,7 @@ export function CheckinPage({ withHeader = true }: { withHeader?: boolean }) {
       <PageHeader
         title={withHeader ? '习惯打卡' : undefined}
         subtitle={withHeader ? `今日已完成 ${todayDone} / ${items.length}` : undefined}
-        actions={<button className={withHeader ? 'btn' : 'btn slim'} onClick={() => { setName(''); setEmoji('✨'); setCreating(true) }}>
+        actions={<button className={withHeader ? 'btn' : 'btn slim'} onClick={openCreate}>
           <Icon name="plus" size={15} /> 新增习惯
         </button>}
       />
@@ -93,7 +98,7 @@ export function CheckinPage({ withHeader = true }: { withHeader?: boolean }) {
         <EmptyState style={{ padding: '36px 20px' }}>
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>创建习惯，开始每天打卡</div>
           <div style={{ marginBottom: 16, color: 'var(--text-tertiary)' }}>创建习惯 → 每天勾选打卡 → 培养连续记录</div>
-          <button className="btn slim" onClick={() => { setName(''); setEmoji('✨'); setCreating(true) }}>
+          <button className="btn slim" onClick={openCreate}>
             <Icon name="plus" size={14} /> 创建第一个习惯
           </button>
         </EmptyState>
@@ -139,6 +144,13 @@ export function CheckinPage({ withHeader = true }: { withHeader?: boolean }) {
                 </div>
                 <button
                   className="ck-del"
+                  title="编辑习惯"
+                  onClick={(e) => { e.stopPropagation(); openEdit(item) }}
+                >
+                  <Icon name="pen" size={15} />
+                </button>
+                <button
+                  className="ck-del"
                   title="删除习惯"
                   onClick={(e) => { e.stopPropagation(); remove(item) }}
                 >
@@ -151,22 +163,26 @@ export function CheckinPage({ withHeader = true }: { withHeader?: boolean }) {
         </>
       )}
 
-      {creating && (
+      {formOpen && (
         <Modal
-          title="新增习惯"
-          onClose={() => setCreating(false)}
+          title={creating ? '新增习惯' : '编辑习惯'}
+          size="lg"
+          onClose={() => { setFormOpen(false); setEditing(null) }}
           footer={
             <>
-              <button className="btn ghost" onClick={() => setCreating(false)}>取消</button>
-              <button className="btn" onClick={submit}>保存</button>
+              <button className="btn ghost" onClick={() => { setFormOpen(false); setEditing(null) }}>取消</button>
+              <button className="btn" onClick={submit} disabled={saving}>{saving ? '保存中…' : '保存'}</button>
             </>
           }
         >
           <Field label="名称">
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="如：晨跑 30 分钟" maxLength={50} autoFocus />
+            <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="如：晨跑 30 分钟" autoFocus />
           </Field>
           <Field label="图标（emoji）">
-            <input type="text" value={emoji} onChange={(e) => setEmoji(e.target.value)} maxLength={4} placeholder="✨" />
+            <input type="text" value={form.emoji} onChange={(e) => setForm({ ...form, emoji: e.target.value })} maxLength={4} placeholder="✨" />
+          </Field>
+          <Field label="习惯说明 / 执行计划（文章编辑器 · 可留空）">
+            <MarkdownEditor value={form.desc} onChange={(md) => setForm((f) => ({ ...f, desc: md }))} minHeight={200} />
           </Field>
         </Modal>
       )}

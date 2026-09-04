@@ -129,6 +129,9 @@ export interface User {
   lastLoginAt?: string | null
   lastLoginIp?: string
   lastLoginAgent?: string
+  avatar?: string
+  avatarFrame?: string
+  avatarBadge?: string
 }
 
 export type PostStatus = 'draft' | 'published'
@@ -190,7 +193,7 @@ export interface RevDetail extends RevMeta {
 
 /* ========== 工作台模块（/workbench/:scope） ========== */
 
-export type WbScope = 'plan' | 'checkin' | 'ledger' | 'goals' | 'notes'
+export type WbScope = 'plan' | 'checkin' | 'ledger' | 'goals' | 'notes' | 'worktask'
 
 export interface PlanItem {
   id: string
@@ -209,6 +212,8 @@ export interface CheckinItem {
   id: string
   name: string
   emoji: string
+  /** 习惯说明（Markdown，编辑器内核维护） */
+  desc: string
   /** {"YYYY-MM-DD": true} 逐日打卡记录 */
   log: string
   streak: number
@@ -230,6 +235,7 @@ export interface GoalItem {
   id: string
   name: string
   emoji: string
+  desc: string
   current: number
   target: number
   unit: string
@@ -239,12 +245,32 @@ export interface GoalItem {
   updatedAt: string
 }
 
+/** 速记类型（NoteItem.type）：灵感 | 计划 */
+export type NoteType = 'inspiration' | 'plan'
+
 export interface NoteItem {
   id: string
   title: string
   body: string
+  /** 规范类型（inspiration=灵感 | plan=计划）；mood 为自由标签 */
+  type: NoteType
   mood: string
   date: string
+  done: boolean
+  doneAt: string
+  createdAt: string
+  updatedAt: string
+}
+
+/** 工作计划任务（周一~周五工作安排） */
+export interface WorkTask {
+  id: string
+  date: string // YYYY-MM-DD
+  text: string
+  note: string
+  done: boolean
+  doneAt: string
+  order: number
   createdAt: string
   updatedAt: string
 }

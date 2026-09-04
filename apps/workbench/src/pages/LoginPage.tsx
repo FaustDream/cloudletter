@@ -30,6 +30,34 @@ export function LoginPage() {
   const [err, setErr] = useState('')
   const [totp, setTotp] = useState('')
   const [totpStep, setTotpStep] = useState(false)
+  /** 两步验证邮箱安全恢复（需求 7：无法完成验证时的托底） */
+  const [tfaRecover, setTfaRecover] = useState<{ open: boolean; step: 'send' | 'confirm'; code: string; busy: boolean; msg: string; err: string }>({
+    open: false, step: 'send', code: '', busy: false, msg: '', err: '',
+  })
+  const sendTfaRecovery = async () => {
+    setTfaRecover((v) => ({ ...v, busy: true, msg: '', err: '' }))
+    try {
+      const r = await api.post('/auth/2fa/recovery-request', { email: email.trim() })
+      if ((r as any)?.mode === 'demo' && (r as any)?.dev?.code) {
+        setTfaRecover((v) => ({ ...v, step: 'confirm', msg: `演示环境恢复码：${(r as any).dev.code}（邮件已落盘）` }))
+      } else {
+        setTfaRecover((v) => ({ ...v, step: 'confirm', msg: '恢复码已发送至绑定邮箱（15 分钟有效，仅一次）' }))
+      }
+    } catch (ex: any) {
+      setTfaRecover((v) => ({ ...v, err: ex?.message ?? '发送失败，请重试' }))
+    } finally { setTfaRecover((v) => ({ ...v, busy: false })) }
+  }
+  const confirmTfaRecovery = async () => {
+    setTfaRecover((v) => ({ ...v, busy: true, msg: '', err: '' }))
+    try {
+      await api.post('/auth/2fa/recovery-confirm', { email: email.trim(), code: tfaRecover.code.trim() })
+      setTfaRecover((v) => ({ ...v, msg: '两步验证已安全重置，请用密码重新登录并尽快重新绑定验证器' }))
+      setTotpStep(false)
+      setTotp('')
+    } catch (ex: any) {
+      setTfaRecover((v) => ({ ...v, err: ex?.message ?? '验证失败，请重试' }))
+    } finally { setTfaRecover((v) => ({ ...v, busy: false })) }
+  }
   const [busy, setBusy] = useState(false)
   const [fieldErr, setFieldErr] = useState<{ email?: string; password?: string; code?: string }>({})
   const [help, setHelp] = useState<Help>(null)
@@ -352,6 +380,28 @@ export function LoginPage() {
                   <input id="login-totp" inputMode="numeric" maxLength={6} value={totp} autoFocus
                     onChange={(e) => setTotp(e.target.value.replace(/\D/g, ''))}
                     placeholder="6 位动态码" style={{ letterSpacing: 6, fontFamily: 'var(--mono)' }} />
+                  <span className="lfield-help">
+                    {!tfaRecover.open
+                      ? <button type="button" className="l-forgot" onClick={() => setTfaRecover((v) => ({ ...v, open: true }))}>无法获取验证码？通过绑定邮箱恢复</button>
+                      : null}
+                  </span>
+                  {tfaRecover.open && (
+                    <div className="tfa-recover">
+                      {tfaRecover.step === 'send'
+                        ? <button type="button" className="btn slim" disabled={tfaRecover.busy} onClick={sendTfaRecovery}>
+                            {tfaRecover.busy ? '发送中…' : '发送恢复码到绑定邮箱（15 分钟有效）'}
+                          </button>
+                        : <div className="tfa-recover-confirm">
+                            <input value={tfaRecover.code} onChange={(e) => setTfaRecover((v) => ({ ...v, code: e.target.value.toUpperCase() }))}
+                              placeholder="8 位恢复码" maxLength={8} style={{ width: 160, fontFamily: 'var(--mono)' }} />
+                            <button type="button" className="btn slim" disabled={tfaRecover.busy || tfaRecover.code.length < 4} onClick={confirmTfaRecovery}>
+                              {tfaRecover.busy ? '验证中…' : '安全重置两步验证'}
+                            </button>
+                          </div>}
+                      {tfaRecover.msg && <span className="lferr ok">{tfaRecover.msg}</span>}
+                      {tfaRecover.err && <span className="lferr">{tfaRecover.err}</span>}
+                    </div>
+                  )}
                 </div>
               )}
                 <div className="lfield">

@@ -30,6 +30,8 @@ export const dbDir = ensureDir(path.join(dataRoot, 'db'))
 export const revisionsDir = ensureDir(path.join(dataRoot, 'revisions'))
 /** 上传资源目录 */
 export const uploadsDir = ensureDir(path.join(dataRoot, 'uploads'))
+/** 头像目录 */
+export const avatarsDir = ensureDir(path.join(dataRoot, 'avatars'))
 
 /** SQLite 连接串 */
 export function databaseUrl(): string {

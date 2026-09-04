@@ -1,8 +1,26 @@
 /**
- * BlockNote 中文词典（0.54 dictionary i18n，结构对齐 core i18n Dictionary）。
- * 覆盖界面可见文案：斜杠菜单 / 占位符 / 工具栏提示 / 侧边手柄 / 表格手柄 / 取色器 / 文件面板 / 链接栏。
+ * BlockNote 中文词典（0.54 dictionary i18n）：官方 en 词典打底，本文件仅维护中文覆盖项。
+ * 结构对齐 core i18n Dictionary；覆盖界面可见文案：斜杠菜单 / 占位符 / 工具栏提示 / 侧边手柄 / 表格手柄 / 取色器 / 文件面板 / 链接栏。
+ * 不再手写全量键——0.54 react 层会读取 slash_menu.heading 等全部内置键，手写漏键即编辑器崩溃（缺键回退英文）。
  */
-export const zhDictionary = {
+import { en, type Dictionary } from '@blocknote/core/locales'
+
+type Plain = Record<string, unknown>
+
+/** 深合并：override 为部分覆盖（叶子整体替换），base 保证键完整 */
+function deepMergeEn(base: Plain, override: Plain): Dictionary {
+  const out: Plain = { ...base }
+  for (const [k, v] of Object.entries(override)) {
+    const b = out[k]
+    out[k] =
+      v && typeof v === 'object' && !Array.isArray(v) && b && typeof b === 'object' && !Array.isArray(b)
+        ? deepMergeEn(b as Plain, v as Plain)
+        : v
+  }
+  return out as Dictionary
+}
+
+const zhOverrides = {
   slash_menu: {
     heading_1: { title: '标题 1', subtext: '顶级标题', aliases: ['h', 'heading1', 'h1'], group: '标题' },
     heading_2: { title: '标题 2', subtext: '关键章节标题', aliases: ['h2', 'heading2', 'subheading'], group: '标题' },
@@ -133,4 +151,6 @@ export const zhDictionary = {
   },
   exporter: { open_file: '打开文件', open_video_file: '打开视频', open_audio_file: '打开音频' },
   generic: { ctrl_shortcut: 'Ctrl' },
-} as const
+} as const satisfies Record<string, unknown>
+
+export const zhDictionary: Dictionary = deepMergeEn(en as unknown as Plain, zhOverrides as unknown as Plain)

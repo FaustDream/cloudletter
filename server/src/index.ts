@@ -6,7 +6,7 @@ import 'dotenv/config'
 import express from 'express'
 import { api } from './routes/index.js'
 import { prisma } from './prisma.js'
-import { uploadsDir } from './config.js'
+import { uploadsDir, avatarsDir } from './config.js'
 import { smtpStatus } from './mailer.js'
 import { initSearchIndex, reindexAllSearch } from './search-index.js'
 import { logInfo, logWarn, logError } from './logger.js'
@@ -132,6 +132,8 @@ app.use('/api/v2', api)
 
 // 上传图片静态托管兜底在前缀路由未命中的 GET（文件名含随机 hex 不可枚举；博客前台将来引用图片需公开可读）
 app.use('/api/v2/uploads', express.static(uploadsDir, { maxAge: '30d', immutable: true }))
+// 头像静态托管（/api/v2/avatars/*）
+app.use('/api/v2/avatars', express.static(avatarsDir, { maxAge: '1d' }))
 
 // 404 兜底
 app.use((_req, res) => {
