@@ -42,6 +42,7 @@ pnpm -C tests/e2e test:headed      # 端到端测试（有头浏览器）
 
 ## 变更记录
 
+- 2026-09-05（四）：侧边栏与「组织」页三项 UX 改进。① 侧边栏悬停展开重构为独立滑入抽屉：图标轨道常驻、全尺寸菜单作浮层仅动画 `transform`（合成器线程执行，零重排），替代原 `width` 逐帧重排——重页面（three/mermaid/BlockNote）下不再掉帧；另加 450ms 程序化关闭误触抑制、hover intent 120ms→80ms、`prefers-reduced-motion` 降级。② 能力导览条改为会话级弹出：新账户必弹、重新登录后首次进入弹一次（登录会话标记 `cl_login_epoch` 由 `api.setToken` 统一写入），提供「我知道了」（本会话）/「永不提示」/右上 ✕（本会话），页头新增「导览」入口可随时重看；旧 `cl_org_toured` 自动迁移为永不提示，设置页清偏好保留导览记录。③ 菜单「组织」更名「分类标签」（更贴合分类+标签+看板/图谱/洞察的实际功能），路由 `/organize` 与存储键不变；设置页布局主题分组同步更名「分类标签看板」。配套单测 `tests/workbench/lib/tour.test.ts`（本地不入库）11 例全绿。
 - 2026-09-05（三）：恢复被误删的 `e2e/tests` UI 端到端测试，并将整个 `e2e/` 工作区迁移至 `tests/e2e/`（`git mv` 保留历史），修正其内部相对路径（playwright.config 的 cwd 与内容目录、global-setup 的 serverDir、eslint 共享配置引用）；`.gitignore` 改为 `tests/*` + 例外 `!tests/e2e/`（单测仍本地不入库，端到端工作区入库）。
 - 2026-09-05（二）：仓库边界重划——`tests/` 转为本地目录不入库（.gitignore 忽略，已提交的测试文件自版本控制移除，本地文件保留、vitest 照常运行）；`docs/`（设计规范 + 上下文记忆）重新纳入版本控制；`.gitignore` 重写分区整理。另：前条记录中"25 个测试文件"应为 23 个（server 14 + workbench 9），已更正。
 - 2026-09-05：散落在 `server/src` 与 `apps/workbench/src` 的 23 个单测文件统一迁移至根 `tests/` 目录，按 `server/`（routes、middleware 镜像源码子目录）与 `workbench/`（components、lib、pages）分组；导入路径改用 `@server/*`、`@workbench/*` 别名，两包 vitest include 与 tsconfig paths/include 同步更新。迁移后 170 个用例全部通过（server 120 + workbench 50），typecheck 无回归。
