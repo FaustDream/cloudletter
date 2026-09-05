@@ -982,7 +982,7 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 
 /* ============================================================
    组件布局主题（同一概念：骨架不变 · 样式抽离）
-   检索结果 / 文章列表 / 组织看板 / 日常卡片
+   检索结果 / 文章列表 / 分类标签看板 / 日常卡片
    data-<area>=<variant> 由设置「组件布局风格」写入，仅替换外观
    ============================================================ */
 /* 检索结果条目 */
@@ -1003,7 +1003,7 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 .posts-body[data-posts='glass'] .ptable-row { background: rgba(255, 255, 255, .5); }
 [data-theme='dark'] .posts-body[data-posts='glass'] .ptable-row { background: rgba(30, 44, 70, .5); }
 
-/* 组织 · 看板卡片 */
+/* 分类标签 · 看板卡片 */
 .org-page[data-org='card'] .org-card { box-shadow: var(--shadow-card);
   border-color: color-mix(in srgb, var(--accent) 24%, var(--border)); }
 .org-page[data-org='glass'] .org-card { background: rgba(255, 255, 255, .55);
@@ -2236,7 +2236,7 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 }
 
 /* ============================================================
-   组织中枢（需求 5）：导览 / 看板 / 图谱 / 洞察
+   分类标签中枢（需求 5）：导览 / 看板 / 图谱 / 洞察
    ============================================================ */
 .tabbar button svg { vertical-align: -2px; margin-right: 4px; }
 .st-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; display: inline-block; }
@@ -2418,19 +2418,30 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 .fm-panel .fm-tags-row, .fm-panel .fm-cover-row { align-items: flex-start; }
 .fm-panel .fm-tags-row .fm-k, .fm-panel .fm-cover-row .fm-k { padding-top: 5px; }
 .fm-hint { display: block; font-size: 11px; color: var(--warn); margin-top: 4px; line-height: 1.5; }
-.fm-panel .fm-tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.fm-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--accent-muted);
-  color: var(--accent); font-size: 12px; font-weight: 600; padding: 3px 4px 3px 9px; border-radius: 999px; }
-.fm-chip button { border: none; background: rgba(80, 100, 160, .16); color: inherit; width: 16px; height: 16px;
-  border-radius: 999px; cursor: pointer; display: grid; place-items: center; padding: 0; }
-.fm-chip button:hover { background: var(--danger); color: #fff; }
-.fm-panel .fm-tags-input { flex: 1; min-width: 84px; width: auto; border: none; background: transparent;
-  font-size: 13px; color: var(--text); padding: 4px 2px; }
-.fm-tags-input:focus { outline: none; }
-.fm-tag-cand { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
-.fm-tag-cand button { border: 1px dashed var(--border-input); background: transparent; color: var(--text-secondary);
-  font-size: 11.5px; padding: 2px 9px; border-radius: 999px; cursor: pointer; }
-.fm-tag-cand button:hover { color: var(--accent); border-color: var(--accent); }
+/* 标签下拉多选（Notion 式：触发器 chip + 搜索 + 勾选 + 新建） */
+.tag-ms { position: relative; width: 100%; }
+.tag-ms-trigger { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; width: 100%; min-height: 34px;
+  padding: 4px 26px 4px 8px; background: var(--surface-card); border: 1px solid var(--border-input);
+  border-radius: 9px; cursor: pointer; font-size: 12.5px; text-align: left; position: relative; }
+.tag-ms-trigger:hover, .tag-ms-trigger.open { border-color: var(--accent); }
+.tag-ms-trigger .dd-chev { position: absolute; right: 9px; top: 50%; translate: 0 -50%; }
+.tag-ms-ph { color: var(--text-tertiary); }
+.tag-ms-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--accent-muted);
+  color: var(--accent); font-size: 12px; font-weight: 600; padding: 2px 4px 2px 8px; border-radius: 999px; }
+.tag-ms-chip i { font-style: normal; font-size: 11px; opacity: .7; padding: 0 3px; border-radius: 999px; }
+.tag-ms-chip i:hover { opacity: 1; background: var(--danger); color: #fff; }
+.tag-ms-menu { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 70;
+  background: var(--surface-solid); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: var(--shadow-overlay); padding: 6px; display: flex; flex-direction: column; gap: 2px;
+  animation: wlIn .15s var(--ease-out); }
+.tag-ms-menu.up { top: auto; bottom: calc(100% + 6px); }
+.tag-ms-search { border: 1px solid var(--border-input); background: var(--surface-card); border-radius: 8px;
+  font-size: 12.5px; font-family: inherit; color: var(--text); padding: 5px 8px; margin-bottom: 4px; }
+.tag-ms-item { display: flex; align-items: center; gap: 7px; border: none; background: transparent;
+  color: var(--text); font-size: 12.5px; padding: 6px 8px; border-radius: 8px; cursor: pointer; text-align: left; }
+.tag-ms-item:hover, .tag-ms-item.hi { background: var(--accent-muted); }
+.tag-ms-check { width: 14px; flex: 0 0 auto; color: var(--accent); font-weight: 800; }
+.tag-ms-new { flex: 0 0 auto; color: var(--accent); font-weight: 700; font-size: 12px; }
 .fm-cover-thumb { display: block; width: 100%; max-height: 112px; object-fit: cover; border-radius: 9px;
   border: 1px solid var(--border); margin-bottom: 6px; }
 .fm-cover-empty { font-size: 12px; color: var(--text-tertiary); border: 1px dashed var(--border-input);
@@ -2444,8 +2455,13 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 .outline { background: transparent; border: none; border-bottom: 1px solid var(--border);
   border-radius: 0; box-shadow: none; padding: 6px 4px 18px; }
 .outline-empty { font-size: 12.5px; color: var(--text-tertiary); }
-.outline-item { font-size: 12.8px; color: var(--text-secondary); line-height: 1.9; cursor: default;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.outline-title { display: block; width: 100%; text-align: left; border: none; background: transparent;
+  font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.7; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0; border-radius: 6px; }
+.outline-title:hover { color: var(--accent); }
+.outline-item { display: block; width: 100%; text-align: left; border: none; background: transparent;
+  font-size: 12.8px; color: var(--text-secondary); line-height: 1.9; cursor: pointer; padding: 0;
+  border-radius: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .outline-item:hover { color: var(--accent); }
 .outline-stats { display: flex; gap: 10px; font-size: 12px; color: var(--text-tertiary); font-family: var(--mono); }
 
@@ -2711,6 +2727,17 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
    BlockNote 编辑器宿主（ProseMirror/Tiptap 内核，与全站主题融合）
    ============================================================ */
 .ed-blocknote { display: flex; flex-direction: column; min-height: 300px; }
+/* ── 常驻格式工具栏（吸附在编辑区顶部） ── */
+.ed-toolbar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; flex-wrap: wrap;
+  gap: 2px; padding: 5px 8px; margin-bottom: 8px; border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-card) 86%, transparent);
+  backdrop-filter: blur(8px); border: 1px solid var(--border); }
+.ed-tb-btn { border: none; background: transparent; color: var(--text-secondary); font-size: 12.5px;
+  line-height: 1; min-width: 26px; height: 24px; padding: 0 5px; border-radius: 6px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; }
+.ed-tb-btn:hover { background: var(--accent-muted); color: var(--accent); }
+.ed-tb-btn.on { background: var(--accent-muted); color: var(--accent); font-weight: 700; }
+.ed-tb-sep { width: 1px; height: 14px; background: var(--border); margin: 0 4px; flex: 0 0 auto; }
 .ed-blocknote .bn-container { min-height: 300px; border: none; background: transparent; }
 .ed-blocknote .bn-editor { padding: 4px 8px 64px; background: transparent;
   font-family: var(--font-sans, inherit); color: var(--text); }

@@ -1,5 +1,5 @@
 /**
- * 组织页（需求 5：内容组织中枢）
+ * 分类标签页（原「组织」，路由 /organize 不变；需求 5：内容组织中枢）
  * 定位：把散落的内容，组织成可以被理解、被检索、被复用的结构。
  * 能力导览（首次进入展示）→ 五种视图同源派生：分类 / 标签 / 看板 / 图谱(关联推荐) / 洞察。
  */
@@ -68,7 +68,7 @@ export function OrganizePage() {
   return (
     <div className="org-page" data-org={kanbanTheme}>
       <PageHeader
-        title="组织"
+        title="分类标签"
         subtitle="把散落的内容，组织成可以被理解、被检索、被复用的结构"
         actions={<div className="org-head-tools">
           <button className="tour-reopen" title="重看功能导览" onClick={() => setToured(false)}>

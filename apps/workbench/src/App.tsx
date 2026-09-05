@@ -1,4 +1,4 @@
-/** 工作台路由：内容(总览/文章/灵感/组织/检索) + 日常(目标三合一) + 记账 + 账号，旧路径重定向 */
+/** 工作台路由：内容(总览/文章/灵感/分类标签/检索) + 日常(目标三合一) + 记账 + 账号，旧路径重定向 */
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth'
 import { Shell } from './components/framework/Shell'
@@ -34,7 +34,7 @@ function LoginRoute() {
   return <LoginPage />
 }
 
-/** 旧路径 → 新路径重定向（分类/标签并入组织页，计划/习惯/目标并入目标页） */
+/** 旧路径 → 新路径重定向（分类/标签并入分类标签页，计划/习惯/目标并入目标页） */
 function Redirect({ to }: { to: string }) {
   return <Navigate to={to} replace />
 }

@@ -22,14 +22,14 @@ interface NavItem {
 }
 
 /** 导航平铺（去掉分组标题，减少层级干扰，功能本身即入口）。
- *  需求调整：统一顺序 = 云笺 / 灵感笔记 / 日常 / 文章 / 目标 / 组织 / 检索 / 记账本 / 设置。 */
+ *  需求调整：统一顺序 = 云笺 / 灵感笔记 / 日常 / 文章 / 目标 / 分类标签 / 检索 / 记账本 / 设置。 */
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: '云笺', icon: 'home' },
   { to: '/notes', label: '灵感笔记', icon: 'book' },
   { to: '/daily', label: '日常', icon: 'flame' },
   { to: '/posts', label: '文章', icon: 'file' },
   { to: '/goals-home', label: '目标', icon: 'target' },
-  { to: '/organize', label: '组织', icon: 'grid' },
+  { to: '/organize', label: '分类标签', icon: 'grid' },
   { to: '/search', label: '检索', icon: 'search' },
   { to: '/ledger', label: '记账本', icon: 'wallet' },
   { to: '/settings', label: '设置', icon: 'setting' },

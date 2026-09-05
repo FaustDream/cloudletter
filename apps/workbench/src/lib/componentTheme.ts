@@ -151,7 +151,7 @@ export const POST_LIST_THEMES: ThemeVariant[] = [
   { id: 'subtle', label: '浅灰', desc: '浅灰块层次', swatch: 'linear-gradient(135deg, #fafbff, #f5f8ff)' },
 ]
 
-/** 组织看板卡片主题 */
+/** 分类标签页看板卡片主题 */
 export const ORG_KANBAN_THEMES: ThemeVariant[] = [
   { id: 'clean', label: '清爽', desc: '白底无背景 · 默认', swatch: 'transparent' },
   { id: 'card', label: '卡片', desc: '圆角卡片阴影', swatch: 'linear-gradient(135deg, #ffffff, #f8faff)' },
@@ -175,7 +175,7 @@ export const LAYOUT_THEMES: { key: string; label: string; variants: ThemeVariant
   { key: 'searchCard', label: '检索卡片', variants: SEARCH_CARD_THEMES },
   { key: 'goalsRow', label: '目标行', variants: GOALS_ROW_THEMES },
   { key: 'postList', label: '文章列表', variants: POST_LIST_THEMES },
-  { key: 'orgKanban', label: '组织看板', variants: ORG_KANBAN_THEMES },
+  { key: 'orgKanban', label: '分类标签看板', variants: ORG_KANBAN_THEMES },
 ]
 
 /** 读取布局主题偏好 */
