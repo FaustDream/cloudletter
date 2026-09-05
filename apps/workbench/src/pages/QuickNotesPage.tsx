@@ -1,38 +1,29 @@
 /**
- * 速记汇总：集中查看全部速记（灵感 / 计划）。
- * 列表展示类型徽章、标题、内容预览、创建时间与状态（计划类可标记完成）；
+ * 速记汇总：集中查看全部速记灵感（计划类速记已并入今日计划，在「目标 → 今日计划」管理）。
+ * 列表展示标题、内容预览、创建时间与共用分类/标签；
  * 点击 → 详情侧栏（全文渲染）→ 编辑弹窗（文章编辑器内核）→ 保存。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api, type NoteItem, type NoteType } from '../api'
+import { api, type Category, type NoteItem } from '../api'
 import { Icon } from '../components/framework/Icon'
 import { Modal, Field, confirmDialog } from '../components/framework/Modal'
 import { Drawer } from '../components/framework/Drawer'
 import { MarkdownView } from '../components/framework/MarkdownView'
 import { MarkdownEditor } from '../components/editor/MarkdownEditor'
+import { Dropdown } from '../components/framework/Dropdown'
 import { useToast } from '../components/framework/Toast'
 import { PageHeader } from '../components/framework/PageHeader'
 import { EmptyState } from '../components/framework/EmptyState'
-import { NOTE_TYPES } from '../components/timeline/QuickNoteModal'
-
-const TYPE_META: Record<NoteType, { label: string; color: string }> = {
-  inspiration: { label: '灵感', color: '#D97706' },
-  plan: { label: '计划', color: '#EA580C' },
-}
-
-type TypeFilter = 'all' | NoteType
-type StatusFilter = 'all' | 'open' | 'done'
 
 export function QuickNotesPage() {
   const [items, setItems] = useState<NoteItem[]>([])
+  const [cats, setCats] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [kw, setKw] = useState('')
   /** 详情：note 全量展示；编辑：编辑态（detail 为空时也可从新建进入） */
   const [detail, setDetail] = useState<NoteItem | null>(null)
   const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState<{ title: string; body: string; type: NoteType; mood: string }>({ title: '', body: '', type: 'inspiration', mood: '' })
+  const [form, setForm] = useState<{ title: string; body: string; categoryId: string; tags: string }>({ title: '', body: '', categoryId: '', tags: '灵感' })
   const [creating, setCreating] = useState(false)
   const [saving, setSaving] = useState(false)
   const toast = useToast()
@@ -46,6 +37,12 @@ export function QuickNotesPage() {
   }, [])
   useEffect(load, [load])
 
+  useEffect(() => {
+    api.get<{ items: Category[] }>('/categories').then((r) => setCats(r.items)).catch(() => {})
+  }, [])
+
+  const defaultCategoryId = useMemo(() => cats.find((c) => c.name === '灵感')?.id ?? '', [cats])
+
   const sorted = useMemo(
     () => [...items].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))),
     [items],
@@ -54,22 +51,21 @@ export function QuickNotesPage() {
   const filtered = useMemo(() => {
     const k = kw.trim().toLowerCase()
     return sorted.filter((n) => {
-      if (typeFilter !== 'all' && n.type !== typeFilter) return false
-      if (statusFilter === 'open' && n.done) return false
-      if (statusFilter === 'done' && !n.done) return false
-      if (k && !(n.title.toLowerCase().includes(k) || n.body.toLowerCase().includes(k) || (n.mood || '').toLowerCase().includes(k))) return false
+      if (k && !(n.title.toLowerCase().includes(k) || n.body.toLowerCase().includes(k) || n.tags.join(',').toLowerCase().includes(k))) return false
       return true
     })
-  }, [sorted, typeFilter, statusFilter, kw])
+  }, [sorted, kw])
+
+  const parseTags = () => form.tags.split(/[,，]/).map((s) => s.trim()).filter(Boolean)
 
   const openCreate = () => {
-    setForm({ title: '', body: '', type: 'inspiration', mood: '' })
+    setForm({ title: '', body: '', categoryId: defaultCategoryId, tags: '灵感' })
     setCreating(true)
     setEditing(true)
   }
 
   const openEdit = (n: NoteItem) => {
-    setForm({ title: n.title, body: n.body, type: n.type === 'plan' ? 'plan' : 'inspiration', mood: n.mood || '' })
+    setForm({ title: n.title, body: n.body, categoryId: n.categoryId ?? '', tags: n.tags.join(', ') })
     setDetail(n)
     setEditing(true)
   }
@@ -81,8 +77,8 @@ export function QuickNotesPage() {
       const payload = {
         title: form.title.trim() || form.body.trim().split('\n')[0].slice(0, 120),
         body: form.body,
-        type: form.type,
-        mood: form.mood.trim(),
+        categoryId: form.categoryId,
+        tags: parseTags(),
       }
       if (creating) {
         await api.post('/workbench/notes', { ...payload, date: new Date().toISOString().slice(0, 10) })
@@ -102,15 +98,6 @@ export function QuickNotesPage() {
     }
   }
 
-  const toggleDone = async (n: NoteItem) => {
-    try {
-      const now = !n.done
-      await api.put(`/workbench/notes/${n.id}`, { done: now, doneAt: now ? new Date().toISOString() : '' })
-      if (detail?.id === n.id) setDetail({ ...n, done: now, doneAt: now ? new Date().toISOString() : '' })
-      load()
-    } catch (e: any) { toast(e?.message || '操作失败', 'err') }
-  }
-
   const remove = async (n: NoteItem) => {
     if (!(await confirmDialog({ title: '删除速记', description: `确定删除「${n.title || '（无标题）'}」？删除后不可恢复。`, type: 'danger', confirmText: '删除' }))) return
     try {
@@ -121,35 +108,15 @@ export function QuickNotesPage() {
     } catch (e: any) { toast(e?.message || '删除失败', 'err') }
   }
 
-  const counts = useMemo(() => ({
-    all: items.length,
-    inspiration: items.filter((i) => i.type !== 'plan').length,
-    plan: items.filter((i) => i.type === 'plan').length,
-    done: items.filter((i) => i.done).length,
-  }), [items])
-
   return (
     <>
       <PageHeader
         title="速记汇总"
-        subtitle={`共 ${counts.all} 条 · 灵感 ${counts.inspiration} / 计划 ${counts.plan} · 已完成 ${counts.done}`}
+        subtitle={`共 ${items.length} 条 · 分类标签与文章共用 · 计划请到「目标 → 今日计划」`}
         actions={<button className="btn" onClick={openCreate}><Icon name="plus" size={16} /> 新增速记</button>}
       />
 
       <div className="qn-toolbar">
-        <div className="fchips">
-          <button className={`fchip${typeFilter === 'all' ? ' on' : ''}`} onClick={() => setTypeFilter('all')}>全部</button>
-          {NOTE_TYPES.map(([k, l]) => (
-            <button key={k} className={`fchip${typeFilter === k ? ' on' : ''}`} onClick={() => setTypeFilter(k as NoteType)}>
-              {l.slice(2)}
-            </button>
-          ))}
-        </div>
-        <div className="fchips">
-          <button className={`fchip${statusFilter === 'all' ? ' on' : ''}`} onClick={() => setStatusFilter('all')}>全部状态</button>
-          <button className={`fchip${statusFilter === 'open' ? ' on' : ''}`} onClick={() => setStatusFilter('open')}>未完成</button>
-          <button className={`fchip${statusFilter === 'done' ? ' on' : ''}`} onClick={() => setStatusFilter('done')}>已完成</button>
-        </div>
         <div className="spacer" />
         <input className="qn-search" type="search" value={kw} onChange={(e) => setKw(e.target.value)} placeholder="搜索标题 / 内容 / 标签" />
       </div>
@@ -159,39 +126,27 @@ export function QuickNotesPage() {
       ) : filtered.length === 0 ? (
         <EmptyState style={{ padding: '36px 20px' }}>
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>没有符合条件的速记</div>
-          <div style={{ marginBottom: 16, color: 'var(--text-tertiary)' }}>任意页面按 Ctrl/⌘+N 或点右下角 ⚡ 都能随时速记</div>
+          <div style={{ marginBottom: 16, color: 'var(--text-tertiary)' }}>任意页面按 Ctrl/⌘+N 或点左下角 ⚡ 都能随时速记</div>
           <button className="btn slim" onClick={openCreate}><Icon name="plus" size={14} /> 新增速记</button>
         </EmptyState>
       ) : (
         <div className="wb-list qn-list">
-          {filtered.map((n) => {
-            const meta = TYPE_META[n.type === 'plan' ? 'plan' : 'inspiration']
-            return (
-              <div key={n.id} className={`wb-item ${n.done ? 'done' : ''}`} onClick={() => { setDetail(n); setEditing(false) }}>
-                <span className="qn-type" style={{ color: meta.color, background: `color-mix(in srgb, ${meta.color} 12%, transparent)` }}>{meta.label}</span>
-                <div className="wtx">
-                  <div className={`wn ${n.done ? 'done' : ''}`}>{n.title || '（无标题）'}</div>
-                  {n.body && <div className="wsub">{n.body.replace(/[#*`>\-[\]]/g, '').slice(0, 90)}</div>}
-                  <div className="wst">
-                    创建于 {(n.createdAt || '').slice(0, 16).replace('T', ' ')}
-                    {n.mood ? ` · #${n.mood.split(',').join(' #')}` : ''}
-                  </div>
+          {filtered.map((n) => (
+            <div key={n.id} className="wb-item" onClick={() => { setDetail(n); setEditing(false) }}>
+              <div className="wtx">
+                <div className="wn">{n.title || '（无标题）'}</div>
+                {n.body && <div className="wsub">{n.body.replace(/[#*`>\-[\]]/g, '').slice(0, 90)}</div>}
+                <div className="wst">
+                  创建于 {(n.createdAt || '').slice(0, 16).replace('T', ' ')}
+                  {n.category?.name ? ` · ${n.category.name}` : ''}
+                  {n.tags.length ? ` · ${n.tags.map((t) => `#${t}`).join(' ')}` : ''}
                 </div>
-                {n.type === 'plan' && (
-                  <button
-                    className={`qn-done ${n.done ? 'on' : ''}`}
-                    title={n.done ? `完成于 ${(n.doneAt || '').slice(0, 16).replace('T', ' ')}` : '标记完成'}
-                    onClick={(e) => { e.stopPropagation(); toggleDone(n) }}
-                  >
-                    <Icon name={n.done ? 'check' : 'clock'} size={15} /> {n.done ? '已完成' : '未完成'}
-                  </button>
-                )}
-                <button className="wdel" title="编辑" onClick={(e) => { e.stopPropagation(); openEdit(n) }}>
-                  <Icon name="pen" size={15} />
-                </button>
               </div>
-            )
-          })}
+              <button className="wdel" title="编辑" onClick={(e) => { e.stopPropagation(); openEdit(n) }}>
+                <Icon name="pen" size={15} />
+              </button>
+            </div>
+          ))}
         </div>
       )}
 
@@ -199,29 +154,23 @@ export function QuickNotesPage() {
       {detail && !editing && (
         <Drawer
           width={560}
-          title={<span className="qn-drawer-title"><span className="qn-type" style={{ color: TYPE_META[detail.type === 'plan' ? 'plan' : 'inspiration'].color, background: `color-mix(in srgb, ${TYPE_META[detail.type === 'plan' ? 'plan' : 'inspiration'].color} 12%, transparent)` }}>{TYPE_META[detail.type === 'plan' ? 'plan' : 'inspiration'].label}</span>{detail.title || '（无标题）'}</span>}
-          hint={`${(detail.createdAt || '').slice(0, 16).replace('T', ' ')} 创建`}
+          title={detail.title || '（无标题）'}
+          hint={`${(detail.createdAt || '').slice(0, 16).replace('T', ' ')} 创建${detail.category?.name ? ` · ${detail.category.name}` : ''}`}
           onClose={() => setDetail(null)}
           footer={
             <>
               <button className="btn ghost danger" onClick={() => remove(detail)}><Icon name="trash" size={15} /> 删除</button>
               <div className="spacer" />
-              {detail.type === 'plan' && (
-                <button className={`btn ghost${detail.done ? ' ok' : ''}`} onClick={() => toggleDone(detail)}>
-                  <Icon name="check" size={15} /> {detail.done ? '取消完成' : '标记完成'}
-                </button>
-              )}
               <button className="btn" onClick={() => openEdit(detail)}><Icon name="pen" size={15} /> 编辑</button>
             </>
           }
         >
           <MarkdownView value={detail.body} empty="（这条速记没有正文）" />
-          {detail.mood && (
+          {detail.tags.length > 0 && (
             <div className="qn-tags">
-              {detail.mood.split(',').filter(Boolean).map((t) => <span key={t} className="chip">#{t.trim()}</span>)}
+              {detail.tags.map((t) => <span key={t} className="chip">#{t}</span>)}
             </div>
           )}
-          {detail.done && detail.doneAt && <div className="wst done" style={{ marginTop: 10 }}>✅ 完成于 {detail.doneAt.slice(0, 16).replace('T', ' ')}</div>}
         </Drawer>
       )}
 
@@ -242,15 +191,16 @@ export function QuickNotesPage() {
             <input type="text" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="一句话标题" autoFocus />
           </Field>
           <div className="grid g-2">
-            <Field label="类型">
-              <div style={{ display: 'flex', gap: 6 }}>
-                {NOTE_TYPES.map(([k, l]) => (
-                  <button key={k} type="button" className={`seg-btn ${form.type === k ? 'on' : ''}`} onClick={() => setForm({ ...form, type: k as NoteType })}>{l}</button>
-                ))}
-              </div>
+            <Field label="分类（与文章共用）">
+              <Dropdown
+                value={form.categoryId}
+                align="left"
+                options={[{ value: '', label: '无分类' }, ...cats.map((c) => ({ value: c.id, label: c.name }))]}
+                onChange={(v) => setForm((f) => ({ ...f, categoryId: v }))}
+              />
             </Field>
-            <Field label="标签（逗号分隔，可选）">
-              <input type="text" value={form.mood} onChange={(e) => setForm({ ...form, mood: e.target.value })} placeholder="如：灵感，工作" />
+            <Field label="标签（逗号分隔，与文章共用）">
+              <input type="text" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="如：灵感，学习" />
             </Field>
           </div>
           <Field label="内容">

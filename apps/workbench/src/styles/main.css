@@ -823,15 +823,7 @@ textarea { resize: vertical; min-height: 120px; }
 .hero-banner .hstat + .hstat { padding-left: 26px; border-left: 1px solid var(--border-input); }
 .hero-banner .hbtn { position: absolute; top: 22px; right: 26px; z-index: 2; display: flex; gap: 10px; }
 
-/* 分类占比条 */
-.catbar { margin-top: 8px; }
-.catbar .cbrow { display: flex; align-items: center; gap: 9px; padding: 8px 0; cursor: pointer; }
-.catbar .cbn { font-size: 12.5px; color: var(--text); width: 56px; flex: 0 0 auto;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.catbar .cbt { flex: 1; height: 9px; border-radius: 999px; background: var(--border); overflow: hidden; }
-.catbar .cbt i { display: block; height: 100%; border-radius: 999px; transition: width .6s var(--ease-out); }
-.catbar .cbv { font-size: 12px; color: var(--text-secondary); width: 48px; text-align: right; flex: 0 0 auto; }
-
+/* 标签云 */
 .tagcloud { display: flex; flex-wrap: wrap; gap: 10px; }
 .tagpile { display: inline-flex; align-items: center; gap: 7px; padding: 9px 15px; border-radius: 999px;
   cursor: pointer; background: var(--surface-card); border: 1px solid var(--border);
@@ -1003,12 +995,6 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 .posts-body[data-posts='glass'] .ptable-row { background: rgba(255, 255, 255, .5); }
 [data-theme='dark'] .posts-body[data-posts='glass'] .ptable-row { background: rgba(30, 44, 70, .5); }
 
-/* 分类标签 · 看板卡片 */
-.org-page[data-org='card'] .org-card { box-shadow: var(--shadow-card);
-  border-color: color-mix(in srgb, var(--accent) 24%, var(--border)); }
-.org-page[data-org='glass'] .org-card { background: rgba(255, 255, 255, .55);
-  border-color: rgba(160, 195, 235, .45); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
-[data-theme='dark'] .org-page[data-org='glass'] .org-card { background: rgba(30, 44, 70, .5); border-color: rgba(120, 150, 200, .28); }
 .goal-row .gtx { flex: 1; min-width: 0; }
 .goal-row .gtt { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
 .goal-row .gtt .gtn { font-size: 12px; color: var(--text-tertiary); }
@@ -2215,6 +2201,10 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 .tpill-opt.on { border-color: var(--accent); color: var(--accent); background: var(--accent-muted); font-weight: 600; }
 .nactions { display: flex; gap: 10px; margin-top: 2px; }
 .nactions .btn { flex: 1; justify-content: center; margin-top: 0; }
+/* 速记弹窗：分类/标签、紧急度/完成时间 两列行 */
+.qn-row { margin-top: 2px; }
+.nmodal .grid.g-2 { align-items: center; }
+.nmodal input[type='text'], .nmodal input[type='date'] { min-height: 38px; }
 .fab { position: fixed; right: 26px; bottom: 26px; z-index: 40; display: flex; align-items: center; gap: 8px;
   background: linear-gradient(135deg, var(--accent), var(--accent-deep)); color: var(--on-accent);
   border: none; cursor: grab; touch-action: none; user-select: none;
@@ -2269,26 +2259,10 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 .tour-reopen:hover { color: var(--accent); border-color: var(--accent); }
 .tour-reopen svg { opacity: .8; }
 
-/* 看板 */
-.org-board { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 10px; align-items: flex-start; }
-.org-col { min-width: 250px; max-width: 300px; flex: 1 1 0; background: var(--surface-nested);
-  border: 1px solid var(--border); border-radius: var(--radius-tile); padding: 10px 10px 12px; }
-.org-col-h { display: flex; align-items: center; gap: 8px; padding: 4px 6px 10px; font-size: 13px; }
-.org-col-h b { cursor: pointer; font-weight: 800; }
-.org-col-h b:hover { color: var(--accent); }
-.org-col-h em { margin-left: auto; font-style: normal; font-size: 11px; color: var(--text-tertiary);
-  background: var(--surface-solid); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; }
-.oc-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--cc); flex: 0 0 auto; }
-.org-col-list { display: flex; flex-direction: column; gap: 8px; }
-.org-card { background: var(--surface-solid); border: 1px solid var(--border); border-radius: 11px;
-  padding: 10px 12px; cursor: pointer; transition: all .15s; }
-.org-card:hover { border-color: var(--accent); box-shadow: 0 8px 20px var(--glow-blue); translate: 0 -1px; }
-.oc-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.oc-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
-.oc-tags span { font-size: 10.5px; color: var(--text-tertiary); }
-.oc-meta { font-size: 11px; color: var(--text-tertiary); margin-top: 6px; font-variant-numeric: tabular-nums; }
-.org-col-empty { padding: 18px 4px; text-align: center; font-size: 12.5px; color: var(--text-tertiary); }
+/* 内容抽屉分区标题（分类/标签抽屉里的「文章 / 灵感笔记」分组行） */
+.txd-sec { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 800; margin: 4px 0 8px; }
+.txd-sec svg { color: var(--accent); }
+.txd-sec + .org-rel-list { margin-bottom: 14px; }
 
 /* 图谱 + 关联推荐 */
 .org-graph-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 14px; align-items: start; }
@@ -2315,15 +2289,7 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 .org-rel-item .ori-t { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .org-rel-item em { font-style: normal; font-size: 10.5px; color: var(--text-tertiary); flex: 0 0 auto; }
-
-/* 洞察 */
-.org-insights { display: flex; flex-direction: column; gap: 16px; }
-.org-ins-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; align-items: start; }
-.org-ins-sec { padding: 16px 18px; }
-.org-ins-desc { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary);
-  background: var(--accent-muted); border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border));
-  border-radius: var(--radius-tile); padding: 12px 16px; }
-.org-ins-desc svg { color: var(--accent); flex: 0 0 auto; }
+.org-col-empty { padding: 18px 4px; text-align: center; font-size: 12.5px; color: var(--text-tertiary); }
 /* ============================================================
    文章编辑页（写作空间并入工作台）
    ============================================================ */

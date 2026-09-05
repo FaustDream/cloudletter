@@ -1,15 +1,17 @@
-/** 速记居中弹窗 —— 全局可用（Shell 挂载）；类型收敛为 灵感/计划，保存落速记（NoteItem.type）并刷新时间轴 */
+/** 速记居中弹窗 —— 全局可用（Shell 挂载）；灵感=灵感笔记（与文章共用分类/标签），
+ *  计划=直接进今日计划（PlanItem：紧急度 level / 完成时间 dueDate / 标题 text / 详情 note） */
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { api } from '../../api'
+import { api, type Category, type NoteType } from '../../api'
 import { useToast } from '../framework/Toast'
-import { todayYMD } from '../../lib/date'
+import { Dropdown } from '../framework/Dropdown'
+import { MarkdownEditor } from '../editor/MarkdownEditor'
 
-/** 速记类型：灵感 | 计划 */
+/** 速记模式：灵感 | 计划 */
 const NOTE_TYPES: Array<[string, string]> = [['inspiration', '💡 灵感'], ['plan', '📋 计划']]
 
-/** 速记按钮拖拽位置记忆（localStorage）；null = 默认右下角 */
-const FAB_KEY = 'cl_fab_pos'
+/** 速记按钮拖拽位置记忆（localStorage）；null = 默认左下角 */
+const FAB_KEY = 'cl_fab_pos_v2'
 function loadFabPos(): { x: number; y: number } | null {
   try {
     const s = localStorage.getItem(FAB_KEY)
@@ -18,15 +20,28 @@ function loadFabPos(): { x: number; y: number } | null {
   return null
 }
 
+const LEVELS = [
+  { value: 'P0', label: 'P0 · 紧急' },
+  { value: 'P1', label: 'P1 · 重要' },
+  { value: 'P2', label: 'P2 · 一般' },
+]
+
 export function QuickNoteModal({ onSaved }: { onSaved?: () => void }) {
   const [open, setOpen] = useState(false)
-  const [type, setType] = useState('inspiration')
+  const [type, setType] = useState<NoteType>('inspiration')
+  // 灵感表单
   const [text, setText] = useState('')
-  const [tags, setTags] = useState('')
+  const [tags, setTags] = useState('灵感')
+  const [categoryId, setCategoryId] = useState('')
+  const [cats, setCats] = useState<Category[]>([])
+  // 计划表单（直接进今日计划）
+  const [planTitle, setPlanTitle] = useState('')
+  const [planNote, setPlanNote] = useState('')
+  const [level, setLevel] = useState('P1')
+  const [dueDate, setDueDate] = useState('')
   const [saving, setSaving] = useState(false)
   const toast = useToast()
-  const taRef = useRef<HTMLTextAreaElement>(null)
-  // ── 速记按钮：可拖拽移动（位移 >5px 视为拖拽，不触发展开；双击复位右下） ──
+  // ── 速记按钮：可拖拽移动（位移 >5px 视为拖拽，不触发展开；双击复位左下） ──
   const [fabPos, setFabPos] = useState<{ x: number; y: number } | null>(loadFabPos)
   const fabRef = useRef<HTMLButtonElement>(null)
   const fabDrag = useRef<{ bx: number; by: number; gx: number; gy: number; moved: boolean } | null>(null)
@@ -83,7 +98,7 @@ export function QuickNoteModal({ onSaved }: { onSaved?: () => void }) {
     fabPosRef.current = null
     setFabPos(null)
     try { localStorage.removeItem(FAB_KEY) } catch { /* 忽略 */ }
-    toast('速记按钮已复位到右下角')
+    toast('速记按钮已复位到左下角')
   }
 
   useEffect(() => {
@@ -96,25 +111,48 @@ export function QuickNoteModal({ onSaved }: { onSaved?: () => void }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  useEffect(() => { if (open) setTimeout(() => taRef.current?.focus(), 60) }, [open])
+  // 打开时补齐分类下拉（灵感笔记默认「灵感」分类）
+  useEffect(() => {
+    if (!open || cats.length > 0) return
+    api.get<{ items: Category[] }>('/categories')
+      .then((r) => {
+        setCats(r.items)
+        setCategoryId((v) => v || r.items.find((c) => c.name === '灵感')?.id || '')
+      })
+      .catch(() => {})
+  }, [open, cats.length])
 
-  const close = () => { setOpen(false); setText(''); setTags('') }
+  const close = () => {
+    setOpen(false); setText(''); setTags('灵感'); setPlanTitle(''); setPlanNote(''); setLevel('P1'); setDueDate('')
+  }
 
-  const save = async () => {
+  const parseTags = () => tags.split(/[,，]/).map((s) => s.trim()).filter(Boolean)
+
+  const saveInspiration = async () => {
     const body = text.trim()
     if (!body) { toast('写一句再保存~', 'err'); return }
+    await api.post('/workbench/notes', {
+      title: body.split('\n')[0].slice(0, 120) || '（无标题）',
+      body,
+      categoryId,
+      tags: parseTags(),
+      date: new Date().toISOString().slice(0, 10),
+    })
+    toast('已存入灵感笔记 · +10 XP')
+  }
+
+  const savePlan = async () => {
+    const title = planTitle.trim()
+    if (!title) { toast('给计划起个标题吧', 'err'); return }
+    await api.post('/workbench/plan', { text: title.slice(0, 2000), level, dueDate, note: planNote })
+    toast('已加入今日计划 · 完成后进时间轴')
+  }
+
+  const save = async () => {
     setSaving(true)
     try {
-      const tagLine = tags.split(/[,，]/).map((s) => s.trim()).filter(Boolean).join(',')
-      const typeLabel = NOTE_TYPES.find(([k]) => k === type)?.[1].slice(2) || '灵感'
-      await api.post('/workbench/notes', {
-        title: body.split('\n')[0].slice(0, 120) || '（无标题）',
-        body,
-        type,
-        mood: tagLine,
-        date: new Date().toISOString().slice(0, 10),
-      })
-      toast(`已入时间轴 · ${typeLabel} +10 XP`)
+      if (type === 'inspiration') await saveInspiration()
+      else await savePlan()
       close()
       onSaved?.()
       // 全局广播：任意页面保存速记后，时间轴等关心数据的页面自行刷新
@@ -136,24 +174,54 @@ export function QuickNoteModal({ onSaved }: { onSaved?: () => void }) {
           onPointerDown={onFabDown}
           onClick={onFabClick}
           onDoubleClick={onFabReset}
-          title="⚡ 速记 · 按住可拖拽移动位置 · 双击复位右下角"
+          title="⚡ 速记 · 按住可拖拽移动位置 · 双击复位左下角"
         >⚡ 速记</button>,
         document.body,
       )}
       {open && createPortal(
         <div className="overlay" onClick={close}>
           <div className="nmodal" onClick={(e) => e.stopPropagation()}>
-            <h3>速记 <span className="kick">灵感 / 计划 随手记 · Ctrl/⌘+N 保存 · Esc 关闭</span></h3>
+            <h3>速记 <span className="kick">灵感 / 计划 · Ctrl/⌘+N 唤起 · Esc 关闭</span></h3>
             <div className="type-pills">
               {NOTE_TYPES.map(([k, l]) => (
-                <button key={k} className={`tpill-opt${type === k ? ' on' : ''}`} type="button" onClick={() => setType(k)}>{l}</button>
+                <button key={k} className={`tpill-opt${type === k ? ' on' : ''}`} type="button" onClick={() => setType(k as NoteType)}>{l}</button>
               ))}
             </div>
-            <textarea ref={taRef} value={text} onChange={(e) => setText(e.target.value)} placeholder="此刻想到什么…" />
-            <input type="text" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="标签，逗号分隔（可选）" />
+            {type === 'inspiration' ? (
+              <>
+                <MarkdownEditor value={text} onChange={setText} minHeight={150} />
+                <div className="grid g-2 qn-row">
+                  <Dropdown
+                    value={categoryId}
+                    align="left"
+                    options={[{ value: '', label: '无分类' }, ...cats.map((c) => ({ value: c.id, label: c.name }))]}
+                    onChange={setCategoryId}
+                    ariaLabel="分类"
+                  />
+                  <input type="text" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="标签，逗号分隔（默认灵感）" />
+                </div>
+              </>
+            ) : (
+              <>
+                <input type="text" value={planTitle} onChange={(e) => setPlanTitle(e.target.value)} placeholder="计划标题（要做什么）" autoFocus />
+                <div className="grid g-2 qn-row">
+                  <Dropdown
+                    value={level}
+                    align="left"
+                    options={LEVELS}
+                    onChange={(v) => setLevel(v)}
+                    ariaLabel="紧急度"
+                  />
+                  <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} title="完成时间（可留空）" />
+                </div>
+                <MarkdownEditor value={planNote} onChange={setPlanNote} minHeight={120} />
+              </>
+            )}
             <div className="nactions">
               <button className="btn ghost" type="button" onClick={close}>取消</button>
-              <button className="btn" type="button" onClick={save} disabled={saving}>{saving ? '保存中…' : '保存到时间轴 · +XP'}</button>
+              <button className="btn" type="button" onClick={save} disabled={saving}>
+                {saving ? '保存中…' : type === 'inspiration' ? '存入灵感笔记 · +XP' : '加入今日计划'}
+              </button>
             </div>
           </div>
         </div>,

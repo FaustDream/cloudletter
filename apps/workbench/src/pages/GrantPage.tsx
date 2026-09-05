@@ -12,7 +12,7 @@ import { Loading } from '../components/framework/Loading'
 import type { TimelineDay } from '../api'
 
 interface GrantMeta { scopes: string[]; expiresAt: string; label: string }
-interface NoteRow { id: string; title: string; body: string; type: string; mood: string; date: string; done: boolean; createdAt: string }
+interface NoteRow { id: string; title: string; body: string; date: string; createdAt: string; tags: string[]; category?: { name: string } | null }
 interface PostRow { id: string; title: string; summary: string; charCount: number; publishedAt: string | null; tags: string[] }
 interface WorkRow { id: string; date: string; text: string; note: string; done: boolean; doneAt: string }
 interface PlanRow { id: string; text: string; level: string; note: string; done: boolean; dueDate: string; doneAt: string }
@@ -180,9 +180,11 @@ function GuestNotes() {
     <div className="grant-list">
       {items.map((n) => (
         <div key={n.id} className="grant-item">
-          <div className="wn">{n.type === 'plan' ? '📋 ' : '💡 '}{n.title || '（无标题）'}{n.done ? ' ✅' : ''}</div>
+          <div className="wn">💡 {n.title || '（无标题）'}</div>
           {n.body && <MarkdownView value={n.body} empty="" />}
-          <div className="dim" style={{ fontSize: 12 }}>{n.date}{n.mood ? ` · #${n.mood.split(',').join(' #')}` : ''}</div>
+          <div className="dim" style={{ fontSize: 12 }}>
+            {n.date}{n.category?.name ? ` · ${n.category.name}` : ''}{n.tags.length ? ` · ${n.tags.map((t) => `#${t}`).join(' ')}` : ''}
+          </div>
         </div>
       ))}
     </div>

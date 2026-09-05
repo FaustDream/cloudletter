@@ -1,12 +1,12 @@
-/** 分类管理：颜色语义 + 数量联动（点击进入文章筛选）+ hover 操作 + 描述/时间 */
+/** 分类管理：颜色语义 + 数量联动（点击开抽屉看分类下内容）+ hover 操作 + 描述/时间 */
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { api, type Category } from '../api'
 import { Icon } from '../components/framework/Icon'
 import { Modal, Field, confirmDialog } from '../components/framework/Modal'
 import { useToast } from '../components/framework/Toast'
 import { PageHeader } from '../components/framework/PageHeader'
 import { EmptyState } from '../components/framework/EmptyState'
+import { TaxonomyDrawer } from './org/TaxonomyDrawer'
 
 /** 分类名 → 语义色（技术=蓝 / 指南=蓝图 / 随笔=绿 / 项目=橙 / 生活=绿 / 重要=红） */
 const CAT_COLORS: Array<{ name: string; color: string }> = [
@@ -30,8 +30,9 @@ export function CategoriesPage({ withHeader = true }: { withHeader?: boolean }) 
   const [name, setName] = useState('')
   const [desc, setDesc] = useState('')
   const [creating, setCreating] = useState(false)
+  /** 点分类卡 → 抽屉展示该分类下的文章与灵感笔记（不整页跳转） */
+  const [drawer, setDrawer] = useState<string | null>(null)
   const toast = useToast()
-  const nav = useNavigate()
 
   const load = useCallback(() => {
     setLoading(true)
@@ -60,7 +61,7 @@ export function CategoriesPage({ withHeader = true }: { withHeader?: boolean }) 
   }
 
   const remove = async (c: Category) => {
-    if (!(await confirmDialog({ title: '删除分类', description: `确定删除分类「${c.name}」？删除后该分类下的文章将变为未分类。`, type: 'danger', confirmText: '删除' }))) return
+    if (!(await confirmDialog({ title: '删除分类', description: `确定删除分类「${c.name}」？删除后该分类下的文章与灵感笔记将变为未分类。`, type: 'danger', confirmText: '删除' }))) return
     try {
       await api.del(`/categories/${c.id}`)
       toast('已删除'); load()
@@ -72,7 +73,7 @@ export function CategoriesPage({ withHeader = true }: { withHeader?: boolean }) 
       {withHeader ? (
       <PageHeader
         title="分类"
-        subtitle="按主题组织文章 · 点击分类查看该分类下全部文章"
+        subtitle="文章与灵感笔记共用 · 点击分类查看相关内容"
         actions={<button className="btn" onClick={openCreate}><Icon name="plus" size={16} /> 新建分类</button>}
       />
       ) : (
@@ -90,17 +91,19 @@ export function CategoriesPage({ withHeader = true }: { withHeader?: boolean }) 
         <div className="cat-grid">
           {items.map((c) => {
             const color = catColor(c.name)
-            const count = c._count?.posts ?? 0
+            const pcount = c._count?.posts ?? 0
+            const ncount = c._count?.notes ?? 0
+            const count = pcount + ncount
             return (
-              <div key={c.id} className="cat-card" onClick={() => nav(`/posts?cat=${encodeURIComponent(c.name)}`)}>
+              <div key={c.id} className="cat-card" title="点击查看该分类下的文章与灵感笔记" onClick={() => setDrawer(c.name)}>
                 <span className="cc-dot" style={{ background: color, boxShadow: `0 0 0 4px color-mix(in srgb, ${color} 18%, transparent)` }} />
                 <div className="cc-name">{c.name}</div>
-                <div className="cc-count">{count} 篇</div>
+                <div className="cc-count">{pcount} 篇 · {ncount} 条</div>
                 <div className="cc-bar"><i style={{ width: `${Math.min(100, count * 14)}%`, background: color }} /></div>
-                <div className="cc-desc">{c.description || `创建于最近 · 共 ${count} 篇文章`}</div>
+                <div className="cc-desc">{c.description || `共 ${pcount} 篇文章 · ${ncount} 条灵感笔记`}</div>
                 <div className="cc-ops" onClick={(e) => e.stopPropagation()}>
                   <button className="qop" title="编辑" onClick={() => openEdit(c)}><Icon name="pen" size={14} /></button>
-                  <button className="qop danger" title="删除" disabled={count > 0} onClick={() => remove(c)}><Icon name="trash" size={14} /></button>
+                  <button className="qop danger" title={count > 0 ? '先移出该分类下的内容再删除' : '删除'} disabled={count > 0} onClick={() => remove(c)}><Icon name="trash" size={14} /></button>
                 </div>
               </div>
             )
@@ -119,6 +122,8 @@ export function CategoriesPage({ withHeader = true }: { withHeader?: boolean }) 
           <Field label="描述（可选）"><input type="text" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="一句话描述" /></Field>
         </Modal>
       )}
+      {/* 点分类 → 内容抽屉（文章 + 灵感笔记） */}
+      {drawer && <TaxonomyDrawer kind="category" name={drawer} onClose={() => setDrawer(null)} />}
     </>
   )
 }

@@ -94,11 +94,10 @@ export function TimelineDetailDrawer({ node, onClose }: { node: TimelineNode | n
         const n = detail as NoteItem
         return (
           <>
-            <Meta label="类型">{n.type === 'plan' ? '计划（速记）' : '灵感（速记）'}</Meta>
+            <Meta label="类型">灵感（速记）</Meta>
             <Meta label="记录日期">{n.date}</Meta>
             <Meta label="创建时间">{(n.createdAt || '').slice(0, 16).replace('T', ' ')}</Meta>
-            <Meta label="状态">{n.done ? `已完成${n.doneAt ? ` · ${n.doneAt.slice(0, 16).replace('T', ' ')}` : ''}` : '未完成'}</Meta>
-            {n.mood && <Meta label="标签">{n.mood.split(',').filter(Boolean).map((t) => `#${t.trim()}`).join(' ')}</Meta>}
+            {n.tags.length > 0 && <Meta label="标签">{n.tags.map((t) => `#${t}`).join(' ')}</Meta>}
             <div className="tld-body"><MarkdownView value={n.body} empty="（这条速记没有正文）" /></div>
           </>
         )

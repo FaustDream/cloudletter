@@ -1,12 +1,12 @@
-/** 标签管理：使用频次视觉编码 + 分档（高频/中频/低频）+ 未使用标签与一键清理 + 点击联动文章 */
+/** 标签管理：使用频次视觉编码 + 分档 + 未使用标签一键清理 + 点击开抽屉看关联内容（文章+灵感笔记共用） */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { api, type Tag } from '../api'
 import { Icon } from '../components/framework/Icon'
 import { Modal, Field, confirmDialog } from '../components/framework/Modal'
 import { useToast } from '../components/framework/Toast'
 import { PageHeader } from '../components/framework/PageHeader'
 import { EmptyState } from '../components/framework/EmptyState'
+import { TaxonomyDrawer } from './org/TaxonomyDrawer'
 
 export function TagsPage({ withHeader = true }: { withHeader?: boolean }) {
   const [items, setItems] = useState<Tag[]>([])
@@ -14,8 +14,9 @@ export function TagsPage({ withHeader = true }: { withHeader?: boolean }) {
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
   const [unusedOpen, setUnusedOpen] = useState(false)
+  /** 点标签 → 抽屉展示该标签下的文章与灵感笔记（不整页跳转） */
+  const [drawer, setDrawer] = useState<string | null>(null)
   const toast = useToast()
-  const nav = useNavigate()
 
   const load = useCallback(() => {
     setLoading(true)
@@ -26,9 +27,10 @@ export function TagsPage({ withHeader = true }: { withHeader?: boolean }) {
   }, [])
   useEffect(load, [load])
 
-  const max = useMemo(() => Math.max(1, ...items.map((t) => t._count?.posts ?? 0)), [items])
-  const used = useMemo(() => items.filter((t) => (t._count?.posts ?? 0) > 0), [items])
-  const unused = useMemo(() => items.filter((t) => (t._count?.posts ?? 0) === 0), [items])
+  const totalOf = (t: Tag) => (t._count?.posts ?? 0) + (t._count?.notes ?? 0)
+  const max = useMemo(() => Math.max(1, ...items.map(totalOf)), [items])
+  const used = useMemo(() => items.filter((t) => totalOf(t) > 0), [items])
+  const unused = useMemo(() => items.filter((t) => totalOf(t) === 0), [items])
 
   const submit = async () => {
     if (!name.trim()) return
@@ -62,7 +64,7 @@ export function TagsPage({ withHeader = true }: { withHeader?: boolean }) {
     <>
       <PageHeader
         title={withHeader ? '标签' : undefined}
-        subtitle={withHeader ? '可叠加的关键词 · 点击标签查看关联文章' : undefined}
+        subtitle={withHeader ? '文章与灵感笔记共用 · 点击标签查看关联内容' : undefined}
         actions={<>
           {unused.length > 0 && (
             <button className="btn ghost slim" style={{ marginRight: 10 }} onClick={() => setUnusedOpen(true)}>
@@ -82,12 +84,13 @@ export function TagsPage({ withHeader = true }: { withHeader?: boolean }) {
         <>
           <div className="tag-cloud">
             {used.map((t) => {
-              const count = t._count?.posts ?? 0
+              const count = totalOf(t)
               return (
                 <span key={t.id} className="tagpile" style={{ fontSize: sizeOf(count) }}
-                  onClick={() => nav(`/posts?tag=${encodeURIComponent(t.name)}`)}>
+                  title="点击查看该标签下的文章与灵感笔记"
+                  onClick={() => setDrawer(t.name)}>
                   # {t.name}
-                  <span className="tcount">· {count} 篇</span>
+                  <span className="tcount">· {count}</span>
                   <span className="tagpiledel" onClick={(e) => { e.stopPropagation(); remove(t) }}>
                     <Icon name="x" size={12} />
                   </span>
@@ -125,9 +128,12 @@ export function TagsPage({ withHeader = true }: { withHeader?: boolean }) {
               <span key={t.id} className="tagpile" style={{ opacity: .65 }}># {t.name}</span>
             ))}
           </div>
-          <p className="dim" style={{ fontSize: 12.5, marginTop: 14 }}>未被任何文章使用的标签不会在博客中展示，可一键清理。</p>
+          <p className="dim" style={{ fontSize: 12.5, marginTop: 14 }}>未被任何文章或灵感笔记使用的标签不会在博客中展示，可一键清理。</p>
         </Modal>
       )}
+
+      {/* 点标签 → 内容抽屉（文章 + 灵感笔记） */}
+      {drawer && <TaxonomyDrawer kind="tag" name={drawer} onClose={() => setDrawer(null)} />}
     </>
   )
 }

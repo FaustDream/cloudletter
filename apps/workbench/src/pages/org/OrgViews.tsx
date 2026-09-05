@@ -1,8 +1,7 @@
 /**
- * 分类标签页子视图（需求 5）：看板 / 图谱 / 洞察 —— 由同一份分类+标签+文章数据派生的三种看法。
- * - 看板：按分类分列的卡片墙（未分类单独一列），点击列头跳文章筛选
+ * 分类标签页子视图：图谱 —— 由同一份分类+标签+文章数据派生的共现关系视图。
+ * （看板/洞察已下线：看板与列表职责重复，洞察数据并入检索与总览）
  * - 图谱：分类↔标签 共现关系 SVG 网络，节点尺寸∝数量，点击节点右侧面板给关联推荐
- * - 洞察：内容增长趋势 / 标签榜 / 汇总统计
  */
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -20,49 +19,6 @@ const hashColor = (s: string) => {
   let h = 0
   for (const c of s) h = (h * 31 + c.charCodeAt(0)) | 0
   return CAT_PALETTE[Math.abs(h) % CAT_PALETTE.length]
-}
-
-/* ================= 看板 ================= */
-export function OrgKanban({ cats, posts }: OrgData) {
-  const nav = useNavigate()
-  const boards = useMemo(() => {
-    const cols: { name: string; key: string; color: string; items: PostListItem[] }[] = cats.map((c) => ({
-      name: c.name, key: c.id, color: hashColor(c.name), items: [],
-    }))
-    cols.push({ name: '未分类', key: '__none', color: '#7c8fb0', items: [] })
-    posts.forEach((p) => {
-      const col = p.category ? cols.find((c) => c.name === p.category?.name) : null
-      ;(col ?? cols[cols.length - 1]).items.push(p)
-    })
-    return cols.filter((c) => c.items.length > 0 || c.key === '__none')
-  }, [cats, posts])
-
-  return (
-    <div className="org-board">
-      {boards.map((col) => (
-        <div className="org-col" key={col.key}>
-          <div className="org-col-h" style={{ ['--cc' as string]: col.color }}>
-            <span className="oc-dot" />
-            <b onClick={() => nav(col.key === '__none' ? '/posts' : `/posts?cat=${encodeURIComponent(col.name)}`)}>{col.name}</b>
-            <em>{col.items.length}</em>
-          </div>
-          <div className="org-col-list">
-            {col.items.length === 0 ? (
-              <div className="org-col-empty">暂无文章</div>
-            ) : (
-              col.items.map((p) => (
-                <div className="org-card" key={p.id} title={p.title} onClick={() => nav(`/posts?status=${p.status === 'published' ? '' : 'draft'}`)}>
-                  <div className="oc-title"><span className={`st-dot ${p.status}`} title={p.status === 'published' ? '已发布' : '草稿'} />{p.title}</div>
-                  <div className="oc-tags">{p.tags.slice(0, 3).map((t) => <span key={t}>#{t}</span>)}</div>
-                  <div className="oc-meta">{new Date(p.updatedAt).toLocaleDateString('zh-CN')} · {p.readMin} 分钟</div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      ))}
-    </div>
-  )
 }
 
 /* ================= 图谱（分类↔标签共现） + 关联推荐 ================= */
@@ -92,9 +48,8 @@ export function OrgGraph({ cats, tags, posts }: OrgData) {
   const W = 1040, H = 480
   const catY = (i: number, n: number) => H * (n === 1 ? 0.5 : (i + 0.5) / n)
   const tagY = (i: number, n: number) => H * (n === 1 ? 0.5 : (i + 0.5) / n)
-  const relevant = (name: string) => edges.some((e) => (focus?.kind === 'cat' ? e.cat : e.tag) === name && (focus?.kind === 'tag' ? e.cat : e.tag) === focus?.name)
 
-  // 关联推荐：聚焦标签 → 共享该标签的文章 + 共现分类；聚焦分类 → 该分类文章 + 共现标签
+  // 关联推荐：聚焦标签 → 共享该标签的文章；聚焦分类 → 该分类文章
   const relatedPost = useMemo(() => {
     if (!focus) return []
     return posts
@@ -173,90 +128,6 @@ export function OrgGraph({ cats, tags, posts }: OrgData) {
           </div>
         </aside>
       )}
-    </div>
-  )
-}
-
-/* ================= 洞察 ================= */
-export function OrgInsights({ cats, tags, posts }: OrgData) {
-  const stats = useMemo(() => ({
-    total: posts.length,
-    published: posts.filter((p) => p.status === 'published').length,
-    cats: cats.length,
-    tags: tags.length,
-  }), [cats, tags, posts])
-
-  // 近 6 个月发布/更新趋势
-  const trend = useMemo(() => {
-    const now = new Date()
-    const months: { label: string; n: number; u: number }[] = []
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-      months.push({ label: `${d.getMonth() + 1}月`, n: 0, u: 0 })
-    }
-    posts.forEach((p) => {
-      const u = new Date(p.updatedAt)
-      const idx = (u.getFullYear() - now.getFullYear()) * 12 + (u.getMonth() - now.getMonth()) + 5
-      if (idx >= 0 && idx < 6) {
-        months[idx].u++
-        if (p.status === 'published') months[idx].n++
-      }
-    })
-    return months
-  }, [posts])
-
-  const topTags = useMemo(() => [...tags].sort((a, b) => (b._count?.posts ?? 0) - (a._count?.posts ?? 0)).slice(0, 6), [tags])
-  const desc = useMemo(() => {
-    if (posts.length === 0) return '内容还在积蓄中 · 在「文章」里写下第一篇吧'
-    const cat = [...cats].sort((a, b) => (b._count?.posts ?? 0) - (a._count?.posts ?? 0))[0]
-    const tg = topTags[0]
-    return `共沉淀 ${stats.total} 篇文章（发布 ${stats.published} 篇）${cat ? `，最常写「${cat.name}」（${cat._count?.posts} 篇）` : ''}${tg ? `，高频标签「#${tg.name}」（${tg._count?.posts} 篇）` : ''}。`
-  }, [posts, cats, topTags, stats])
-
-  const maxU = Math.max(1, ...trend.map((m) => m.u))
-  const maxT = Math.max(1, ...topTags.map((t) => t._count?.posts ?? 0))
-
-  return (
-    <div className="org-insights">
-      <div className="stat-grid">
-        <div className="stat-card"><div className="sk"><Icon name="file" size={15} />文章总数</div><div className="sv">{stats.total}</div><div className="sd">全部状态</div></div>
-        <div className="stat-card"><div className="sk"><Icon name="check" size={15} />已发布</div><div className="sv">{stats.published}</div><div className="sd">对外可见</div></div>
-        <div className="stat-card"><div className="sk"><Icon name="folder" size={15} />分类</div><div className="sv">{stats.cats}</div><div className="sd">主题容器</div></div>
-        <div className="stat-card"><div className="sk"><Icon name="tag" size={15} />标签</div><div className="sv">{stats.tags}</div><div className="sd">可叠加关键词</div></div>
-      </div>
-
-      <div className="org-ins-grid">
-        <section className="card org-ins-sec">
-          <div className="asec-h"><Icon name="chart" size={16} /> 近 6 个月产出趋势</div>
-          <div className="bar-chart">
-            {trend.map((m, i) => (
-              <div className="bar-col" key={i}>
-                <span className="bval">{m.n || ''}</span>
-                <span className="b" style={{ height: `${Math.max(2, (m.u / maxU) * 100)}%`, background: 'linear-gradient(180deg, var(--accent), var(--info))' }} />
-                <span className="bl">{m.label}</span>
-              </div>
-            ))}
-          </div>
-          <div className="legend"><span><i style={{ background: 'var(--accent)' }} />当月产出</span><span className="dim">柱高按趋势加权</span></div>
-        </section>
-
-        <section className="card org-ins-sec">
-          <div className="asec-h"><Icon name="target" size={16} /> 高频标签榜</div>
-          <div className="catbar">
-            {topTags.length === 0 ? (
-              <div className="org-col-empty">暂无标签</div>
-            ) : topTags.map((t) => (
-              <div className="cbrow" key={t.id}>
-                <span className="cbn"># {t.name}</span>
-                <span className="cbt"><i style={{ width: `${((t._count?.posts ?? 0) / maxT) * 100}%`, background: hashColor(t.name) }} /></span>
-                <span className="cbv">{t._count?.posts ?? 0}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
-
-      <div className="org-ins-desc"><Icon name="spark" size={15} /> 一句话洞察：{desc}</div>
     </div>
   )
 }

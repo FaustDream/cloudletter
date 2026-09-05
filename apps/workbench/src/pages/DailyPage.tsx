@@ -2,9 +2,9 @@
  * 日常（目标之外的第二入口）：番茄专注 + 今日回顾。
  * - 番茄专注：计时引擎使用成熟开源方案 react-timer-hook（截止时间戳驱动，无手写 setInterval），
  *   工作/短休息/长休息完整循环，时长与自动衔接等全部可在设置·偏好 → 番茄专注中配置
- * - 番茄完成 → 自动写入一条灵感笔记（mood=习惯）→ 时间线与习惯映射直接可见
+ * - 番茄完成 → 自动写入一条灵感笔记（标签=习惯）→ 时间线与习惯映射直接可见
  * - 今日回顾 → 聚合今天的时间线/计划/记账数据，支持自动生成草稿与多种模板；
- *   已保存回顾可直接回显、随时改写（mood=日志）→ 时间线可见
+ *   已保存回顾可直接回显、随时改写（标签=日志）→ 时间线可见
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTimer } from 'react-timer-hook'
@@ -149,7 +149,7 @@ export function DailyPage() {
       await api.post('/workbench/notes', {
         title: `🍅 专注 ${goRef.current.cfg.focus} 分钟`,
         body: `${todayYMD()} 完成一轮 ${goRef.current.cfg.focus} 分钟专注（${auto ? '计时结束' : '手动收尾'}）`,
-        mood: '习惯',
+        tags: ['习惯'],
         date: todayYMD(),
       })
       loadNotes()
@@ -207,7 +207,7 @@ export function DailyPage() {
     // 已写过今日回顾？回显保存内容
     api.get<{ items: NoteItem[] }>('/workbench/notes')
       .then((r) => {
-        const item = r.items.find((n) => (n.date || '').slice(0, 10) === today && n.mood === '日志' && n.title.startsWith('今日回顾'))
+        const item = r.items.find((n) => (n.date || '').slice(0, 10) === today && n.tags.includes('日志') && n.title.startsWith('今日回顾'))
         if (item) { setSaved(true); setSavedBody(item.body || '') }
       })
       .catch(() => {})
@@ -240,7 +240,7 @@ export function DailyPage() {
       await api.post('/workbench/notes', {
         title: `今日回顾 · ${today}`,
         body: b,
-        mood: '日志',
+        tags: ['日志'],
         date: today,
       })
       setSavedBody(b)

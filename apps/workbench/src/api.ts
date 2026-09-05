@@ -144,14 +144,16 @@ export interface Category {
   name: string
   slug: string
   description: string | null
-  _count?: { posts: number }
+  /** 灵感笔记与文章共用分类，计数含两边 */
+  _count?: { posts: number; notes: number }
 }
 
 export interface Tag {
   id: string
   name: string
   slug: string
-  _count?: { posts: number }
+  /** 灵感笔记与文章共用标签，计数含两边 */
+  _count?: { posts: number; notes: number }
 }
 
 export interface PostListItem {
@@ -248,19 +250,19 @@ export interface GoalItem {
   updatedAt: string
 }
 
-/** 速记类型（NoteItem.type）：灵感 | 计划 */
+/** 速记弹窗的记录模式（仅 UI 概念）：灵感=灵感笔记；计划=直接进今日计划 */
 export type NoteType = 'inspiration' | 'plan'
 
 export interface NoteItem {
   id: string
   title: string
   body: string
-  /** 规范类型（inspiration=灵感 | plan=计划）；mood 为自由标签 */
-  type: NoteType
-  mood: string
   date: string
-  done: boolean
-  doneAt: string
+  /** 与文章共用的分类（null = 未分类） */
+  categoryId: string | null
+  category?: { id: string; name: string; slug: string } | null
+  /** 与文章共用的标签名 */
+  tags: string[]
   createdAt: string
   updatedAt: string
 }

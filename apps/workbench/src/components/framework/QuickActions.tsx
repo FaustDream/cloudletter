@@ -88,7 +88,7 @@ export function QuickActionsProvider({ children }: { children: ReactNode }) {
     if (!nTitle.trim() && !nBody.trim()) { toast('写点什么再保存', 'err'); return }
     setSaving(true)
     try {
-      await api.post('/workbench/notes', { title: nTitle.trim() || '（无标题）', body: nBody, mood: nMood, date: new Date().toISOString().slice(0, 10) })
+      await api.post('/workbench/notes', { title: nTitle.trim() || '（无标题）', body: nBody, tags: [nMood], date: new Date().toISOString().slice(0, 10) })
       toast('灵感已捕捉')
       setNTitle(''); setNBody('')
     } catch (e: any) { toast(e?.message || '保存失败', 'err') } finally { setSaving(false) }
