@@ -35,9 +35,6 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/settings', label: '设置', icon: 'setting' },
 ]
 
-/** 项目开源仓库：点击侧边栏 GitHub 入口 → 应用内 iframe 抽屉打开 */
-const GITHUB_URL = 'https://github.com/FaustDream/cloudletter'
-
 type SbMode = 'pinned' | 'collapsed'
 const SB_KEY = 'cl_sidebar'
 const NARROW_W = 1240 // 小于该宽度自动降级为图标轨道
@@ -55,8 +52,6 @@ export function Shell({ children }: { children: ReactNode }) {
   })
   const [narrow, setNarrow] = useState(window.innerWidth < NARROW_W)
   const [peek, setPeek] = useState(false)
-  /** GitHub 快捷入口：应用内 iframe 抽屉 */
-  const [ghOpen, setGhOpen] = useState(false)
   const enterTimer = useRef<number | undefined>(undefined)
   const leaveTimer = useRef<number | undefined>(undefined)
 
@@ -157,10 +152,6 @@ export function Shell({ children }: { children: ReactNode }) {
           </button>
           <span className="sb-hotkey">⌘B</span>
         </div>
-        <button className="sb-gh" onClick={() => setGhOpen(true)} title="GitHub 仓库（应用内打开）">
-          <Icon name="github" size={16} />
-          <span>GitHub</span>
-        </button>
         <div className="foot">
           {user ? (
             <AvatarMenu size={effective === 'pinned' ? 'lg' : 'sm'} align="left" />
@@ -189,10 +180,6 @@ export function Shell({ children }: { children: ReactNode }) {
           <span className="sb-hotkey">⌘B</span>
           {peek && <span className="sb-peek-hint">移出自动收起</span>}
         </div>
-        <button className="sb-gh" onClick={() => setGhOpen(true)} title="GitHub 仓库（应用内打开）">
-          <Icon name="github" size={16} />
-          <span>GitHub</span>
-        </button>
         <div className="foot">
           {user ? (
             <AvatarMenu size="lg" align="left" />
@@ -204,24 +191,6 @@ export function Shell({ children }: { children: ReactNode }) {
       <main className="main">
         <div className="screen">{children}</div>
       </main>
-      {/* GitHub 快捷入口：右侧抽屉 iframe，保持当前操作上下文 */}
-      {ghOpen && (
-        <div className="gh-drawer-mask" onClick={() => setGhOpen(false)}>
-          <div className="gh-drawer" onClick={(e) => e.stopPropagation()}>
-            <div className="gh-drawer-head">
-              <b>GitHub · cloudletter</b>
-              <a href={GITHUB_URL} target="_blank" rel="noreferrer noopener">新窗口打开 ↗</a>
-              <button className="gh-drawer-close" onClick={() => setGhOpen(false)} title="关闭">✕</button>
-            </div>
-            <iframe
-              className="gh-drawer-frame"
-              src={GITHUB_URL}
-              title="GitHub 仓库"
-              sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-            />
-          </div>
-        </div>
-      )}
       {/* 全局回到顶部：滚动下滑即出现，内容不足一屏自动隐藏 */}
       <BackToTop />
       {/* 速记：全局可用（任意页面 ⚡ 按钮唤起，Ctrl/⌘+N 快捷键） */}

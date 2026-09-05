@@ -1,19 +1,20 @@
-/** 灵感笔记：卡片网格（card/list/timeline 多风格）；随手记=新建灵感（默认分类/标签「灵感」）；
- *  点击查看详情侧栏 → 编辑弹窗（文章编辑器内核）→ 保存修改。计划类速记已并入今日计划。 */
+/** 灵感笔记：5 种布局（卡片/列表/时间线/瀑布流/便利贴，页头即点即换）；
+ *  点卡片 → 右侧抽屉直接编辑详情（标题/分类/标签/富文本正文），随手记=抽屉新建，
+ *  默认分类/标签「灵感」，与文章共用。计划类速记已并入今日计划。 */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api, type Category, type NoteItem } from '../api'
 import { Icon } from '../components/framework/Icon'
-import { Modal, Field, confirmDialog } from '../components/framework/Modal'
+import { confirmDialog } from '../components/framework/Modal'
 import { Drawer } from '../components/framework/Drawer'
-import { MarkdownView } from '../components/framework/MarkdownView'
 import { MarkdownEditor } from '../components/editor/MarkdownEditor'
 import { Dropdown } from '../components/framework/Dropdown'
+import { Field } from '../components/framework/Modal'
 import { useToast } from '../components/framework/Toast'
 import { PageHeader } from '../components/framework/PageHeader'
 import { EmptyState } from '../components/framework/EmptyState'
 import { todayYMD } from '../lib/date'
-import { noteStyle, type NoteStyle } from '../lib/layout'
+import { noteStyle, setNoteStyle, NOTE_STYLES, NOTE_STYLE_LABELS, type NoteStyle } from '../lib/layout'
 
 /** 标签输入 → 标签数组（逗号/中文逗号分隔） */
 const parseTags = (s: string) => s.split(/[,，]/).map((t) => t.trim()).filter(Boolean)
@@ -23,18 +24,15 @@ export function NotesPage() {
   const [items, setItems] = useState<NoteItem[]>([])
   const [cats, setCats] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
-  /** creating=true 新建；editing 携带被编辑的笔记 */
-  const [formOpen, setFormOpen] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const [editing, setEditing] = useState<NoteItem | null>(null)
-  /** 详情侧栏（查看全文） */
-  const [detail, setDetail] = useState<NoteItem | null>(null)
+  /** 编辑抽屉：editingNote=null 且抽屉开 = 新建随手记 */
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [editingNote, setEditingNote] = useState<NoteItem | null>(null)
   const [form, setForm] = useState<{ title: string; body: string; categoryId: string; tags: string }>({ title: '', body: '', categoryId: '', tags: '灵感' })
   const [saving, setSaving] = useState(false)
   const [style, setStyle] = useState<NoteStyle>(noteStyle)
   const toast = useToast()
 
-  // 风格偏好切换：设置页写入后同 tab 内即时生效
+  // 风格偏好：本页切换即写回；设置页改动后同 tab 内即时生效
   useEffect(() => {
     const onStorage = (e: StorageEvent) => { if (e.key === 'cl_note_style') setStyle(noteStyle()) }
     window.addEventListener('storage', onStorage)
@@ -57,12 +55,12 @@ export function NotesPage() {
 
   const defaultCategoryId = useMemo(() => cats.find((c) => c.name === '灵感')?.id ?? '', [cats])
 
-  // 分类标签页内容抽屉深链：/notes?focus=<id> → 直接打开该笔记详情
+  // 分类标签页内容抽屉深链：/notes?focus=<id> → 直接打开该笔记编辑
   useEffect(() => {
     const fid = sp.get('focus')
     if (!fid) return
     const hit = items.find((n) => n.id === fid)
-    if (hit) setDetail(hit)
+    if (hit) openNote(hit)
     setSp({}, { replace: true })
   }, [sp, items, setSp])
 
@@ -73,14 +71,16 @@ export function NotesPage() {
 
   const openCreate = () => {
     setForm({ title: '', body: '', categoryId: defaultCategoryId, tags: '灵感' })
-    setCreating(true); setEditing(null); setFormOpen(true)
+    setEditingNote(null)
+    setDrawerOpen(true)
   }
-  const openEdit = (n: NoteItem) => {
+  const openNote = (n: NoteItem) => {
+    setEditingNote(n)
     setForm({ title: n.title, body: n.body, categoryId: n.categoryId ?? '', tags: n.tags.join(', ') })
-    setCreating(false); setEditing(n); setFormOpen(true)
+    setDrawerOpen(true)
   }
 
-  const submit = async () => {
+  const save = async () => {
     if (!form.title.trim() && !form.body.trim()) { toast('标题或内容至少写一样', 'err'); return }
     setSaving(true)
     try {
@@ -90,15 +90,15 @@ export function NotesPage() {
         categoryId: form.categoryId,
         tags: parseTags(form.tags),
       }
-      if (creating) {
+      if (editingNote) {
+        const saved = await api.put<NoteItem>(`/workbench/notes/${editingNote.id}`, payload)
+        toast('已保存修改')
+        setEditingNote(saved)
+      } else {
         await api.post('/workbench/notes', { ...payload, date: todayYMD() })
         toast('已记录')
-      } else if (editing) {
-        await api.put(`/workbench/notes/${editing.id}`, payload)
-        toast('已保存修改')
-        if (detail?.id === editing.id) setDetail({ ...editing, ...payload, tags: payload.tags })
+        setDrawerOpen(false)
       }
-      setFormOpen(false); setEditing(null)
       load()
     } catch (e: any) {
       toast(e?.message || '保存失败', 'err')
@@ -112,7 +112,7 @@ export function NotesPage() {
     try {
       await api.del(`/workbench/notes/${n.id}`)
       toast('已删除')
-      setDetail(null)
+      setDrawerOpen(false)
       load()
     } catch (e: any) {
       toast(e?.message || '删除失败', 'err')
@@ -124,7 +124,18 @@ export function NotesPage() {
       <PageHeader
         title="灵感笔记"
         subtitle={`共 ${items.length} 条 · 分类标签与文章共用`}
-        actions={<button className="btn" onClick={openCreate}><Icon name="plus" size={16} /> 随手记</button>}
+        actions={
+          <>
+            <div className="seg" style={{ marginRight: 12 }} aria-label="笔记布局切换">
+              {NOTE_STYLES.map((s) => (
+                <button key={s} type="button" className={`seg-btn ${style === s ? 'on' : ''}`} onClick={() => { setNoteStyle(s); setStyle(s) }}>
+                  {NOTE_STYLE_LABELS[s]}
+                </button>
+              ))}
+            </div>
+            <button className="btn" onClick={openCreate}><Icon name="plus" size={16} /> 随手记</button>
+          </>
+        }
       />
 
       <div className="grid g-2 note-grid" data-style={style}>
@@ -135,7 +146,7 @@ export function NotesPage() {
         ) : (
           sorted.map((n) => {
             return (
-              <div key={n.id} className="note" data-date={n.date} data-tags={n.tags[0] ?? ''} style={{ cursor: 'pointer' }} title="点击查看详情" onClick={() => { setDetail(n) }}>
+              <div key={n.id} className="note" data-date={n.date} data-tags={n.tags[0] ?? ''} style={{ cursor: 'pointer' }} title="点击查看与编辑" onClick={() => { openNote(n) }}>
                 <div className="nt" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ display: 'inline-flex', color: 'var(--text-tertiary)' }}>
                     <Icon name="book" size={16} />
@@ -147,9 +158,6 @@ export function NotesPage() {
                   {n.category?.name && <span className="chip">{n.category.name}</span>}
                   {n.tags.slice(0, 2).map((t) => <span key={t} className="chip">#{t}</span>)}
                   <span className="dt">{n.date}</span>
-                  <button className="ndel" title="编辑" onClick={(e) => { e.stopPropagation(); openEdit(n) }}>
-                    <Icon name="pen" size={15} />
-                  </button>
                 </div>
               </div>
             )
@@ -157,39 +165,20 @@ export function NotesPage() {
         )}
       </div>
 
-      {/* 详情侧栏：全文 + 编辑/删除 */}
-      {detail && (
+      {/* 编辑抽屉：查看=编辑，标题/分类/标签/正文直接在此修改，不再弹二次弹窗 */}
+      {drawerOpen && (
         <Drawer
-          width={560}
-          title={detail.title || '（无标题）'}
-          hint={`${detail.date} 记录${detail.category?.name ? ` · ${detail.category.name}` : ''}`}
-          onClose={() => setDetail(null)}
+          width={720}
+          title={editingNote ? (editingNote.title || '（无标题）') : '随手记'}
+          hint={editingNote ? `${editingNote.date} 记录` : '新灵感 · 默认分类/标签「灵感」'}
+          onClose={() => { setDrawerOpen(false); setEditingNote(null) }}
           footer={
             <>
-              <button className="btn ghost danger" onClick={() => remove(detail)}><Icon name="trash" size={15} /> 删除</button>
+              {editingNote && (
+                <button className="btn ghost danger" onClick={() => remove(editingNote)}><Icon name="trash" size={15} /> 删除</button>
+              )}
               <div className="spacer" />
-              <button className="btn" onClick={() => openEdit(detail)}><Icon name="pen" size={15} /> 编辑</button>
-            </>
-          }
-        >
-          <MarkdownView value={detail.body} empty="（这条笔记没有正文）" />
-          {detail.tags.length > 0 && (
-            <div className="qn-tags">
-              {detail.tags.map((t) => <span key={t} className="chip">#{t}</span>)}
-            </div>
-          )}
-        </Drawer>
-      )}
-
-      {formOpen && (
-        <Modal
-          title={creating ? '随手记' : '编辑笔记'}
-          size="lg"
-          onClose={() => { setFormOpen(false); setEditing(null) }}
-          footer={
-            <>
-              <button className="btn ghost" onClick={() => { setFormOpen(false); setEditing(null) }}>取消</button>
-              <button className="btn" onClick={submit} disabled={saving}>{saving ? '保存中…' : '保存'}</button>
+              <button className="btn" onClick={save} disabled={saving}>{saving ? '保存中…' : '保存'}</button>
             </>
           }
         >
@@ -210,9 +199,9 @@ export function NotesPage() {
             </Field>
           </div>
           <Field label="内容">
-            <MarkdownEditor value={form.body} onChange={(md) => setForm((f) => ({ ...f, body: md }))} minHeight={260} />
+            <MarkdownEditor value={form.body} onChange={(md) => setForm((f) => ({ ...f, body: md }))} minHeight={380} />
           </Field>
-        </Modal>
+        </Drawer>
       )}
     </>
   )
