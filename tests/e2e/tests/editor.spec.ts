@@ -103,11 +103,11 @@ test.describe('工作台 · 编辑体验（工具栏/右栏/滚动/大纲/双链
     const title = page.locator('.ed-paper .ed-canvas-title')
     await expect(title).toBeVisible({ timeout: 15_000 })
 
-    // 常驻格式工具栏（撤销重做/H1-3/B I U S 代码/引用/三种列表）
-    await expect(page.locator('.ed-toolbar .ed-tb-btn')).toHaveCount(14)
-    // 手动保存按钮：初始已保存态禁用
+    // 常驻格式工具栏（撤销重做/H1-3/B I U S 代码/颜色/引用/列表/双链/识别/排版/链接/图片/表格/分隔线/代码块/提示框/嵌入）
+    await expect(page.locator('.ed-toolbar .ed-tb-btn')).toHaveCount(25)
+    // 手动保存按钮始终可点（内容未变时点击仅确认状态）
     const saveBtn = page.getByRole('button', { name: '保存', exact: true })
-    await expect(saveBtn).toBeDisabled()
+    await expect(saveBtn).toBeEnabled()
 
     // 右栏首节 = 文档信息（可折叠）；封面标签只出现一次（旧顶部条已移除）
     await expect(page.locator('.ed-side-fold')).toHaveText(/文档信息/)
@@ -117,11 +117,13 @@ test.describe('工作台 · 编辑体验（工具栏/右栏/滚动/大纲/双链
     await expect.poll(() => page.evaluate(() => localStorage.getItem('cl_ed_meta'))).toBe('0')
     await page.locator('.ed-side-fold').click()
 
-    // 标签多选：搜索无命中 → 「新建」→ chip 展示
-    await page.locator('.tag-ms-trigger').click()
-    await page.locator('.tag-ms-search').fill('e2e标签')
+    // 标签多选：搜索无命中 → 「新建」→ chip 展示（分类同为 tag-ms 组件，按 aria-label 收窄；
+    // 标签名带时间戳保证唯一——库中已有同名标签时下拉只会给出「已存在」项）
+    const tagName = `e2e标签${Date.now()}`
+    await page.getByRole('button', { name: '选择标签' }).click()
+    await page.locator('.tag-ms-search').fill(tagName)
     await page.locator('.tag-ms-item').filter({ hasText: '新建' }).click()
-    await expect(page.locator('.tag-ms-chip').filter({ hasText: 'e2e标签' })).toBeVisible()
+    await expect(page.locator('.tag-ms-chip').filter({ hasText: tagName })).toBeVisible()
 
     // 手动保存：脏 → 点击 → 已保存
     await title.fill('工具栏与右栏验证文章')

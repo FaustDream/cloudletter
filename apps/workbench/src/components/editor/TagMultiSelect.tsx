@@ -1,17 +1,23 @@
 /**
- * 标签下拉多选（Notion 式属性交互，替代 chip 手输）：
- * - 触发器内联展示已选标签（点 × 移除）；点击展开面板：搜索框 + 候选列表 + 「新建」项
- * - 候选构建走 lib/tagOptions.ts 纯函数（已选置顶可取消、查询过滤、无命中给新建）
- * - 键盘：↑↓ 移动 / Enter 勾选或新建 / Backspace 删除末尾 / Esc 关闭（对齐 ⌘K 浮层约定）
+ * 下拉选择器（Notion 式属性交互，多选/单选两用）：
+ * - 多选（默认）：标签场景——已选 chip、搜索过滤、勾选切换、无命中给「新建」
+ * - 单选：分类场景——同一下拉范式，点选即替换；配 onCreate 可在无命中时直接新建
+ *   （如分类会 POST /categories 落库，自动同步到「分类标签」菜单）
+ * 候选构建走 lib/tagOptions.ts 纯函数；键盘：↑↓/Enter/Backspace/Esc（对齐 ⌘K 浮层约定）
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { buildTagOptions, type TagOption } from '../../lib/tagOptions'
 
-export function TagMultiSelect({ tags, suggestions, onChange, ariaLabel = '选择标签' }: {
+export function TagMultiSelect({ tags, suggestions, onChange, onCreate, multiple = true, placeholder = '添加标签…', ariaLabel = '选择标签' }: {
+  /** 多选=已选标签列表；单选=长度 0/1 的当前值 */
   tags: string[]
-  /** 全站标签名（候选来源） */
+  /** 全站候选（标签=全站标签名；分类=全部分类名） */
   suggestions: string[]
-  onChange: (tags: string[]) => void
+  onChange: (next: string[]) => void
+  /** 「新建」回调（如分类需先 POST /categories 落库再选中）；缺省时仅本地新增 */
+  onCreate?: (name: string) => Promise<unknown> | unknown
+  multiple?: boolean
+  placeholder?: string
   ariaLabel?: string
 }) {
   const [open, setOpen] = useState(false)
@@ -47,14 +53,21 @@ export function TagMultiSelect({ tags, suggestions, onChange, ariaLabel = '选�
   }, [open])
 
   const toggleTag = (name: string) => {
+    if (!multiple) {
+      onChange(tags.includes(name) ? [] : [name])
+      setOpen(false)
+      return
+    }
     onChange(tags.includes(name) ? tags.filter((t) => t !== name) : [...tags, name])
   }
 
   const commit = (o: TagOption) => {
-    if (o.kind === 'create') onChange([...tags, o.name])
-    else toggleTag(o.name)
-    setQuery('')
-    inputRef.current?.focus()
+    void Promise.resolve(onCreate?.(o.name)).then(() => {
+      if (o.kind === 'create') onChange(multiple ? [...tags, o.name] : [o.name])
+      else toggleTag(o.name)
+      setQuery('')
+      inputRef.current?.focus()
+    })
   }
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -74,26 +87,26 @@ export function TagMultiSelect({ tags, suggestions, onChange, ariaLabel = '选�
         aria-label={ariaLabel}
         onClick={() => { setOpen((v) => !v); if (!open) setTimeout(() => inputRef.current?.focus(), 0) }}
       >
-        {tags.length === 0 && <span className="tag-ms-ph">添加标签…</span>}
+        {tags.length === 0 && <span className="tag-ms-ph">{placeholder}</span>}
         {tags.map((t) => (
           <span key={t} className="tag-ms-chip">
             {t}
-            <i title={`移除「${t}」`} onClick={(e) => { e.stopPropagation(); toggleTag(t) }}>×</i>
+            <i title={`移除「${t}」`} onClick={(e) => { e.stopPropagation(); if (!multiple) onChange([]); else toggleTag(t) }}>×</i>
           </span>
         ))}
         <i className="dd-chev" />
       </button>
       {open && (
-        <div className={`tag-ms-menu${up ? ' up' : ''}`} role="listbox" aria-multiselectable="true">
+        <div className={`tag-ms-menu${up ? ' up' : ''}`} role="listbox" aria-multiselectable={multiple}>
           <input
             ref={inputRef}
             className="tag-ms-search"
             value={query}
-            placeholder="搜索或新建标签…"
+            placeholder={multiple ? '搜索或新建标签…' : '搜索或新建…'}
             onChange={(e) => { setQuery(e.target.value); setHi(0) }}
             onKeyDown={onKeyDown}
           />
-          {options.length === 0 && <div className="dd-empty">没有匹配的标签</div>}
+          {options.length === 0 && <div className="dd-empty">没有匹配的选项</div>}
           {options.map((o, i) => (
             <button
               key={`${o.kind}:${o.name}`}

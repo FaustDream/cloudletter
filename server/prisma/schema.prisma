@@ -110,13 +110,15 @@ model PostTag {
   @@index([tagId])
 }
 
-// 版本历史：DB 存元数据（version/时间/摘要），正文快照存文件 projects/.revisions/<slug>/<version>.md
+// 版本历史：DB 存元数据（version/时间/摘要/来源），正文快照存文件 projects/.revisions/<slug>/<version>.md
 model Revision {
   id        String   @id @default(cuid())
   version   Int
   postId    String
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   summary   String   @default("")
+  // 快照来源：manual=手动保存/创建/恢复，auto=自动保存（自动保存按时间间隔频控，避免历史爆炸）
+  kind      String   @default("auto")
   createdAt DateTime @default(now())
 
   @@unique([postId, version])

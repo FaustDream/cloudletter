@@ -252,6 +252,7 @@ export function PostsPage() {
             view.map((p) => (
               <div key={p.id} className={`post-card ${sel.has(p.id) ? 'on' : ''}`}
                 onClick={() => sel.has(p.id) ? toggle(p.id) : nav(`/posts/${p.id}/edit`)}>
+                {p.cover && <img className="pc-cover" src={p.cover} alt="" loading="lazy" />}
                 <div className="pc-head">
                   <div className="pc-title">{p.title}</div>
                   <span className={`pill ${p.status === 'published' ? 'ok' : 'warn'}`}>{p.status === 'published' ? '已发布' : '草稿'}</span>

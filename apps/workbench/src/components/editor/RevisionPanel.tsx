@@ -72,6 +72,9 @@ export function RevisionPanel({
                 onClick={() => open(r.version)}
               >
                 <span className="rev-version">v{r.version}</span>
+                <span className={`rev-kind ${r.kind === 'manual' ? 'manual' : 'auto'}`}>
+                  {r.kind === 'manual' ? '手动' : '自动'}
+                </span>
                 <span className="rev-time">{new Date(r.createdAt).toLocaleString()}</span>
               </button>
             ))}

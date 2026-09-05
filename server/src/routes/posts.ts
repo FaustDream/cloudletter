@@ -24,6 +24,9 @@ import { emitWebhookEvent } from './integrations'
 export const posts = Router()
 posts.use(requireAuth)
 
+/** 自动保存版本快照的最小间隔：距上次快照不足该时长时，自动保存不再产生新版本（手动保存不受限） */
+const AUTO_REVISION_MIN_INTERVAL_MS = 2 * 60 * 1000
+
 function isP2025(e: unknown): boolean {
   return typeof e === 'object' && e !== null && (e as { code?: unknown }).code === 'P2025'
 }
@@ -82,7 +85,7 @@ posts.get('/', ah(async (req, res) => {
     where,
     select: {
       id: true, slug: true, title: true, status: true, summary: true,
-      charCount: true, updatedAt: true, publishedAt: true,
+      charCount: true, updatedAt: true, publishedAt: true, frontmatter: true,
       category: { select: { name: true, slug: true } },
       tags: { include: { tag: true } },
     },
@@ -90,19 +93,24 @@ posts.get('/', ah(async (req, res) => {
     take: limit,
   })
   res.json({
-    items: items.map((p) => ({
-      id: p.id,
-      slug: p.slug,
-      title: p.title,
-      status: p.status,
-      summary: p.summary,
-      updatedAt: p.updatedAt,
-      publishedAt: p.publishedAt,
-      category: p.category,
-      tags: p.tags.map((t) => t.tag.name),
-      chars: p.charCount,
-      readMin: Math.max(1, Math.round(p.charCount / 480)),
-    })),
+    items: items.map((p) => {
+      let cover = ''
+      try { cover = (JSON.parse(p.frontmatter || '{}') as { cover?: string }).cover ?? '' } catch {}
+      return {
+        id: p.id,
+        slug: p.slug,
+        title: p.title,
+        status: p.status,
+        summary: p.summary,
+        updatedAt: p.updatedAt,
+        publishedAt: p.publishedAt,
+        category: p.category,
+        tags: p.tags.map((t) => t.tag.name),
+        chars: p.charCount,
+        readMin: Math.max(1, Math.round(p.charCount / 480)),
+        cover,
+      }
+    }),
   })
 }))
 
@@ -156,7 +164,7 @@ posts.post('/', ah(async (req, res) => {
           rawMarkdown: markdown, frontmatter: fmJson, status: st, publishedAt: publishDate,
           charCount: markdown.length,
           categoryId: b.categoryId || null,
-          revisions: { create: { version: 1 } },
+          revisions: { create: { version: 1, kind: 'manual' } },
         },
       })
     } catch (e) {
@@ -171,7 +179,7 @@ posts.post('/', ah(async (req, res) => {
               rawMarkdown: markdown, frontmatter: fmJson, status: st, publishedAt: publishDate,
               charCount: markdown.length,
               categoryId: b.categoryId || null,
-              revisions: { create: { version: 1 } },
+              revisions: { create: { version: 1, kind: 'manual' } },
             },
           })
         } catch (e2) {
@@ -360,6 +368,8 @@ posts.put('/:id', ah(async (req, res) => {
     tags?: string[]
     status?: string
     baseVersion?: number
+    cover?: string
+    revisionKind?: string
   }>(req, res, {
     title: { ...v.str(), min: 1, max: 200 },
     slug: { ...v.str(), min: 1, max: 120 },
@@ -370,6 +380,8 @@ posts.put('/:id', ah(async (req, res) => {
     tags: v.arr(v.str(), 0, 20),
     status: { ...v.str(), oneOf: ['draft', 'published'] },
     baseVersion: v.num(),
+    cover: { ...v.str(), keepEmpty: true, max: 2000 },
+    revisionKind: { ...v.str(), oneOf: ['manual', 'auto'] },
   })
   if (!body) return
 
@@ -424,6 +436,11 @@ posts.put('/:id', ah(async (req, res) => {
     if (body.tags.length) fm.tags = body.tags
     else delete fm.tags
   }
+  // 封面：随保存写入 frontmatter（博客端/列表封面用）；空串清除
+  if (body.cover !== undefined) {
+    if (body.cover) fm.cover = body.cover
+    else delete fm.cover
+  }
   // 兜底：仅当本次请求未变更该字段时，收敛到 DB 当前状态（防止文件与索引分叉）
   if (body.categoryId === undefined && !fm.category && post.categoryId) {
     const cat = await prisma.category.findUnique({ where: { id: post.categoryId } })
@@ -438,11 +455,15 @@ posts.put('/:id', ah(async (req, res) => {
   }
   const fmJson = JSON.stringify(fm)
 
-  const versionUp = body.rawMarkdown !== undefined && body.rawMarkdown !== post.rawMarkdown
+  // 版本频控：手动保存每次都留快照；自动保存（默认）在距上次快照 2 分钟内不重复产生，避免历史爆炸
+  const revisionKind = body.revisionKind ?? 'auto'
+  const contentChanged = body.rawMarkdown !== undefined && body.rawMarkdown !== post.rawMarkdown
   let nextRev = 0
-  if (versionUp) {
+  if (contentChanged) {
     const last = await prisma.revision.findFirst({ where: { postId: post.id }, orderBy: { version: 'desc' } })
-    nextRev = (last?.version ?? 0) + 1
+    const lastAt = last ? new Date(last.createdAt).getTime() : 0
+    const shouldSnapshot = revisionKind === 'manual' || !last || Date.now() - lastAt > AUTO_REVISION_MIN_INTERVAL_MS
+    if (shouldSnapshot) nextRev = (last?.version ?? 0) + 1
   }
 
   // 文件先落（真相源）：slug 变更时先改名资产，失败则整体不落
@@ -467,7 +488,7 @@ posts.put('/:id', ah(async (req, res) => {
         ...data,
         ...(newSlug ? { slug: newSlug } : {}),
         frontmatter: fmJson,
-        ...(versionUp ? { revisions: { create: { version: nextRev } } } : {}),
+        ...(nextRev ? { revisions: { create: { version: nextRev, kind: revisionKind } } } : {}),
       },
     })
   } catch (e) {
@@ -489,7 +510,7 @@ posts.put('/:id', ah(async (req, res) => {
   }
 
   if (body.tags !== undefined) await syncTags(post.id, body.tags)
-  if (versionUp) {
+  if (nextRev) {
     try {
       writeRevisionFile(newSlug ?? post.slug, nextRev, String(data.rawMarkdown))
     } catch (e) {
@@ -529,7 +550,7 @@ posts.get('/:id/revisions', ah(async (req, res) => {
   const items = await prisma.revision.findMany({
     where: { postId: req.params.id },
     orderBy: { version: 'desc' },
-    select: { id: true, version: true, summary: true, createdAt: true },
+    select: { id: true, version: true, summary: true, kind: true, createdAt: true },
   })
   res.json({ items })
 }))
@@ -560,7 +581,7 @@ posts.post('/:id/revisions/:vid/restore', ah(async (req, res) => {
   try {
     await prisma.post.update({
       where: { id: post.id },
-      data: { rawMarkdown: content, charCount: content.length, revisions: { create: { version } } },
+      data: { rawMarkdown: content, charCount: content.length, revisions: { create: { version, kind: 'manual' } } },
     })
   } catch (e) {
     try {

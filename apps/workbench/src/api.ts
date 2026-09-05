@@ -168,6 +168,8 @@ export interface PostListItem {
   tags: string[]
   chars: number
   readMin: number
+  /** 封面图 URL（frontmatter.cover，卡片视图展示） */
+  cover?: string
 }
 
 export interface PostDetail {
@@ -190,6 +192,8 @@ export interface RevMeta {
   id: string
   version: number
   createdAt: string
+  /** 快照来源：manual=手动保存，auto=自动保存 */
+  kind?: string
 }
 
 export interface RevDetail extends RevMeta {

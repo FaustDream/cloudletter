@@ -55,12 +55,17 @@ pnpm backup
 
 tar -xzf /tmp/deploy-v2.tar.gz -C /srv/cloudletter/ && rm /tmp/deploy-v2.tar.gz
 pnpm install --frozen-lockfile
+# 首跑偶发安装失败（虚拟_store 与解包竞态），重跑一次即可；关键命令禁止加管道（| tail 会吞退出码）
+test -x node_modules/.bin/tsx
 
-# db push 前必须先删 FTS 表（post_search 由运行时代码创建、不在 schema 内，
-# 不删则 push 因「表非空要求 drop」必然失败）；服务重启后 initSearchIndex 自动重建
+# 库结构：必须先「停服务」再 drop-fts + db push —— 运行中的服务（公网搜索流量）会在
+# drop 与 push 之间重建 FTS 表，把 push 挡在数据丢失警告上（2026-09-05 实战教训）。
+# 停服窗口仅数秒；推完即起。
+systemctl stop cloudletter-server
 pnpm exec tsx scripts/drop-fts-tables.ts
 pnpm exec prisma db push --skip-generate
 pnpm db:generate
+systemctl start cloudletter-server
 
 rm -rf /srv/cloudletter/workbench && mkdir -p /srv/cloudletter/workbench
 cp -r /srv/cloudletter/apps/workbench/dist/* /srv/cloudletter/workbench/

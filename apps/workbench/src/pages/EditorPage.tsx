@@ -166,10 +166,16 @@ export function EditorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  /* ===== 保存（冲突自动以本地覆盖重试，见 savePolicy） ===== */
+  /* ===== 保存（冲突自动以本地覆盖重试，见 savePolicy） =====
+   * kind：manual=手动保存（按钮/Ctrl+S/发布前落库，历史必留快照）；auto=自动保存（5s 静默 + 服务端 2 分钟频控） */
   const doSave = useCallback(
-    async (override = false): Promise<boolean> => {
+    async (kind: 'manual' | 'auto' = 'auto', override = false): Promise<boolean> => {
       if (!post || baseVersion === null) return false
+      // 内容与最近一次落库一致：无需请求（保存按钮始终可点，点了也只是确认状态）
+      if (!override && snap(content) === savedSnap.current) {
+        setSaveState('saved')
+        return true
+      }
       setSaveState('saving')
       // frontmatter.category（名称）→ categoryId；未知名称置空（后端会同步删除文件 frontmatter 中的分类）
       const catName = (content.fm.category ?? '').trim()
@@ -181,6 +187,8 @@ export function EditorPage() {
         rawMarkdown: content.markdown,
         categoryId,
         tags: content.fm.tags ?? [],
+        cover: content.fm.cover ?? '',
+        revisionKind: kind,
       }
       if (!override) body.baseVersion = baseVersion
       try {
@@ -201,7 +209,7 @@ export function EditorPage() {
             conflictSeenRef.current = true
             setNotice({ kind: 'conflict-saved' })
           }
-          return doSave(true) // 本地为主：覆盖重试（覆盖保存不带 baseVersion，不会再冲突）
+          return doSave(kind, true) // 本地为主：覆盖重试（覆盖保存不带 baseVersion，不会再冲突）
         }
         if (plan.kind === 'offline') {
           // 网络层失败（fetch 抛 TypeError）：内容留在本机草稿，重连后自动同步
@@ -219,11 +227,11 @@ export function EditorPage() {
     [post, baseVersion, content, categories, slug],
   )
 
-  // 防抖 1s 自动保存
+  // 自动保存：5s 静默防抖（每次输入都会重置计时，连续编辑不落库；停手 5s 后保存）
   useEffect(() => {
     if (!post || saveState !== 'dirty') return
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => { doSave().catch(console.error) }, 1000)
+    saveTimer.current = setTimeout(() => { doSave('auto').catch(console.error) }, 5000)
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current)
     }
@@ -243,7 +251,7 @@ export function EditorPage() {
       setOnline(onlineNow)
       if (onlineNow) {
         setNotice((n) => (n?.kind === 'offline' ? null : n))
-        if (saveStateRef.current === 'dirty') void doSaveRef.current()
+        if (saveStateRef.current === 'dirty') void doSaveRef.current('auto')
       } else if (postRef.current) {
         saveDraft(postRef.current.id, { content, slug, baseVersion, savedAt: Date.now() })
         setNotice((n) => (n && n.kind !== 'offline' ? n : { kind: 'offline' }))
@@ -263,12 +271,12 @@ export function EditorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, slug, baseVersion, post, id])
 
-  // Ctrl/Cmd + S 手动保存
+  // Ctrl/Cmd + S 手动保存（历史必留快照）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's') {
         e.preventDefault()
-        void doSaveRef.current()
+        void doSaveRef.current('manual')
       }
     }
     window.addEventListener('keydown', onKey)
@@ -277,7 +285,7 @@ export function EditorPage() {
 
   // 路由切换（SPA 内部跳转）触发卸载：脏内容立即 flush 一次保存（冲突策略保证本地覆盖成功）
   useEffect(() => () => {
-    if (saveStateRef.current === 'dirty' || saveStateRef.current === 'saving') void doSaveRef.current()
+    if (saveStateRef.current === 'dirty' || saveStateRef.current === 'saving') void doSaveRef.current('auto')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -308,7 +316,7 @@ export function EditorPage() {
     setSaveState('dirty')
     if (id) clearDraft(id)
     setNotice(null)
-    if (isOnline()) void doSaveRef.current()
+    if (isOnline()) void doSaveRef.current('manual')
   }
 
   /* ===== 图片上传（粘贴 / 工具栏上传按钮） ===== */
@@ -334,6 +342,19 @@ export function EditorPage() {
     } catch (e) {
       toast(e instanceof ApiError ? e.message : '封面上传失败', 'err')
       return null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  /** 右栏新建分类：落库（同步到「分类标签」菜单）并刷新全站分类候选 */
+  const handleCreateCategory = useCallback(async (name: string) => {
+    try {
+      const c = await api.post<Category>('/categories', { name })
+      setCategories((prev) => (prev.some((x) => x.id === c.id) ? prev : [...prev, c]))
+      toast(`已创建分类「${c.name}」`)
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : '创建分类失败', 'err')
+      throw e
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -365,11 +386,11 @@ export function EditorPage() {
     document.querySelector<HTMLInputElement>('.ed-canvas-title')?.focus()
   }, [])
 
-  /* ===== 发布 / 删除 ===== */
+  /* ===== 发布 / 删除（发布=对访客公开；转为草稿=撤回，仅自己可见） ===== */
   const publish = async () => {
     if (!post) return
     if (saveState === 'dirty') {
-      const ok = await doSave()
+      const ok = await doSave('manual')
       if (!ok) return // 保存失败一律中止
       if (savedSnap.current !== snap(content)) return
     }
@@ -424,13 +445,18 @@ export function EditorPage() {
         />
         <button
           className="btn slim"
-          disabled={saveState !== 'dirty'}
-          onClick={() => { void doSaveRef.current() }}
-          title="手动保存（Ctrl / ⌘ + S）"
+          onClick={() => { void doSaveRef.current('manual') }}
+          title="手动保存（Ctrl / ⌘ + S）· 历史中必留快照"
         >
           保存
         </button>
-        <button className="btn slim" onClick={publish}>{post.status === 'published' ? '转为草稿' : '发布'}</button>
+        <button
+          className="btn slim"
+          onClick={publish}
+          title={post.status === 'published' ? '转为草稿：撤回发布，文章仅自己可见' : '发布：文章对访客公开可见'}
+        >
+          {post.status === 'published' ? '转为草稿' : '发布'}
+        </button>
         <button className="btn slim ghost" onClick={() => setShowHistory(true)}>历史</button>
         <button className="btn slim ghost danger-ghost" onClick={trash}>删除</button>
         <button
@@ -485,6 +511,8 @@ export function EditorPage() {
                 onPasteImage={handlePasteImage}
                 wikilinkTargets={linkTargets}
                 onOpenWikilink={openWikilink}
+                currentTitle={content.title}
+                notify={(message, kind) => toast(message, kind)}
               />
             </Suspense>
           </div>
@@ -500,6 +528,7 @@ export function EditorPage() {
               categories={categories.map((c) => ({ id: c.id, name: c.name }))}
               tagSuggestions={tagNames}
               onUploadCover={handleCoverUpload}
+              onCreateCategory={handleCreateCategory}
             />
             <Outline
               markdown={content.markdown}
