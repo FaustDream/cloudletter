@@ -46,9 +46,11 @@ test.describe('工作台 · 文章编辑页', () => {
   test('站点设置分组渲染（原控制台并入）', async ({ page }) => {
     await login(page)
     await page.goto(`${BASE}/settings?g=site`)
-    await expect(page.locator('.set-crumb')).toContainText('站点设置')
-    // 分组标题（.set-sec-h）与左侧导航 desc 都含「博客外观」，精确到分组标题避免 strict mode
-    const sec = page.locator('.set-sec-h', { hasText: '博客外观（appearance）' })
+    // 左侧分组导航（set-nav-item）含「站点设置」，精确到导航项避免 strict mode
+    const nav = page.locator('.set-nav-item', { hasText: '站点设置' })
+    await expect(nav.first()).toBeVisible()
+    // 分组标题（.set-sec-h）：site 组首个板块为「站点自定义中心」
+    const sec = page.locator('.set-sec-h', { hasText: '站点自定义中心' })
     await expect(sec.first()).toBeVisible()
   })
 })

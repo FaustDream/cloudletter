@@ -45,8 +45,8 @@ cloudletter/
 ├─ server/            # 后端服务（完全权限）
 ├─ apps/
 │  └─ workbench/     # 个人工作台 SPA（React 18 + Vite，dev 端口 3015）
-├─ e2e/              # Playwright 端到端（独立）
-├─ tests/            # 单测统一目录：server/ workbench/ 按源码文件夹镜像（vitest，@server/* @workbench/* 别名回指源码）
+├─ e2e/              # 已迁至 tests/e2e/（见 §2.4）
+├─ tests/            # 测试统一目录：server/ workbench/ 单测镜像源码目录（本地维护不入库）；e2e/ 端到端工作区入库
 ├─ fuwari-blog/      # 第三方 Astro 模板（限定权限）
 ├─ docs/             # 规范 / 计划 / 报告（完全权限）
 ├─ .github/          # ci.yml / deploy.yml / PR 模板
@@ -88,9 +88,9 @@ apps/workbench/
 ├─ index.html · vite.config.ts · tsconfig.json · eslint.config.js
 ```
 
-### 2.4 `e2e/`
+### 2.4 `tests/e2e/`
 ```
-e2e/
+tests/e2e/
 ├─ tests/*.spec.ts        # workbench / editor 分文件（覆盖主链路与编辑器）
 ├─ content/               # 测试用 content 快照（_settings / note / posts）
 ├─ playwright.config.ts · global-setup.ts
@@ -192,7 +192,7 @@ e2e/
 | `server/` | 后端包 | ✅ | 共享+node | typecheck/test/lint/build | **L** | @Lynn |
 | `apps/write/` | 前端包 | ✅ | 共享+react | typecheck/test/lint/build | **L** | @Lynn |
 | `apps/console/` | 前端包 | ✅ | 共享+react | typecheck/test/lint/build | **L** | @Lynn |
-| `e2e/` | 测试包 | ✅(typecheck+lint) | 共享 | E2E 按需/定时 | **L** | @Lynn |
+| `tests/e2e/` | 测试包 | ✅(typecheck+lint) | 共享 | E2E 按需/定时 | **L** | @Lynn |
 | `docs/` | 文档 | ✅(doc) | — | — | **L** | @Lynn |
 | `.github/` | CI/部署 | ✅ | — | 触发门禁/发布 | **L** | @Lynn |
 | 根配置（eslint/.prettierrc/.editorconfig/CODEOWNERS） | 配置 | ✅ | — | 被各包引用 | **L** | @Lynn |

@@ -38,9 +38,9 @@ test.describe('工作台 · 核心闭环', () => {
     // 检索页页头结构不同（shead-h）
     await page.goto(`${BASE}/search`)
     await expect(page.locator('.shead h2').first()).toContainText('全站检索', { timeout: 10_000 })
-    // 站点设置页头结构不同（set-crumb）
+    // 站点设置已并入统一 PageHeader（旧 set-crumb 已废弃）
     await page.goto(`${BASE}/settings?g=site`)
-    await expect(page.locator('.set-crumb')).toContainText('站点设置', { timeout: 10_000 })
+    await expect(page.locator('.header h2').first()).toContainText('设置', { timeout: 10_000 })
   })
 
   test('今日计划：新增 → 完成 → 删除 闭环', async ({ page }) => {

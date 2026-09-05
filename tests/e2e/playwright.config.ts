@@ -7,7 +7,7 @@ import path from 'node:path'
  * - 串行（workers=1）：工作台前端(:4015)与其独立后端(:4011, e2e 测试库)共享状态，避免并发写入冲突
  * - write/console 独立应用已下线（编辑器/站点设置已并入工作台），仅保留工作台一套 webServer
  * - 测试数据库独立于开发库（server/data/e2e-test.db），globalSetup 里 db push + seed
- * - 内容目录通过 POSTS_ROOT/SETTINGS_ROOT 指向 e2e/content，与开发数据完全隔离
+ * - 内容目录通过 POSTS_ROOT/SETTINGS_ROOT 指向 tests/e2e/content，与开发数据完全隔离
  * - executablePath 指向本机已缓存的 chromium（Linux/CI 需自行调整或改用 channel 定位）
  */
 const chromiumExe = path.join(
@@ -21,7 +21,7 @@ const chromiumExe = path.join(
 )
 
 // 与开发实例完全隔离的内容目录（config.ts 只读 POSTS_ROOT / SETTINGS_ROOT）
-const E2E_CONTENT = '../e2e/content'
+const E2E_CONTENT = '../../tests/e2e/content'
 
 export default defineConfig({
   testDir: './tests',
@@ -40,7 +40,7 @@ export default defineConfig({
   webServer: [
     {
       command: 'node node_modules/tsx/dist/cli.mjs src/index.ts',
-      cwd: '../server',
+      cwd: '../../server',
       url: 'http://localhost:4011/healthz',
       reuseExistingServer: true,
       timeout: 60_000,
@@ -56,7 +56,7 @@ export default defineConfig({
     },
     {
       command: 'node node_modules/vite/bin/vite.js --port 4015',
-      cwd: '../apps/workbench',
+      cwd: '../../apps/workbench',
       url: 'http://localhost:4015/',
       reuseExistingServer: true,
       timeout: 60_000,

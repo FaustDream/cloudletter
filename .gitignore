@@ -1,13 +1,16 @@
 # ============================================================
 # 云笺集 · CLOUDLETTER — .gitignore
-# 分区：依赖 / 构建产物 / 运行时数据 / 环境变量 / 测试相关 / 本地工具状态 / 编辑器与系统 / 防误提交
+# 分区：本地单测 / 依赖 / 构建产物 / 运行时数据 / 环境变量 / 测试产物 / 本地工具状态 / 编辑器与系统 / 防误提交
 # 仓库边界约定：
-#   - tests/  = 本地单测目录（不入库，文件保留在本地工作区）
-#   - docs/   = 设计规范 + 上下文记忆，在版本控制内，勿加入忽略
+#   - tests/server、tests/workbench = 本地单测目录（2026-09-05 起不入库，文件保留在本地工作区）
+#   - tests/e2e                     = 端到端测试工作区，在版本控制内（勿整体忽略）
+#   - docs/                         = 设计规范 + 上下文记忆，在版本控制内，勿加入忽略
 # ============================================================
 
-# --- 本地单测目录（不随仓库分发，本地 vitest 运行：pnpm -C server test / pnpm -C apps/workbench test）---
-tests/
+# --- 本地单测目录（不随仓库分发；本地 vitest 运行：pnpm -C server test / pnpm -C apps/workbench test）---
+# 用 tests/* 而非 tests/，以便保留例外：tests/e2e（端到端工作区）正常入库
+tests/*
+!tests/e2e/
 
 # --- 依赖 ---
 node_modules/
@@ -34,11 +37,11 @@ tsconfig.tsbuildinfo
 .env
 .env.production
 
-# --- 测试产物（e2e）---
+# --- 测试产物（tests/e2e 运行时生成）---
 # Playwright 失败截图/痕迹（保留被跟踪的 .last-run.json）
-e2e/test-results/*/
+tests/e2e/test-results/*/
 # e2e 临时测试内容
-e2e/content/posts/
+tests/e2e/content/posts/
 
 # --- 本地工具状态（AI 助手记忆 / 本地缓存，非源码）---
 .codebuddy/

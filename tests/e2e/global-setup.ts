@@ -4,7 +4,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const serverDir = path.resolve(__dirname, '../server')
+const serverDir = path.resolve(__dirname, '../../server')
 const TEST_DB_URL = 'file:./data/e2e-test.db'
 
 /** 跨平台执行同步子进程（spawnSync 参数组，避免 shell 引号差异） */
