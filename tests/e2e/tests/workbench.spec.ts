@@ -26,7 +26,7 @@ test.describe('工作台 · 核心闭环', () => {
     await login(page)
     const pages: Array<{ path: string; text: string }> = [
       { path: '/posts', text: '文章' },
-      { path: '/organize?tab=category', text: '组织' },
+      { path: '/organize?tab=category', text: '分类标签' },
       { path: '/goals-home', text: '目标' },
       { path: '/ledger', text: '记账本' },
       { path: '/notes', text: '灵感笔记' },
