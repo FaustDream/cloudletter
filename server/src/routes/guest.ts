@@ -54,14 +54,18 @@ guest.get('/posts/:id', requireGuest, requireScope('posts'), ah(async (req, res)
   res.json(p)
 }))
 
-// GET /guest/notes —— 速记（notes 范围）
+// GET /guest/notes —— 灵感笔记（notes 范围；标签与文章共用）
 guest.get('/notes', requireGuest, requireScope('notes'), ah(async (_req, res) => {
   const rows = await prisma.noteItem.findMany({
     orderBy: { createdAt: 'desc' },
     take: CAP,
-    select: { id: true, title: true, body: true, type: true, mood: true, date: true, done: true, createdAt: true },
+    select: {
+      id: true, title: true, body: true, date: true, createdAt: true,
+      category: { select: { name: true } },
+      tags: { select: { tag: { select: { name: true } } } },
+    },
   })
-  res.json({ items: rows })
+  res.json({ items: rows.map((n) => ({ ...n, tags: n.tags.map((t) => t.tag.name) })) })
 }))
 
 // GET /guest/workplan —— 工作计划（workplan 范围）

@@ -4,7 +4,7 @@
  * - checkin  习惯打卡：name/emoji/desc/log/streak
  * - ledger   记账本：kind/cat/amount/note/date
  * - goals    长期目标：name/emoji/desc/current/target/unit
- * - notes    速记/灵感笔记：title/body/type(灵感|计划)/mood(标签)/date/done
+ * - notes    灵感笔记/速记：title/body/date + 与文章共用的分类(categoryId)与标签(tags)
  * - worktask 工作计划：date/text/note/done/doneAt
  */
 import { Router } from 'express'
@@ -16,6 +16,7 @@ import { ah, err } from './helpers'
 import { ymdLocal } from '../util-date'
 import { planDrop, postDrop } from '../game'
 import { validateBody, v, type FieldSpec } from '../middleware/validate'
+import { slugify } from '../content'
 import { log, CLIENT_LOG_LEVELS, type LogLevel } from '../logger'
 import { logActivity } from '../services/activity'
 
@@ -52,6 +53,8 @@ workbench.post('/data/import', ah(async (req, res) => {
     counts[name] = { total: cleanRows.length, added: 0, skipped: 0 }
     plan.push({ model: IMPORT_MODEL[name], rows: cleanRows })
   }
+  // 灵感笔记旧备份兼容：无分类的导入行默认归入「灵感」（分类不存在则不强造）
+  const defaultCatId = (await prisma.category.findFirst({ where: { name: '灵感' } }))?.id ?? null
   const saved = await prisma.$transaction(async (tx) => {
     const result: Record<string, number> = {}
     for (const { model, rows } of plan) {
@@ -67,6 +70,13 @@ workbench.post('/data/import', ah(async (req, res) => {
           }
         }
         if (Object.keys(safe).length === 0) continue
+        // 灵感笔记：旧备份的 type/mood/done/doneAt 列已弃用——丢弃，mood 转正式标签
+        let legacyMood = ''
+        if (model === 'noteItem') {
+          for (const k of ['type', 'mood', 'done', 'doneAt']) delete safe[k]
+          if (typeof row.mood === 'string' && row.mood.trim()) legacyMood = row.mood.trim()
+          if (!safe.categoryId) safe.categoryId = defaultCatId
+        }
         // 冲突策略：skip = 按业务唯一字段判重（不同模型不同）→ 跳过；overwrite = 直接新建副本
         if (conflict === 'skip') {
           const uniq = uniqKey(model, safe)
@@ -76,7 +86,13 @@ workbench.post('/data/import', ah(async (req, res) => {
           }
         }
         try {
-          await (tx as any)[model].create({ data: safe })
+          const created = await (tx as any)[model].create({ data: safe })
+          if (model === 'noteItem' && legacyMood) {
+            try {
+              const tag = await tx.tag.upsert({ where: { name: legacyMood }, update: {}, create: { name: legacyMood, slug: slugify(legacyMood) } })
+              await tx.noteTag.create({ data: { noteId: (created as { id: string }).id, tagId: tag.id } })
+            } catch { /* 标签关联失败不阻塞该行导入 */ }
+          }
           result[model]++
           counts[modelNameFor(model)]!.added++
         } catch { counts[modelNameFor(model)]!.skipped++ }
@@ -365,7 +381,7 @@ export async function timelineData(opts: { limit?: number; from?: string; to?: s
     prisma.checkinItem.findMany(),
     prisma.ledgerEntry.findMany(),
     prisma.goalItem.findMany(),
-    prisma.noteItem.findMany(),
+    prisma.noteItem.findMany({ include: NOTE_INCLUDE }),
     prisma.workTask.findMany(),
   ])
 
@@ -395,16 +411,15 @@ export async function timelineData(opts: { limit?: number; from?: string; to?: s
     })
   }
 
-// 灵感笔记 → 规范类型（type：inspiration|plan）决定节点类型；mood 为自由标签
+// 灵感笔记 → 与文章共用标签体系（tags 为正式标签名）；计划类速记已并入今日计划
 for (const n of notes) {
-  const isPlan = n.type === 'plan'
   push(n.date || ymd(n.createdAt), {
     id: 'note:' + n.id,
-    t: isPlan ? 'plan' : 'note',
-    title: (n.done ? '✅ ' : '') + (n.title || '（无标题）'),
-    sub: n.body ? n.body.slice(0, 120) : (n.type === 'plan' ? '计划' : '灵感'),
+    t: 'note',
+    title: n.title || '（无标题）',
+    sub: n.body ? n.body.slice(0, 120) : '灵感',
     date: ymd(n.date), xp: 10,
-    tags: [...(isPlan ? ['速记'] : []), ...(n.mood || '').trim() ? [(n.mood || '').trim()] : []],
+    tags: n.tags.map((x) => x.tag.name),
     ts: n.createdAt ? n.createdAt.toISOString() : undefined,
   })
 }
@@ -538,7 +553,7 @@ const FIELDS: Record<string, string[]> = {
   checkin: ['name', 'emoji', 'desc', 'log', 'streak'],
   ledger: ['kind', 'cat', 'amount', 'note', 'date'],
   goals: ['name', 'emoji', 'desc', 'current', 'target', 'unit', 'relatedPlanIds', 'relatedCheckinIds'],
-  notes: ['title', 'body', 'type', 'mood', 'date', 'done', 'doneAt'],
+  notes: ['title', 'body', 'date', 'categoryId'],
   worktask: ['date', 'text', 'note', 'done', 'doneAt', 'order'],
 }
 
@@ -586,11 +601,10 @@ const WB_SCHEMA: Record<string, Record<string, FieldSpec>> = {
   notes: {
     title: { ...v.str(), max: 500 },
     body: { ...v.str(), max: 100_000 },
-    type: { ...v.str(), oneOf: ['inspiration', 'plan'] },
-    mood: { ...v.str(), max: 100 },
     date: v.str(),
-    done: v.bool(),
-    doneAt: v.str(),
+    // keepEmpty：'' 保留 = 「无分类」语义（默认空串会被校验层按缺失丢弃）
+    categoryId: { ...v.str(), max: 64, keepEmpty: true },
+    tags: v.arr(v.str(), 0, 20),
   },
   worktask: {
     date: v.str(),
@@ -609,6 +623,91 @@ function sanitizeObj(scope: string, body: Record<string, unknown>): Record<strin
   return out
 }
 
+/* ============================================================
+   灵感笔记 × 共用分类/标签：与文章同一套 Category / Tag 表。
+   分类未传默认「灵感」，标签未传默认「灵感」；'' = 明确无分类。
+   ============================================================ */
+const DEFAULT_NOTE_TAX = '灵感'
+const NOTE_INCLUDE = {
+  category: { select: { id: true, name: true, slug: true } },
+  tags: { select: { tag: { select: { id: true, name: true, slug: true } } } },
+} as const
+
+interface NoteWithTax {
+  id: string
+  title: string
+  body: string
+  date: string
+  categoryId: string | null
+  createdAt: Date
+  updatedAt: Date
+  category: { id: string; name: string; slug: string } | null
+  tags: Array<{ tag: { id: string; name: string; slug: string } }>
+}
+
+/** 笔记输出整形：tags 摊平为名称数组，分类带 id/name/slug 直出 */
+function shapeNote(n: NoteWithTax) {
+  const { tags, ...rest } = n
+  return { ...rest, tags: tags.map((t) => t.tag.name) }
+}
+
+/** 笔记标签同步：按 name upsert Tag → 重建 NoteTag（与 posts.syncTags 同构；最多 20 个） */
+async function syncNoteTags(noteId: string, names: unknown): Promise<void> {
+  if (!Array.isArray(names)) return
+  const list = [...new Set(
+    names.filter((x): x is string => typeof x === 'string' && x.trim() !== '').map((x) => x.trim()),
+  )].slice(0, 20)
+  const ids: string[] = []
+  for (const name of list) {
+    const tag = await prisma.tag.upsert({ where: { name }, update: {}, create: { name, slug: slugify(name) } })
+    ids.push(tag.id)
+  }
+  await prisma.noteTag.deleteMany({ where: { noteId } })
+  for (const tagId of ids) await prisma.noteTag.create({ data: { noteId, tagId } })
+}
+
+/** 默认分类「灵感」的 id（不存在则返回 null，不强造） */
+async function defaultCategoryId(): Promise<string | null> {
+  const def = await prisma.category.findFirst({ where: { name: DEFAULT_NOTE_TAX } })
+  return def?.id ?? null
+}
+
+/** 分类入参解析：undefined=未指定（fillDefault 时兜底「灵感」）；''/null=明确无分类；id 字符串原样返回（存在性由路由校验） */
+async function resolveCategoryId(raw: unknown, fillDefault: boolean): Promise<string | null> {
+  if (raw === undefined) return fillDefault ? defaultCategoryId() : null
+  if (typeof raw === 'string' && raw) return raw
+  return null
+}
+
+/** 新建灵感笔记：默认分类/标签 + 标签同步，返回整形后的完整条目 */
+async function createNote(clean: Record<string, unknown>, body: Record<string, unknown>) {
+  const created = await prisma.noteItem.create({
+    data: {
+      title: typeof clean.title === 'string' ? clean.title : '',
+      body: typeof clean.body === 'string' ? clean.body : '',
+      date: typeof clean.date === 'string' ? clean.date : ymdLocal(new Date()),
+      categoryId: await resolveCategoryId(clean.categoryId, true),
+    },
+  })
+  const names = body.tags === undefined ? [DEFAULT_NOTE_TAX] : body.tags
+  await syncNoteTags(created.id, names)
+  const full = await prisma.noteItem.findUnique({ where: { id: created.id }, include: NOTE_INCLUDE })
+  return full ? shapeNote(full) : created
+}
+
+/** 更新灵感笔记：''分类=清空、未传不动；tags 传数组时重建关联 */
+async function updateNote(id: string, clean: Record<string, unknown>, body: Record<string, unknown>) {
+  const data: { title?: string; body?: string; date?: string; categoryId?: string | null } = {}
+  if (typeof clean.title === 'string') data.title = clean.title
+  if (typeof clean.body === 'string') data.body = clean.body
+  if (typeof clean.date === 'string') data.date = clean.date
+  if (clean.categoryId !== undefined) data.categoryId = await resolveCategoryId(clean.categoryId, false)
+  const updated = await prisma.noteItem.update({ where: { id }, data })
+  if (body.tags !== undefined) await syncNoteTags(id, body.tags)
+  const full = await prisma.noteItem.findUnique({ where: { id }, include: NOTE_INCLUDE })
+  return full ? shapeNote(full) : updated
+}
+
 // GET /:scope —— 列表（leader 自然序；plan 按完成态排后）
 workbench.get('/:scope', ah(async (req, res) => {
   const scope = req.params.scope
@@ -617,6 +716,10 @@ workbench.get('/:scope', ah(async (req, res) => {
     scope === 'plan' ? { done: 'asc' }
       : scope === 'worktask' ? { date: 'asc' }
       : { createdAt: 'asc' }
+  if (scope === 'notes') {
+    const rows = await prisma.noteItem.findMany({ orderBy, include: NOTE_INCLUDE })
+    return res.json({ items: rows.map(shapeNote) })
+  }
   const items = await (prisma as any)[MODEL[scope]].findMany({ orderBy })
   res.json({ items })
 }))
@@ -680,6 +783,13 @@ workbench.post('/:scope', ah(async (req, res) => {
   }
   const clean = sanitizeObj(scope, body)
   if ((scope === 'ledger' || scope === 'notes') && !clean.date) clean.date = ymdLocal(new Date())
+  if (scope === 'notes') {
+    if (typeof clean.categoryId === 'string' && clean.categoryId) {
+      const cat = await prisma.category.findUnique({ where: { id: clean.categoryId } })
+      if (!cat) return err(res, 422, 'VALIDATION', '分类不存在')
+    }
+    return res.json({ ok: true, item: await createNote(clean, body) })
+  }
   const created = await (prisma as any)[MODEL[scope]].create({ data: clean })
   res.json({ ok: true, item: created })
 }))
@@ -691,6 +801,13 @@ workbench.put('/:scope/:id', ah(async (req, res) => {
   const body = validateBody<Record<string, unknown>>(req, res, WB_SCHEMA[scope])
   if (!body) return
   const clean = sanitizeObj(scope, body)
+  if (scope === 'notes') {
+    try {
+      return res.json({ ok: true, item: await updateNote(req.params.id, clean, body) })
+    } catch {
+      return err(res, 404, 'NOT_FOUND', '记录不存在')
+    }
+  }
   try {
     const updated = await (prisma as any)[MODEL[scope]].update({
       where: { id: req.params.id },

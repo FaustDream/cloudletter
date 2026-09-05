@@ -89,6 +89,7 @@ model Category {
   slug        String  @unique
   description String?
   posts       Post[]
+  notes       NoteItem[] // 灵感笔记与文章共用同一套分类
 }
 
 model Tag {
@@ -96,6 +97,7 @@ model Tag {
   name  String    @unique
   slug  String    @unique
   posts PostTag[]
+  notes NoteTag[] // 灵感笔记与文章共用同一套标签
 }
 
 model PostTag {
@@ -185,21 +187,31 @@ model GoalItem {
   updatedAt        DateTime @updatedAt
 }
 
-// 灵感笔记（速记与其同源）：type 为规范类型（inspiration=灵感 | plan=计划），
-// mood 退化为自由标签；done/doneAt 仅计划类速记使用，形成完成闭环
+// 灵感笔记（速记与其同源）：与文章共用 Category / Tag 体系；
+// 计划类速记已并入今日计划（PlanItem），本表只存灵感
 model NoteItem {
-  id        String   @id @default(cuid())
-  title     String
-  body      String   @default("")
-  type      String   @default("inspiration") // inspiration | plan
-  mood      String   @default("")
-  date      String
-  done      Boolean  @default(false)
-  doneAt    String   @default("") // 完成时间（ISO），空 = 未完成
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String    @id @default(cuid())
+  title      String
+  body       String    @default("")
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+  tags       NoteTag[]
+  date       String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
-  @@index([type])
+  @@index([categoryId])
+}
+
+// 笔记↔标签 中间表（与 PostTag 同构）
+model NoteTag {
+  noteId String
+  tagId  String
+  note   NoteItem @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  tag    Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([noteId, tagId])
+  @@index([tagId])
 }
 
 // 工作计划任务（周一~周五工作安排为核心）：date 归属工作日，note 为 Markdown 全文

@@ -12,7 +12,7 @@ export const categories = Router()
 categories.use(requireAuth)
 
 categories.get('/', ah(async (_req, res) => {
-  const items = await prisma.category.findMany({ include: { _count: { select: { posts: true } } } })
+  const items = await prisma.category.findMany({ include: { _count: { select: { posts: true, notes: true } } } })
   res.json({ items })
 }))
 
@@ -60,8 +60,14 @@ categories.put('/:id', ah(async (req, res) => {
 categories.delete('/:id', ah(async (req, res) => {
   const c = await prisma.category.findUnique({ where: { id: req.params.id } })
   if (!c) return err(res, 404, 'NOT_FOUND', '分类不存在')
-  const used = await prisma.post.count({ where: { categoryId: req.params.id } })
-  if (used > 0) return err(res, 409, 'CONFLICT', '该分类下还有文章，请先移动或删除文章后再删除分类')
+  // 笔记与文章共用分类：两边都要查占用
+  const [posts, notes] = await Promise.all([
+    prisma.post.count({ where: { categoryId: req.params.id } }),
+    prisma.noteItem.count({ where: { categoryId: req.params.id } }),
+  ])
+  if (posts > 0 || notes > 0) {
+    return err(res, 409, 'CONFLICT', `该分类下还有 ${posts} 篇文章、${notes} 条灵感笔记，请先移动或删除后再删除分类`)
+  }
   await prisma.category.delete({ where: { id: req.params.id } })
   res.json({ ok: true })
 }))

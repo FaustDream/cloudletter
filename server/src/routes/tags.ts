@@ -12,7 +12,7 @@ export const tags = Router()
 tags.use(requireAuth)
 
 tags.get('/', ah(async (_req, res) => {
-  const items = await prisma.tag.findMany({ include: { _count: { select: { posts: true } } } })
+  const items = await prisma.tag.findMany({ include: { _count: { select: { posts: true, notes: true } } } })
   res.json({ items })
 }))
 

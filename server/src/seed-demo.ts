@@ -5,6 +5,7 @@
  * 用法：corepack pnpm exec tsx src/seed-demo.ts
  */
 import { prisma } from './prisma'
+import { slugify } from './content'
 
 const iso = (d: Date) => d.toISOString().slice(0, 10)
 const daysAgo = (n: number) => {
@@ -76,18 +77,35 @@ async function main() {
   ]
   for (const g of goals) await prisma.goalItem.create({ data: g })
 
-  /* ===== 灵感（8+ 条：长短文本/多标签/新旧） ===== */
+  /* ===== 灵感（8+ 条：与文章共用分类/标签体系） ===== */
+  const catInspiration = await prisma.category.upsert({
+    where: { slug: slugify('灵感') },
+    update: {},
+    create: { name: '灵感', slug: slugify('灵感') },
+  })
+  const tagIds: Record<string, string> = {}
+  for (const name of ['灵感', '想法', '学习', '备忘', '摘录']) {
+    const t = await prisma.tag.upsert({ where: { name }, update: {}, create: { name, slug: slugify(name) } })
+    tagIds[name] = t.id
+  }
   const notes = [
-    { title: '博客三周年复盘提纲', body: '回顾 3 年写作：选题演变、阅读量变化、写作习惯养成。想拆成一篇文章 + 一个视频脚本。', mood: '灵感', date: daysAgo(0) },
-    { title: 'AI 写作工具的边界', body: '生成是开始，编辑才是主体。思考人类判断力在内容生产中的不可替代性。', mood: '想法', date: daysAgo(1) },
-    { title: '好标题的公式', body: '具体数字 + 冲突 + 承诺价值。例：为什么我删掉了 600 篇草稿。', mood: '学习', date: daysAgo(3) },
-    { title: '本周待读文章', body: '1) 设计系统的权衡 2) 异步协作实践 3) SQLite 性能优化实录', mood: '备忘', date: daysAgo(4) },
-    { title: '', body: '深色模式下的对比度：注意背景层次，不要纯黑纯白。', mood: '灵感', date: daysAgo(6) },
-    { title: '网站改版灵感', body: '把侧栏换成抽屉，文章列表用表格密度。更大的预览图，更少装饰。', mood: '想法', date: daysAgo(9) },
-    { title: '一句备忘', body: 'Record 比记忆可靠 —— 这是博客存在的意义。', mood: '摘录', date: daysAgo(14) },
-    { title: '长文素材：工作流自动化', body: '从草稿到发布的完整链路：脚本、模板、标签规则、发布检查清单。收集截图与报错案例。这是一段较长文本用于验证灵感卡片的高度变化与摘要截断，让列表呈现出长短内容差异。', mood: '灵感', date: daysAgo(20) },
+    { title: '博客三周年复盘提纲', body: '回顾 3 年写作：选题演变、阅读量变化、写作习惯养成。想拆成一篇文章 + 一个视频脚本。', tag: '灵感', date: daysAgo(0) },
+    { title: 'AI 写作工具的边界', body: '生成是开始，编辑才是主体。思考人类判断力在内容生产中的不可替代性。', tag: '想法', date: daysAgo(1) },
+    { title: '好标题的公式', body: '具体数字 + 冲突 + 承诺价值。例：为什么我删掉了 600 篇草稿。', tag: '学习', date: daysAgo(3) },
+    { title: '本周待读文章', body: '1) 设计系统的权衡 2) 异步协作实践 3) SQLite 性能优化实录', tag: '备忘', date: daysAgo(4) },
+    { title: '', body: '深色模式下的对比度：注意背景层次，不要纯黑纯白。', tag: '灵感', date: daysAgo(6) },
+    { title: '网站改版灵感', body: '把侧栏换成抽屉，文章列表用表格密度。更大的预览图，更少装饰。', tag: '想法', date: daysAgo(9) },
+    { title: '一句备忘', body: 'Record 比记忆可靠 —— 这是博客存在的意义。', tag: '摘录', date: daysAgo(14) },
+    { title: '长文素材：工作流自动化', body: '从草稿到发布的完整链路：脚本、模板、标签规则、发布检查清单。收集截图与报错案例。这是一段较长文本用于验证灵感卡片的高度变化与摘要截断，让列表呈现出长短内容差异。', tag: '灵感', date: daysAgo(20) },
   ]
-  for (const n of notes) await prisma.noteItem.create({ data: n })
+  for (const n of notes) {
+    await prisma.noteItem.create({
+      data: {
+        title: n.title, body: n.body, date: n.date, categoryId: catInspiration.id,
+        tags: { create: [{ tagId: tagIds[n.tag] }] },
+      },
+    })
+  }
 
   const summary = {
     plan: await prisma.planItem.count(),
