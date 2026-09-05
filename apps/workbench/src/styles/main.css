@@ -310,8 +310,8 @@ input, textarea, select { font-family: var(--font); font-size: 14px; color: var(
 }
 
 /* GitHub 抽屉（应用内打开仓库，保持当前操作上下文） */
-.gh-drawer-mask { position: fixed; inset: 0; z-index: 95; background: rgba(10, 18, 34, .42);
-  backdrop-filter: blur(3px); display: flex; justify-content: flex-end; }
+.gh-drawer-mask { position: fixed; inset: 0; z-index: 95; background: transparent;
+  display: flex; justify-content: flex-end; }
 .gh-drawer { width: min(860px, 92vw); height: 100%; background: var(--surface-solid);
   border-left: 1px solid var(--border); display: flex; flex-direction: column;
   box-shadow: -18px 0 50px -20px rgba(10, 25, 60, .5);
@@ -496,11 +496,9 @@ textarea { resize: vertical; min-height: 120px; }
   box-shadow: var(--shadow-overlay); animation: riseIn .3s var(--ease-out) both; }
 .wb-toast.err { background: var(--danger); }
 
-/* modal */
-.overlay { position: fixed; inset: 0; background: rgba(20, 30, 50, .35); backdrop-filter: blur(6px);
-  z-index: 50; display: flex; align-items: center; justify-content: center; padding: 24px;
-  animation: fadeIn .2s ease both; }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+/* modal —— 浮层规范（DESIGN-SPEC §9）：遮罩仅作透明点击捕获层，不变暗不模糊背景 */
+.overlay { position: fixed; inset: 0; background: transparent;
+  z-index: 50; display: flex; align-items: center; justify-content: center; padding: 24px; }
 .modal { background: var(--surface-solid); border-radius: var(--radius-sheet);
   box-shadow: var(--shadow-overlay); width: 480px; max-width: 96vw; border: 1px solid var(--border);
   padding: 26px 28px; animation: pop .22s ease; }
@@ -758,8 +756,7 @@ textarea { resize: vertical; min-height: 120px; }
 
 /* ===== 右侧抽屉（快速动作） ===== */
 .drawer-layer { position: fixed; inset: 0; z-index: 60; }
-.drawer-mask { position: absolute; inset: 0; background: rgba(35, 45, 65, .18);
-  opacity: 1; animation: fadeIn .25s ease both; }
+.drawer-mask { position: absolute; inset: 0; background: transparent; }
 .drawer { position: absolute; top: 0; right: 0; bottom: 0; max-width: 96vw;
   background: var(--surface-solid); border-left: 1px solid var(--border);
   box-shadow: -14px 0 40px rgba(30, 45, 80, .16);
@@ -1476,7 +1473,7 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 .save-state.conflict { color: var(--danger); }
 .welcome { display: grid; place-items: center; height: 100%; color: var(--text-tertiary); text-align: center; }
 .welcome h2 { margin-bottom: 8px; color: var(--text); }
-.rev-mask { position: fixed; inset: 0; background: rgba(20, 30, 50, .35); backdrop-filter: blur(4px);
+.rev-mask { position: fixed; inset: 0; background: transparent;
   z-index: 50; display: grid; place-items: center; padding: 24px; }
 .rev-dialog { background: var(--surface-solid); border-radius: var(--radius-sheet); box-shadow: var(--shadow-overlay);
   width: 620px; max-width: 96vw; padding: 24px; max-height: 86vh; overflow-y: auto; }
@@ -2205,7 +2202,7 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 .qn-row { margin-top: 2px; }
 .nmodal .grid.g-2 { align-items: center; }
 .nmodal input[type='text'], .nmodal input[type='date'] { min-height: 38px; }
-.fab { position: fixed; right: 26px; bottom: 26px; z-index: 40; display: flex; align-items: center; gap: 8px;
+.fab { position: fixed; left: 26px; bottom: 26px; z-index: 40; display: flex; align-items: center; gap: 8px;
   background: linear-gradient(135deg, var(--accent), var(--accent-deep)); color: var(--on-accent);
   border: none; cursor: grab; touch-action: none; user-select: none;
   padding: 13px 20px; border-radius: 999px; font-size: 14px; font-weight: 700;
