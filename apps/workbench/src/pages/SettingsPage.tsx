@@ -401,8 +401,9 @@ export function SettingsPage() {
     } catch (e: any) { toast(e?.message || '导入失败：请确认是云笺集备份文件', 'err') } finally { setImporting(false) }
   }
   const clearCache = () => {
-    Object.keys(localStorage).filter((k) => k.startsWith('cl_') && k !== 'cl_token' && k !== 'cl_dev').forEach((k) => localStorage.removeItem(k))
-    toast('本地偏好缓存已清理（登录态与设备标识保留）')
+    // 登录态(cl_token)、设备标识(cl_dev)、登录会话标记与导览关闭记录不清——否则导览会在用户选了「永不提示」后再次弹出
+    Object.keys(localStorage).filter((k) => k.startsWith('cl_') && !['cl_token', 'cl_dev', 'cl_login_epoch', 'cl_org_tour'].includes(k)).forEach((k) => localStorage.removeItem(k))
+    toast('本地偏好缓存已清理（登录态、设备标识与导览设置保留）')
   }
 
   /* ========== 集成（API 凭据 / Webhook / RSS） ========== */

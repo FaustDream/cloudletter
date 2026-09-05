@@ -1,4 +1,5 @@
 /** /api/v2 客户端（§6 契约）：统一错误包络解析 + Bearer Token */
+import { markLoginEpoch } from './lib/tour'
 
 const TOKEN_KEY = 'cl_token'
 const COOKIE_DAYS = 30
@@ -29,6 +30,8 @@ export function setToken(t: string | null): void {
     // 清理旧 localStorage 副本，token 只留一份（减少 XSS 侧漏面）
     localStorage.removeItem(TOKEN_KEY)
     setCookieToken(t)
+    // 所有登录路径的统一收口：写入登录会话标记（功能导览按「重新登录」弹出的依据）
+    markLoginEpoch()
   } else {
     localStorage.removeItem(TOKEN_KEY)
     setCookieToken(null)
