@@ -7,6 +7,7 @@
  * - 命令式 confirmDialog() 用于一行替换 window.confirm()
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Icon } from './Icon'
 import { createRoot, type Root } from 'react-dom/client'
 
@@ -83,7 +84,9 @@ export function Modal({ title, onClose, children, footer, type = 'info', size = 
 
   const meta = TYPE_META[type]
 
-  return (
+  // createPortal 挂 body：避免祖先 transform/filter 困住 fixed 坐标系导致弹窗偏心/被裁切；
+  // .overlay 纵向可滚 + .modal margin:auto = 内容超高时安全居中（顶部不再被裁出屏幕）
+  return createPortal(
     <div
       className={`overlay${closing ? ' overlay-out' : ''}`}
       onClick={(e) => { if (maskClosable && e.target === e.currentTarget) requestClose() }}
@@ -112,7 +115,8 @@ export function Modal({ title, onClose, children, footer, type = 'info', size = 
         {children}
         {footer && <div className="mfoot">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

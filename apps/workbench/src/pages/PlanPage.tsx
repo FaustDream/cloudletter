@@ -1,9 +1,10 @@
-/** 今日计划：优先级 + 截止时间 + 逾期/延期状态 + 完成时间 + 空状态引导；
- *  书写直接复用文章编辑器内核（MarkdownEditor），新建/编辑均可查看与修改全文备注 */
+/** 今日计划：优先级 + 截止时间 + 逾期/延期状态 + 完成时间；
+ *  点行 → 右侧抽屉直接编辑（文章编辑器内核写备注），布局三式：舒适（默认）/ 紧凑 / 分组（P0/P1/P2） */
 import { useCallback, useEffect, useState } from 'react'
 import { api, type PlanItem } from '../api'
 import { Icon } from '../components/framework/Icon'
-import { Modal, Field } from '../components/framework/Modal'
+import { Field } from '../components/framework/Modal'
+import { Drawer } from '../components/framework/Drawer'
 import { MarkdownEditor } from '../components/editor/MarkdownEditor'
 import { useToast } from '../components/framework/Toast'
 import { PageHeader } from '../components/framework/PageHeader'
@@ -17,6 +18,7 @@ const LEVELS: Record<string, { label: string; color: string }> = {
 import { todayYMD } from '../lib/date'
 import { celebrate, praise } from '../lib/celebrate'
 import { Dropdown } from '../components/framework/Dropdown'
+import { planStyle, setPlanStyle, PLAN_STYLE_LABELS, type PlanStyle } from '../lib/layout'
 
 interface PlanForm { text: string; level: 'P0' | 'P1' | 'P2'; note: string; dueDate: string }
 
@@ -25,12 +27,13 @@ const EMPTY_FORM: PlanForm = { text: '', level: 'P1', note: '', dueDate: todayYM
 export function PlanPage({ withHeader = true }: { withHeader?: boolean }) {
   const [items, setItems] = useState<PlanItem[]>([])
   const [loading, setLoading] = useState(true)
-  /** creating=true 新建；editing 携带被编辑的计划 */
-  const [formOpen, setFormOpen] = useState(false)
+  /** 编辑抽屉：editing=null 且抽屉开 = 新建 */
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<PlanItem | null>(null)
   const [form, setForm] = useState<PlanForm>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+  const [ls, setLs] = useState<PlanStyle>(planStyle)
   const toast = useToast()
 
   const load = useCallback(() => {
@@ -45,10 +48,10 @@ export function PlanPage({ withHeader = true }: { withHeader?: boolean }) {
   const done = items.filter((i) => i.done).length
   const overdue = items.filter((i) => !i.done && i.dueDate && i.dueDate < todayYMD()).length
 
-  const openCreate = () => { setForm(EMPTY_FORM); setCreating(true); setEditing(null); setFormOpen(true) }
+  const openCreate = () => { setForm(EMPTY_FORM); setCreating(true); setEditing(null); setDrawerOpen(true) }
   const openEdit = (item: PlanItem) => {
     setForm({ text: item.text, level: item.level, note: item.note || '', dueDate: item.dueDate || todayYMD() })
-    setCreating(false); setEditing(item); setFormOpen(true)
+    setCreating(false); setEditing(item); setDrawerOpen(true)
   }
 
   const submit = async () => {
@@ -58,11 +61,12 @@ export function PlanPage({ withHeader = true }: { withHeader?: boolean }) {
       if (creating) {
         await api.post('/workbench/plan', { text: form.text.trim(), level: form.level, note: form.note, dueDate: form.dueDate })
         toast('已添加')
+        setDrawerOpen(false)
       } else if (editing) {
         await api.put(`/workbench/plan/${editing.id}`, { text: form.text.trim(), level: form.level, note: form.note, dueDate: form.dueDate })
         toast('已保存修改')
       }
-      setFormOpen(false); setEditing(null)
+      setEditing(null)
       load()
     } catch (e: any) { toast(e?.message || '保存失败', 'err') }
     finally { setSaving(false) }
@@ -83,7 +87,7 @@ export function PlanPage({ withHeader = true }: { withHeader?: boolean }) {
   const remove = async (item: PlanItem) => {
     try {
       await api.del(`/workbench/plan/${item.id}`)
-      toast('已删除'); load()
+      toast('已删除'); setDrawerOpen(false); load()
     } catch (e: any) { toast(e?.message || '删除失败', 'err') }
   }
 
@@ -95,14 +99,53 @@ export function PlanPage({ withHeader = true }: { withHeader?: boolean }) {
     return null
   }
 
+  const planRow = (item: PlanItem) => {
+    const st = stateOf(item)
+    return (
+      <div key={item.id} className={`wb-item ${st?.cls ?? ''}`}>
+        <div className={`wchk ${item.done ? 'on' : ''}`} onClick={() => toggle(item)}>
+          <Icon name="check" size={15} />
+        </div>
+        <div className="wtx" onClick={() => openEdit(item)} title="点击查看与编辑">
+          <div className={`wn ${item.done ? 'done' : ''}`}>{item.text}</div>
+          {item.note && <div className="wsub">{item.note.replace(/[#*`>\-[\]]/g, '').slice(0, 80)}</div>}
+          {st && <div className={`wst ${st.cls}`}>{st.label}</div>}
+        </div>
+        <span className="wlv" style={{ color: LEVELS[item.level]?.color, background: `color-mix(in srgb, ${LEVELS[item.level]?.color} 12%, transparent)` }}>
+          {LEVELS[item.level]?.label ?? item.level}
+        </span>
+        <button className="wdel" onClick={() => remove(item)} title="删除">
+          <Icon name="trash" size={16} />
+        </button>
+      </div>
+    )
+  }
+
+  // 分组视图：P0 紧急 / P1 重要 / P2 一般（未完成在前，组内保持原排序）
+  const grouped = ls === 'group' ? (['P0', 'P1', 'P2'] as const).map((lv) => ({
+    label: LEVELS[lv].label,
+    list: items.filter((i) => i.level === lv),
+  })).filter((s) => s.list.length > 0) : null
+
   return (
     <>
       <PageHeader
         title={withHeader ? '今日计划' : undefined}
         subtitle={withHeader ? `已完成 ${done} / ${items.length} ${overdue > 0 ? `· ${overdue} 项已逾期` : ''}` : undefined}
-        actions={<button className={withHeader ? 'btn' : 'btn slim'} onClick={openCreate}>
-          <Icon name="plus" size={15} /> 新建计划
-        </button>}
+        actions={
+          <>
+            <div className="seg" style={{ marginRight: 12 }} aria-label="计划布局切换">
+              {(Object.keys(PLAN_STYLE_LABELS) as PlanStyle[]).map((s) => (
+                <button key={s} type="button" className={`seg-btn ${ls === s ? 'on' : ''}`} onClick={() => { setPlanStyle(s); setLs(s) }}>
+                  {PLAN_STYLE_LABELS[s]}
+                </button>
+              ))}
+            </div>
+            <button className={withHeader ? 'btn' : 'btn slim'} onClick={openCreate}>
+              <Icon name="plus" size={15} /> 新建计划
+            </button>
+          </>
+        }
       />
 
       {loading ? (
@@ -115,39 +158,34 @@ export function PlanPage({ withHeader = true }: { withHeader?: boolean }) {
             <Icon name="plus" size={14} /> 创建第一条计划
           </button>
         </EmptyState>
+      ) : grouped ? (
+        grouped.map((sec) => (
+          <div className="gl-group" key={sec.label}>
+            <div className="gl-group-h">{sec.label}<em>{sec.list.length}</em></div>
+            <div className="wb-list" data-ls={ls}>{sec.list.map(planRow)}</div>
+          </div>
+        ))
       ) : (
-        <div className="wb-list">
-          {items.map((item) => {
-            const st = stateOf(item)
-            return (
-              <div key={item.id} className={`wb-item ${st?.cls ?? ''}`}>
-                <div className={`wchk ${item.done ? 'on' : ''}`} onClick={() => toggle(item)}>
-                  <Icon name="check" size={15} />
-                </div>
-                <div className="wtx" onClick={() => openEdit(item)} title="点击查看与编辑">
-                  <div className={`wn ${item.done ? 'done' : ''}`}>{item.text}</div>
-                  {item.note && <div className="wsub">{item.note.replace(/[#*`>\-[\]]/g, '').slice(0, 80)}</div>}
-                  {st && <div className={`wst ${st.cls}`}>{st.label}</div>}
-                </div>
-                <span className="wlv" style={{ color: LEVELS[item.level]?.color, background: `color-mix(in srgb, ${LEVELS[item.level]?.color} 12%, transparent)` }}>
-                  {LEVELS[item.level]?.label ?? item.level}
-                </span>
-                <button className="wdel" onClick={() => remove(item)} title="删除">
-                  <Icon name="trash" size={16} />
-                </button>
-              </div>
-            )
-          })}
-        </div>
+        <div className="wb-list" data-ls={ls}>{items.map(planRow)}</div>
       )}
 
-      {formOpen && (
-        <Modal title={creating ? '新建计划' : '编辑计划'} size="lg" onClose={() => { setFormOpen(false); setEditing(null) }} footer={
-          <>
-            <button className="btn ghost" onClick={() => { setFormOpen(false); setEditing(null) }}>取消</button>
-            <button className="btn" onClick={submit} disabled={saving}>{saving ? '保存中…' : '保存'}</button>
-          </>
-        }>
+      {/* 编辑抽屉：新建/编辑合一，备注用文章编辑器内核 */}
+      {drawerOpen && (
+        <Drawer
+          width={560}
+          title={creating ? '新建计划' : '编辑计划'}
+          hint={editing ? (editing.dueDate ? `截止 ${editing.dueDate}` : '无截止') : undefined}
+          onClose={() => { setDrawerOpen(false); setEditing(null) }}
+          footer={
+            <>
+              {editing && (
+                <button className="btn ghost danger" onClick={() => remove(editing)}><Icon name="trash" size={15} /> 删除</button>
+              )}
+              <div className="spacer" />
+              <button className="btn" onClick={submit} disabled={saving}>{saving ? '保存中…' : '保存'}</button>
+            </>
+          }
+        >
           <Field label="要做什么"><input type="text" value={form.text} onChange={(e) => setForm({ ...form, text: e.target.value })} placeholder="要做什么？" autoFocus /></Field>
           <div className="grid g-2">
             <Field label="优先级">
@@ -167,9 +205,9 @@ export function PlanPage({ withHeader = true }: { withHeader?: boolean }) {
             </Field>
           </div>
           <Field label="计划详情（文章编辑器 · 可留空）">
-            <MarkdownEditor value={form.note} onChange={(md) => setForm((f) => ({ ...f, note: md }))} minHeight={220} />
+            <MarkdownEditor value={form.note} onChange={(md) => setForm((f) => ({ ...f, note: md }))} minHeight={240} />
           </Field>
-        </Modal>
+        </Drawer>
       )}
     </>
   )

@@ -1,8 +1,10 @@
-/** 习惯打卡：今日打卡 / 连续天数 / 新增习惯；点笔图标可查看并编辑习惯详情（文章编辑器内核） */
+/** 习惯打卡：今日打卡 / 连续天数 / 打卡热图；笔图标 → 右侧抽屉编辑详情（文章编辑器内核），
+ *  布局三式：舒适卡片（默认）/ 紧凑 / 分组（今日已打 / 今日未打） */
 import { useCallback, useEffect, useState } from 'react'
 import { api, type CheckinItem } from '../api'
 import { Icon } from '../components/framework/Icon'
-import { Modal, Field, confirmDialog } from '../components/framework/Modal'
+import { Field, confirmDialog } from '../components/framework/Modal'
+import { Drawer } from '../components/framework/Drawer'
 import { MarkdownEditor } from '../components/editor/MarkdownEditor'
 import { useToast } from '../components/framework/Toast'
 import { PageHeader } from '../components/framework/PageHeader'
@@ -10,18 +12,20 @@ import { EmptyState } from '../components/framework/EmptyState'
 
 import { todayYMD } from '../lib/date'
 import { parseLog, computeStreak } from '../lib/checkin'
+import { checkinStyle, setCheckinStyle, CHECKIN_STYLE_LABELS, type CheckinStyle } from '../lib/layout'
 
 interface CkForm { name: string; emoji: string; desc: string }
 
 export function CheckinPage({ withHeader = true }: { withHeader?: boolean }) {
   const [items, setItems] = useState<CheckinItem[]>([])
   const [loading, setLoading] = useState(true)
-  /** creating=true 新建；editing 携带被编辑的习惯 */
-  const [formOpen, setFormOpen] = useState(false)
+  /** 编辑抽屉：editing=null 且抽屉开 = 新建 */
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<CheckinItem | null>(null)
   const [form, setForm] = useState<CkForm>({ name: '', emoji: '✨', desc: '' })
   const [saving, setSaving] = useState(false)
+  const [ls, setLs] = useState<CheckinStyle>(checkinStyle)
   const toast = useToast()
 
   const load = useCallback(() => {
@@ -35,10 +39,10 @@ export function CheckinPage({ withHeader = true }: { withHeader?: boolean }) {
 
   const todayDone = items.filter((i) => parseLog(i.log)[todayYMD()]).length
 
-  const openCreate = () => { setForm({ name: '', emoji: '✨', desc: '' }); setCreating(true); setEditing(null); setFormOpen(true) }
+  const openCreate = () => { setForm({ name: '', emoji: '✨', desc: '' }); setCreating(true); setEditing(null); setDrawerOpen(true) }
   const openEdit = (item: CheckinItem) => {
     setForm({ name: item.name, emoji: item.emoji || '✨', desc: item.desc || '' })
-    setCreating(false); setEditing(item); setFormOpen(true)
+    setCreating(false); setEditing(item); setDrawerOpen(true)
   }
 
   const submit = async () => {
@@ -48,11 +52,12 @@ export function CheckinPage({ withHeader = true }: { withHeader?: boolean }) {
       if (creating) {
         await api.post('/workbench/checkin', { name: form.name.trim(), emoji: form.emoji, desc: form.desc })
         toast('已创建习惯')
+        setDrawerOpen(false)
       } else if (editing) {
         await api.put(`/workbench/checkin/${editing.id}`, { name: form.name.trim(), emoji: form.emoji, desc: form.desc })
         toast('已保存修改')
       }
-      setFormOpen(false); setEditing(null)
+      setEditing(null)
       load()
     } catch (e: any) {
       toast(e?.message || '保存失败', 'err')
@@ -76,20 +81,72 @@ export function CheckinPage({ withHeader = true }: { withHeader?: boolean }) {
     try {
       await api.del(`/workbench/checkin/${item.id}`)
       toast('已删除')
+      setDrawerOpen(false)
       load()
     } catch (e: any) {
       toast(e?.message || '删除失败', 'err')
     }
   }
 
+  const ckCard = (item: CheckinItem) => {
+    const done = !!parseLog(item.log)[todayYMD()]
+    const streak = computeStreak(item.log)
+    return (
+      <div key={item.id} className={`ck-card ${done ? 'done' : ''}`} onClick={() => toggle(item)}>
+        <div className="ck-ic">{item.emoji}</div>
+        <div className="ck-tx">
+          <div className="ckn">{item.name}</div>
+          <div className="cks">
+            <span>连续 <b>{streak}</b> 天</span>
+            {streak >= 3 && <span className="fire">🔥</span>}
+          </div>
+        </div>
+        <div className="ck-st">
+          <Icon name={done ? 'check' : 'x'} size={18} />
+        </div>
+        <button
+          className="ck-del"
+          title="编辑习惯"
+          onClick={(e) => { e.stopPropagation(); openEdit(item) }}
+        >
+          <Icon name="pen" size={15} />
+        </button>
+        <button
+          className="ck-del"
+          title="删除习惯"
+          onClick={(e) => { e.stopPropagation(); remove(item) }}
+        >
+          <Icon name="trash" size={15} />
+        </button>
+      </div>
+    )
+  }
+
+  // 分组视图：今日已打 / 今日未打
+  const grouped = ls === 'group' ? [
+    { label: '今日已打', list: items.filter((i) => parseLog(i.log)[todayYMD()]) },
+    { label: '今日未打', list: items.filter((i) => !parseLog(i.log)[todayYMD()]) },
+  ].filter((s) => s.list.length > 0) : null
+
   return (
     <>
       <PageHeader
         title={withHeader ? '习惯打卡' : undefined}
         subtitle={withHeader ? `今日已完成 ${todayDone} / ${items.length}` : undefined}
-        actions={<button className={withHeader ? 'btn' : 'btn slim'} onClick={openCreate}>
-          <Icon name="plus" size={15} /> 新增习惯
-        </button>}
+        actions={
+          <>
+            <div className="seg" style={{ marginRight: 12 }} aria-label="习惯布局切换">
+              {(Object.keys(CHECKIN_STYLE_LABELS) as CheckinStyle[]).map((s) => (
+                <button key={s} type="button" className={`seg-btn ${ls === s ? 'on' : ''}`} onClick={() => { setCheckinStyle(s); setLs(s) }}>
+                  {CHECKIN_STYLE_LABELS[s]}
+                </button>
+              ))}
+            </div>
+            <button className={withHeader ? 'btn' : 'btn slim'} onClick={openCreate}>
+              <Icon name="plus" size={15} /> 新增习惯
+            </button>
+          </>
+        }
       />
 
       {loading ? (
@@ -125,52 +182,32 @@ export function CheckinPage({ withHeader = true }: { withHeader?: boolean }) {
               </div>
             </div>
           )}
-          <div className="ck-grid">
-            {items.map((item) => {
-              const done = !!parseLog(item.log)[todayYMD()]
-              const streak = computeStreak(item.log)
-            return (
-              <div key={item.id} className={`ck-card ${done ? 'done' : ''}`} onClick={() => toggle(item)}>
-                <div className="ck-ic">{item.emoji}</div>
-                <div className="ck-tx">
-                  <div className="ckn">{item.name}</div>
-                  <div className="cks">
-                    <span>连续 <b>{streak}</b> 天</span>
-                    {streak >= 3 && <span className="fire">🔥</span>}
-                  </div>
-                </div>
-                <div className="ck-st">
-                  <Icon name={done ? 'check' : 'x'} size={18} />
-                </div>
-                <button
-                  className="ck-del"
-                  title="编辑习惯"
-                  onClick={(e) => { e.stopPropagation(); openEdit(item) }}
-                >
-                  <Icon name="pen" size={15} />
-                </button>
-                <button
-                  className="ck-del"
-                  title="删除习惯"
-                  onClick={(e) => { e.stopPropagation(); remove(item) }}
-                >
-                  <Icon name="trash" size={15} />
-                </button>
+          {grouped ? (
+            grouped.map((sec) => (
+              <div className="gl-group" key={sec.label}>
+                <div className="gl-group-h">{sec.label}<em>{sec.list.length}</em></div>
+                <div className="ck-grid" data-ls={ls}>{sec.list.map(ckCard)}</div>
               </div>
-            )
-          })}
-          </div>
+            ))
+          ) : (
+            <div className="ck-grid" data-ls={ls}>{items.map(ckCard)}</div>
+          )}
         </>
       )}
 
-      {formOpen && (
-        <Modal
-          title={creating ? '新增习惯' : '编辑习惯'}
-          size="lg"
-          onClose={() => { setFormOpen(false); setEditing(null) }}
+      {/* 编辑抽屉：新增/编辑合一，说明用文章编辑器内核 */}
+      {drawerOpen && (
+        <Drawer
+          width={560}
+          title={creating ? '新增习惯' : `${editing?.emoji ?? '✨'} ${editing?.name ?? ''}`}
+          hint={editing ? `连续 ${computeStreak(editing.log)} 天` : undefined}
+          onClose={() => { setDrawerOpen(false); setEditing(null) }}
           footer={
             <>
-              <button className="btn ghost" onClick={() => { setFormOpen(false); setEditing(null) }}>取消</button>
+              {editing && (
+                <button className="btn ghost danger" onClick={() => remove(editing)}><Icon name="trash" size={15} /> 删除</button>
+              )}
+              <div className="spacer" />
               <button className="btn" onClick={submit} disabled={saving}>{saving ? '保存中…' : '保存'}</button>
             </>
           }
@@ -182,9 +219,9 @@ export function CheckinPage({ withHeader = true }: { withHeader?: boolean }) {
             <input type="text" value={form.emoji} onChange={(e) => setForm({ ...form, emoji: e.target.value })} maxLength={4} placeholder="✨" />
           </Field>
           <Field label="习惯说明 / 执行计划（文章编辑器 · 可留空）">
-            <MarkdownEditor value={form.desc} onChange={(md) => setForm((f) => ({ ...f, desc: md }))} minHeight={200} />
+            <MarkdownEditor value={form.desc} onChange={(md) => setForm((f) => ({ ...f, desc: md }))} minHeight={220} />
           </Field>
-        </Modal>
+        </Drawer>
       )}
     </>
   )

@@ -65,6 +65,8 @@ export function BlockNoteEditor({
   onPasteImage,
   wikilinkTargets,
   onOpenWikilink,
+  currentTitle,
+  notify,
 }: {
   value: string
   onChange: (markdown: string) => void
@@ -74,6 +76,10 @@ export function BlockNoteEditor({
   wikilinkTargets?: Array<{ id: string; title: string }>
   /** 点击正文 [[标题]] 回调（跳转关联文章） */
   onOpenWikilink?: (title: string) => void
+  /** 当前文章标题（工具栏「识别双链」排除自身） */
+  currentTitle?: string
+  /** 轻提示（编辑页 toast） */
+  notify?: (message: string, kind?: 'ok' | 'err') => void
 }) {
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
@@ -144,6 +150,16 @@ export function BlockNoteEditor({
             if (suppressEmit.current) return
             const md = await editor.blocksToMarkdownLossy(editor.document)
             if (md === lastEmitted.current) return
+            // 竞态防御：文档仍有文字却序列化出空串（双击选词等场景偶发）——跳过本次上抛，
+            // 否则父组件值变空会触发空文档回灌，整篇正文被清空且撤销无效（2026-09-05 实测复现）
+            const docHasText = editor.document.some((b) => Array.isArray(b.content) && b.content.some((c) => {
+              const t = (c as { text?: unknown })?.text
+              return typeof t === 'string' && t.trim() !== ''
+            }))
+            if (!md.trim() && docHasText) {
+              console.warn('[BlockNote] 序列化异常得到空串，已跳过本次同步以防正文被清空')
+              return
+            }
             lastEmitted.current = md
             onChangeRef.current(md)
           } catch (e) {
@@ -267,7 +283,13 @@ export function BlockNoteEditor({
   return (
     <div className="ed-blocknote" onClick={onRootClick} onMouseUp={onRootMouseUp}>
       {/* 常驻格式工具栏：斜杠菜单/浮动工具栏之外的固定入口 */}
-      <EditorToolbar editor={editor} />
+      <EditorToolbar
+        editor={editor}
+        titles={(wikilinkTargets ?? []).map((t) => t.title)}
+        currentTitle={currentTitle}
+        onImageUpload={onPasteImage}
+        notify={notify}
+      />
       <BlockNoteView editor={editor} theme={dark ? 'dark' : 'light'} editable>
         {/* 斜杠菜单（打字 "/" 唤起）：内置块 + 自定义块 */}
         <SuggestionMenuController triggerCharacter="/" getItems={slashItems} />
