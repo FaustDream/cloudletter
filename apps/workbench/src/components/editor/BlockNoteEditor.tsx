@@ -26,6 +26,8 @@ import { filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blockno
 import type { BlockNoteEditor as BlockNoteEditorInstance, PartialBlock } from '@blocknote/core'
 import { zhDictionary } from '../../i18n/blocknote-zh'
 import { editorSchema, normalizeCodeLanguages } from './customBlocks'
+import { EditorToolbar } from './EditorToolbar'
+import { matchWikilinkAtOffset } from '../../lib/wikilinkText'
 import '@blocknote/mantine/style.css'
 
 const EMPTY_BLOCKS: PartialBlock[] = [{ type: 'paragraph' }]
@@ -42,28 +44,19 @@ function useDarkTheme(): boolean {
   return dark
 }
 
-/** 从正文提取光标所在位置的 [[双链]] 目标（仅折叠光标命中时返回非 null） */
-function wikilinkAtCaret(editor: BlockNoteEditorInstance<any, any, any>): string | null {
-  const tiptap = (editor as any)._tiptapEditor
-  if (!tiptap?.state) return null
-  const sel = tiptap.state.selection
-  if (!sel || !sel.empty) return null // 只处理无选区（单次点击/双击后光标）的落点
-  const from = sel.from
-  try {
-    const block = tiptap.state.doc.resolve(from).parent
-    const text = block.textContent
-    const rel = from - Math.max(block.start, 1)
-    if (rel < 0 || rel > text.length) return null
-    for (const m of text.matchAll(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g)) {
-      const s = m.index ?? 0
-      const e = s + m[0].length
-      // 光标落点紧贴双链两端或内部都算命中，便于点击跳转
-      if (rel >= s - 1 && rel <= e + 1) return m[1].trim()
-    }
-  } catch {
-    /* 解析失败视为无命中，不影响编辑 */
-  }
-  return null
+/** 从 DOM Selection 读取光标落点是否在 [[双链]] 上（不依赖内核私有字段，跨版本安全） */
+function wikilinkFromSelection(): { name: string; rect: DOMRect } | null {
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return null
+  const node = sel.focusNode
+  if (!node || node.nodeType !== Node.TEXT_NODE) return null
+  if (!node.parentElement?.closest('.bn-editor')) return null
+  const hit = matchWikilinkAtOffset(node.textContent ?? '', sel.focusOffset)
+  if (!hit) return null
+  const range = document.createRange()
+  range.setStart(node, hit.start)
+  range.setEnd(node, hit.end)
+  return { name: hit.name, rect: range.getBoundingClientRect() }
 }
 
 export function BlockNoteEditor({
@@ -96,6 +89,8 @@ export function BlockNoteEditor({
   const [lightbox, setLightbox] = useState<string | null>(null)
   /** 双链操作浮层：{ 目标标题, 浮层位置 } */
   const [wlHint, setWlHint] = useState<{ name: string; x: number; y: number } | null>(null)
+  /** 浮层打开时刻：忽略紧跟其后的那次 click（mouseup → click 序列会误关浮层） */
+  const wlOpenedAt = useRef(0)
   const dark = useDarkTheme()
 
   const editor: BlockNoteEditorInstance<any, any, any> = useCreateBlockNote({
@@ -189,10 +184,12 @@ export function BlockNoteEditor({
     return () => window.removeEventListener('keydown', onKey)
   }, [lightbox])
 
-  // 双链浮层：点击正文空白/Escape/编辑内容时收起
+  // 双链浮层：点击正文空白/Escape/编辑内容时收起（打开瞬间的 click 忽略，防误关）
   useEffect(() => {
     if (!wlHint) return
-    const close = () => setWlHint(null)
+    const close = () => {
+      if (Date.now() - wlOpenedAt.current > 200) setWlHint(null)
+    }
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setWlHint(null) }
     document.addEventListener('click', close)
     window.addEventListener('keydown', onKey)
@@ -202,23 +199,16 @@ export function BlockNoteEditor({
     }
   }, [wlHint])
 
-  const onRootMouseUp = (e: React.MouseEvent) => {
-    // 点击正文中的 [[双链]] 文本：弹出操作浮层（打开 / 用法说明）
-    const hit = wikilinkAtCaret(editor)
+  const onRootMouseUp = () => {
+    // ProseMirror 在 mousedown 即落好选区，mouseup 时同步读 DOM Selection 即可命中；
+    // 点击 [[双链]] 弹出操作浮层，点击空白处收起
+    const hit = wikilinkFromSelection()
     if (hit) {
-      e.preventDefault()
-      e.stopPropagation()
-      const tiptap = (editor as any)._tiptapEditor
-      const pos = tiptap?.view?.coordsAtPos ? tiptap.view.coordsAtPos(tiptap.state.selection.from) : null
-      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-      setWlHint({
-        name: hit,
-        x: (pos?.left ?? rect.left + rect.width / 2),
-        y: (pos?.bottom ?? rect.top) + 8,
-      })
-      return
+      setWlHint({ name: hit.name, x: hit.rect.left, y: hit.rect.bottom + 6 })
+      wlOpenedAt.current = Date.now()
+    } else {
+      setWlHint(null)
     }
-    setWlHint(null)
   }
 
   const openWl = () => {
@@ -276,6 +266,8 @@ export function BlockNoteEditor({
 
   return (
     <div className="ed-blocknote" onClick={onRootClick} onMouseUp={onRootMouseUp}>
+      {/* 常驻格式工具栏：斜杠菜单/浮动工具栏之外的固定入口 */}
+      <EditorToolbar editor={editor} />
       <BlockNoteView editor={editor} theme={dark ? 'dark' : 'light'} editable>
         {/* 斜杠菜单（打字 "/" 唤起）：内置块 + 自定义块 */}
         <SuggestionMenuController triggerCharacter="/" getItems={slashItems} />
@@ -283,14 +275,28 @@ export function BlockNoteEditor({
         <SuggestionMenuController triggerCharacter="[[" getItems={wikilinkItems} minQueryLength={0} />
       </BlockNoteView>
 
-      {/* 双链操作浮层：打开关联文章 + 使用说明 */}
+      {/* 双链操作浮层：打开关联文章 + 用法说明（未找到目标时说明原因） */}
       {wlHint && createPortal(
         <div className="bn-wl-mask" onClick={() => setWlHint(null)}>
           <div className="bn-wl-hint" style={{ left: wlHint.x, top: wlHint.y }} onClick={(e) => e.stopPropagation()}>
             <b>🔗 {wlHint.name}</b>
-            <em>双链：输入 [[ 插入文章引用，点击正文中的 [[标题]] 可快速跳转关联文章</em>
+            {(() => {
+              const target = (wikilinkTargets ?? []).find((t) => t.title === wlHint.name)
+              return target ? (
+                <em>找到同名文章，点击下方按钮跳转。</em>
+              ) : (
+                <em>还没有同名文章。输入 [[ 时会弹出文章补全，选中即可建立双链。</em>
+              )
+            })()}
+            <em className="bn-wl-howto">用法：在正文输入 [[文章标题]] 建立双链；点击正文中的双链文字随时跳转。</em>
             <div className="bn-wl-ops">
-              <button className="bn-wl-open" onClick={openWl}>打开关联文章</button>
+              <button
+                className="bn-wl-open"
+                disabled={!(wikilinkTargets ?? []).some((t) => t.title === wlHint.name)}
+                onClick={openWl}
+              >
+                打开关联文章
+              </button>
               <button className="bn-wl-close" onClick={() => setWlHint(null)}>知道了</button>
             </div>
           </div>

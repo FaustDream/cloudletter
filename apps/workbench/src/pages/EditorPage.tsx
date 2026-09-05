@@ -1,13 +1,14 @@
 /**
  * 文章编辑页（写作空间并入工作台后的编辑视图，编辑内核 = BlockNote：ProseMirror/Tiptap 内核的 Notion 式块编辑器）：
  * 打开 PostsPage 列表中的文章进入本页；/posts/new 新建草稿后跳转。
- * - 现代交互范式：无鼠标工具栏，格式入口 = 斜杠菜单(/) / 选中浮动工具栏 / 块拖拽菜单；[[ 唤起双链补全
- * - 标题在画布内（Notion 式首行大字），纸面画布 + 阅读宽度；右栏属性面板可收起（cl_ed_side）
- * - 导出：Markdown / 自包含 HTML / 打印·PDF（见 lib/exporters.ts）
- * - 防抖 1s 自动保存 + Ctrl/Cmd+S 手动保存 + 路由切换（卸载）时 flush 一次保存
- * - baseVersion 乐观锁冲突处理；发布前存在未解决冲突即中止（避免静默覆盖他人修改）
- * - 图片粘贴/拖拽/上传统一走 /uploads（客户端先压缩略图：长边 ≤2000px / JPEG q0.85）
- * - 右栏：文档属性（分类下拉/标签chip/封面上传）/ 大纲统计 / 双链列表（点击跳转对应文章）
+ * - 格式入口三层：顶部常驻工具栏（EditorToolbar）+ 斜杠菜单(/) + 选中浮动工具栏；[[ 唤起双链补全
+ * - 标题在画布内（Notion 式首行大字），纸面画布 + 阅读宽度；右栏自上而下：文档信息（可折叠）/ 大纲统计 / 双链
+ * - 保存：防抖 1s 自动保存 + 顶栏手动「保存」按钮 + Ctrl/Cmd+S + 路由切换（卸载）时 flush
+ * - 保存策略（本地为主）：乐观锁冲突自动以本地内容覆盖重试，仅首次给轻提示，不再弹冲突条；
+ *   网络层失败落本机草稿，重连自动同步
+ * - 重开策略（服务器为主）：始终加载服务器版本；本机存在较新未同步草稿时给一次性轻提示，可恢复或放弃
+ * - baseVersion 乐观锁；图片粘贴/拖拽/上传统一走 /uploads（客户端先压缩略图）
+ * - 右栏文档信息：分类下拉 / 标签下拉多选（可搜索·可新建）/ 摘要 / 封面 / Slug
  */
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -18,12 +19,13 @@ import { confirmDialog } from '../components/framework/Modal'
 import { Icon } from '../components/framework/Icon'
 import { exportHtmlFile, exportMarkdownFile, printPost } from '../lib/exporters'
 import { RevisionPanel } from '../components/editor/RevisionPanel'
-import { EdMetaBar, Outline, WikiLinks, type Frontmatter } from '../components/editor/Outline'
+import { EdSideMeta, Outline, WikiLinks, type Frontmatter } from '../components/editor/Outline'
 import { clearDraft, isOnline, loadDraft, saveDraft, subscribeNetwork, type EditorDraft } from '../lib/offline'
+import { planSaveFailure, pickStaleLocalDraft } from '../lib/savePolicy'
 // BlockNote 体积大（ProseMirror 全家桶），独立 chunk 按需加载
 const BlockNoteEditor = lazy(() => import('../components/editor/BlockNoteEditor').then((m) => ({ default: m.BlockNoteEditor })))
 
-type SaveState = 'saved' | 'dirty' | 'saving' | 'conflict'
+type SaveState = 'saved' | 'dirty' | 'saving'
 
 interface Content {
   markdown: string
@@ -33,6 +35,17 @@ interface Content {
 
 function snap(c: Content): string {
   return JSON.stringify([c.markdown, c.title, c.fm])
+}
+
+/** 顶部轻提示条（非阻断）：conflict-saved 自动消失；stale-draft 到点未处理视为放弃本机草稿 */
+type EditorNotice =
+  | { kind: 'conflict-saved' }
+  | { kind: 'stale-draft'; draft: EditorDraft }
+  | { kind: 'offline' }
+
+const NOTICE_AUTO_CLOSE_MS: Partial<Record<EditorNotice['kind'], number>> = {
+  'conflict-saved': 6000,
+  'stale-draft': 12000,
 }
 
 /** 客户端缩略图压缩：长边 ≤2000px、JPEG q0.85（GIF 保留动图原样，小图不重压） */
@@ -59,23 +72,25 @@ export function EditorPage() {
   /** 双链候选：{ id, title }，[[ 补全与双链跳转共用 */
   const [linkTargets, setLinkTargets] = useState<Array<{ id: string; title: string }>>([])
   const [categories, setCategories] = useState<Category[]>([])
-  /** 全站标签名（右栏标签 chip 候选） */
+  /** 全站标签名（右栏标签多选候选） */
   const [tagNames, setTagNames] = useState<string[]>([])
   const [content, setContent] = useState<Content>({ markdown: '', title: '', fm: {} })
   const [slug, setSlug] = useState('')
   const [baseVersion, setBaseVersion] = useState<number | null>(null)
   const [saveState, setSaveState] = useState<SaveState>('saved')
   const [showHistory, setShowHistory] = useState(false)
-  /** 右栏（属性/大纲）显隐：写作时可收起获得沉浸画布，记忆在 localStorage */
+  /** 右栏（文档信息/大纲）显隐：写作时可收起获得沉浸画布，记忆在 localStorage */
   const [sideOpen, setSideOpen] = useState(() => localStorage.getItem('cl_ed_side') !== '0')
   /** 在线状态（离线时本地草稿兜底，重连自动同步） */
   const [online, setOnline] = useState(isOnline)
-  /** 本地草稿恢复条：'newer'=服务器版本比本地旧；'offline'=断网时在离线编辑中 */
-  const [restoreBar, setRestoreBar] = useState<null | { kind: 'newer' | 'offline'; draft: EditorDraft }>(null)
+  /** 顶部轻提示（非阻断，替代旧的冲突横幅与草稿恢复横幅） */
+  const [notice, setNotice] = useState<EditorNotice | null>(null)
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   /** 最近一次落库/加载时的内容快照：与当前内容不同即视为脏 */
   const savedSnap = useRef('')
+  /** 本会话是否已提示过冲突覆盖（只提示第一次） */
+  const conflictSeenRef = useRef(false)
 
   const patchContent = (patch: Partial<Content>) => {
     setContent((prev) => {
@@ -85,7 +100,7 @@ export function EditorPage() {
     })
   }
 
-  /* ===== 加载 ===== */
+  /* ===== 加载（重开以服务器为主） ===== */
   const loadPost = useCallback(async (postId: string) => {
     const p = await api.get<PostDetail>(`/posts/${postId}`)
     let fm: Frontmatter = {}
@@ -106,13 +121,11 @@ export function EditorPage() {
     savedSnap.current = snap(c)
     setBaseVersion(new Date(p.updatedAt).getTime())
     setSaveState('saved')
-    // 本地草稿兜底检测：快照比服务器新且内容不同 → 提示恢复；否则清理无用快照
+    // 本机较新草稿只给一次性轻提示（可恢复/放弃），不再弹恢复横幅；其余快照直接清理
     const d = loadDraft(postId)
-    if (d && d.savedAt > new Date(p.updatedAt).getTime() && snap(d.content) !== snap(c)) {
-      setRestoreBar({ kind: 'newer', draft: d })
-    } else if (d) {
-      clearDraft(postId)
-    }
+    const stale = pickStaleLocalDraft(new Date(p.updatedAt).getTime(), d)
+    if (stale && snap(stale.content) !== snap(c)) setNotice({ kind: 'stale-draft', draft: stale })
+    else if (d) clearDraft(postId)
   }, [])
 
   useEffect(() => {
@@ -134,7 +147,7 @@ export function EditorPage() {
           savedSnap.current = ''
           setSaveState('dirty')
           setOnline(false)
-          setRestoreBar({ kind: 'offline', draft: d })
+          setNotice({ kind: 'offline' })
         } else {
           toast(e instanceof ApiError ? e.message : '载入文章失败', 'err')
         }
@@ -153,7 +166,7 @@ export function EditorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  /* ===== 保存 ===== */
+  /* ===== 保存（冲突自动以本地覆盖重试，见 savePolicy） ===== */
   const doSave = useCallback(
     async (override = false): Promise<boolean> => {
       if (!post || baseVersion === null) return false
@@ -182,18 +195,23 @@ export function EditorPage() {
         clearDraft(post.id) // 落库成功：本地兜底快照使命完成
         return true
       } catch (e) {
-        if (e instanceof ApiError && e.code === 'CONFLICT') {
-          setSaveState('conflict')
-          if (override) toast(e.message, 'err')
-        } else if (e instanceof TypeError) {
+        const plan = planSaveFailure(e, { alreadyOverridden: override })
+        if (plan.kind === 'retry-override') {
+          if (!conflictSeenRef.current) {
+            conflictSeenRef.current = true
+            setNotice({ kind: 'conflict-saved' })
+          }
+          return doSave(true) // 本地为主：覆盖重试（覆盖保存不带 baseVersion，不会再冲突）
+        }
+        if (plan.kind === 'offline') {
           // 网络层失败（fetch 抛 TypeError）：内容留在本机草稿，重连后自动同步
           setOnline(false)
           setSaveState('dirty')
           toast('网络不可用，改动已保存到本机，恢复网络后自动保存')
-        } else {
-          setSaveState('dirty')
-          toast(e instanceof ApiError ? e.message : '保存失败', 'err')
+          return false
         }
+        setSaveState('dirty')
+        toast(e instanceof ApiError ? e.message : '保存失败', 'err')
         return false
       }
     },
@@ -219,14 +237,16 @@ export function EditorPage() {
   const postRef = useRef(post)
   postRef.current = post
 
-  // 离线监听：断网瞬间把当前内容落为本地草稿；恢复网络后若有未保存内容立即自动同步
+  // 离线监听：断网瞬间落本地草稿并提示；恢复网络后清掉离线提示并自动同步
   useEffect(() => {
     const off = subscribeNetwork((onlineNow) => {
       setOnline(onlineNow)
       if (onlineNow) {
+        setNotice((n) => (n?.kind === 'offline' ? null : n))
         if (saveStateRef.current === 'dirty') void doSaveRef.current()
       } else if (postRef.current) {
         saveDraft(postRef.current.id, { content, slug, baseVersion, savedAt: Date.now() })
+        setNotice((n) => (n && n.kind !== 'offline' ? n : { kind: 'offline' }))
       }
     })
     return off
@@ -255,19 +275,41 @@ export function EditorPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // 路由切换（SPA 内部跳转）触发卸载：脏内容立即 flush 一次保存
+  // 路由切换（SPA 内部跳转）触发卸载：脏内容立即 flush 一次保存（冲突策略保证本地覆盖成功）
   useEffect(() => () => {
-    if (saveStateRef.current === 'dirty') void doSaveRef.current()
+    if (saveStateRef.current === 'dirty' || saveStateRef.current === 'saving') void doSaveRef.current()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // 脏内容关闭标签页前提醒（beforeunload 兜底）
   useEffect(() => {
-    if (saveState !== 'dirty' && saveState !== 'conflict') return
+    if (saveState !== 'dirty' && saveState !== 'saving') return
     const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault() }
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [saveState])
+
+  /* ===== 提示条动作 ===== */
+  const closeNotice = useCallback(() => {
+    setNotice((n) => {
+      if (n?.kind === 'stale-draft' && id) clearDraft(id) // 到点未处理/手动放弃 → 服务器为主，清掉本机快照
+      return null
+    })
+  }, [id])
+
+  /** 恢复本机较新草稿：覆盖当前编辑内容并立即落库 */
+  const restoreLocalDraft = () => {
+    if (notice?.kind !== 'stale-draft') return
+    const d = notice.draft
+    setContent(d.content)
+    setSlug(d.slug)
+    setBaseVersion(d.baseVersion)
+    savedSnap.current = ''
+    setSaveState('dirty')
+    if (id) clearDraft(id)
+    setNotice(null)
+    if (isOnline()) void doSaveRef.current()
+  }
 
   /* ===== 图片上传（粘贴 / 工具栏上传按钮） ===== */
   const handlePasteImage = useCallback(async (file: File): Promise<string | null> => {
@@ -306,16 +348,29 @@ export function EditorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkTargets, post?.id])
 
-  /* ===== 发布 / 删除（冲突时中止，不静默覆盖） ===== */
+  /** 大纲点击跳转：按标题文本定位正文中的标题块（引用内标题无块锚点时忽略） */
+  const jumpToHeading = useCallback((text: string) => {
+    const blocks = document.querySelectorAll<HTMLDivElement>('.bn-block-content[data-content-type="heading"]')
+    for (const b of blocks) {
+      if ((b.textContent ?? '').trim() === text) {
+        b.scrollIntoView({ block: 'center' })
+        return
+      }
+    }
+  }, [])
+
+  /** 大纲首条（文章大标题）点击：回到画布开头并聚焦标题 */
+  const jumpToTitle = useCallback(() => {
+    document.querySelector('.ed-blocknote')?.scrollTo({ top: 0 })
+    document.querySelector<HTMLInputElement>('.ed-canvas-title')?.focus()
+  }, [])
+
+  /* ===== 发布 / 删除 ===== */
   const publish = async () => {
     if (!post) return
-    if (saveState === 'conflict') {
-      toast('当前存在未解决的冲突，请先选择「以本地为准覆盖」或「加载服务器版本」', 'err')
-      return
-    }
     if (saveState === 'dirty') {
       const ok = await doSave()
-      if (!ok) return // 保存失败（含刚转成 conflict）一律中止
+      if (!ok) return // 保存失败一律中止
       if (savedSnap.current !== snap(content)) return
     }
     try {
@@ -340,25 +395,6 @@ export function EditorPage() {
     }
   }
 
-  /** 恢复本地草稿：覆盖当前编辑内容，随后走自动保存/离线同步 */
-  const restoreLocalDraft = () => {
-    const bar = restoreBar
-    if (!bar) return
-    setContent(bar.draft.content)
-    setSlug(bar.draft.slug)
-    setBaseVersion(bar.draft.baseVersion)
-    savedSnap.current = ''
-    setSaveState('dirty')
-    setRestoreBar(null)
-    if (isOnline()) void doSaveRef.current() // 在线则立即落库
-  }
-
-  /** 放弃本地草稿：清理快照并保持服务器版本 */
-  const discardLocalDraft = () => {
-    if (restoreBar && id) clearDraft(id)
-    setRestoreBar(null)
-  }
-
   if (loading) return <EmptyState variant="hero" style={{ paddingTop: 120 }}>载入文章中…</EmptyState>
   if (!post) return <EmptyState variant="hero" style={{ paddingTop: 120 }}>文章不存在或已被删除</EmptyState>
 
@@ -370,14 +406,12 @@ export function EditorPage() {
           {saveState === 'saved' && '✓ 已保存'}
           {saveState === 'dirty' && (online ? '未保存…' : '未保存（离线·已存本机）')}
           {saveState === 'saving' && '保存中…'}
-          {saveState === 'conflict' && '⚠ 冲突'}
         </span>
         <span className={`pill ${post.status === 'published' ? 'ok' : 'warn'}`}>
           {post.status === 'published' ? '已发布' : '草稿'}
         </span>
         <div className="spacer" />
         <ExportMenu
-          disabled={saveState === 'conflict'}
           meta={{
             title: content.title || '无标题',
             summary: content.fm.summary,
@@ -388,7 +422,15 @@ export function EditorPage() {
           }}
           markdown={content.markdown}
         />
-        <button className="btn slim" onClick={publish} title="Ctrl / ⌘ + S 手动保存">{post.status === 'published' ? '转为草稿' : '发布'}</button>
+        <button
+          className="btn slim"
+          disabled={saveState !== 'dirty'}
+          onClick={() => { void doSaveRef.current() }}
+          title="手动保存（Ctrl / ⌘ + S）"
+        >
+          保存
+        </button>
+        <button className="btn slim" onClick={publish}>{post.status === 'published' ? '转为草稿' : '发布'}</button>
         <button className="btn slim ghost" onClick={() => setShowHistory(true)}>历史</button>
         <button className="btn slim ghost danger-ghost" onClick={trash}>删除</button>
         <button
@@ -404,42 +446,26 @@ export function EditorPage() {
         </button>
       </div>
 
-      {saveState === 'conflict' && (
-        <div className="ed-conflict">
-          该文章已在其他会话被修改。
-          <button className="btn slim warn" onClick={() => { doSave(true).catch(console.error) }}>以本地为准覆盖</button>
-          <button className="btn slim" onClick={() => { loadPost(post.id).catch(console.error) }}>加载服务器版本</button>
-        </div>
+      {notice?.kind === 'conflict-saved' && (
+        <EdNotice onClose={closeNotice}>
+          检测到其他会话修改了这篇文章，已按「本地为主」用当前内容覆盖保存。
+        </EdNotice>
       )}
-
-      {restoreBar?.kind === 'newer' && (
-        <div className="ed-conflict">
-          检测到本机存有较新的未同步草稿（{new Date(restoreBar.draft.savedAt).toLocaleString()}）。
-          <button className="btn slim warn" onClick={restoreLocalDraft}>恢复本地草稿</button>
-          <button className="btn slim" onClick={discardLocalDraft}>使用服务器版本</button>
-        </div>
+      {notice?.kind === 'stale-draft' && (
+        <EdNotice
+          onClose={closeNotice}
+          autoCloseMs={NOTICE_AUTO_CLOSE_MS['stale-draft']}
+          actions={<>
+            <button className="btn slim warn" onClick={restoreLocalDraft}>恢复本机草稿</button>
+            <button className="btn slim" onClick={closeNotice}>放弃并继续</button>
+          </>}
+        >
+          本机存有较新的未同步草稿（{new Date(notice.draft.savedAt).toLocaleString()}），当前展示的是服务器版本。
+        </EdNotice>
       )}
-
-      {restoreBar?.kind === 'offline' && (
-        <div className="ed-conflict">
-          网络不可用：正在离线编辑本机草稿，恢复网络后将自动保存。
-        </div>
+      {notice?.kind === 'offline' && (
+        <EdNotice onClose={closeNotice}>网络不可用：正在离线编辑本机草稿，恢复网络后自动保存。</EdNotice>
       )}
-
-      {!online && saveState === 'dirty' && !restoreBar && (
-        <div className="ed-conflict">网络不可用：改动已保存在本机，恢复网络后自动同步。</div>
-      )}
-
-      {/* 文档信息（紧凑横条）：置于画布上方，不占用右侧编辑空间 */}
-      <EdMetaBar
-        fm={content.fm}
-        slug={slug}
-        onSlugChange={setSlug}
-        onChange={(fm) => patchContent({ fm })}
-        categories={categories.map((c) => ({ id: c.id, name: c.name }))}
-        tagSuggestions={tagNames}
-        onUploadCover={handleCoverUpload}
-      />
 
       <div className="ed-body" data-side={sideOpen ? 'open' : 'closed'}>
         <div className="ed-main">
@@ -466,7 +492,21 @@ export function EditorPage() {
 
         {sideOpen && (
           <aside className="ed-side">
-            <Outline markdown={content.markdown} />
+            <EdSideMeta
+              fm={content.fm}
+              slug={slug}
+              onSlugChange={setSlug}
+              onChange={(fm) => patchContent({ fm })}
+              categories={categories.map((c) => ({ id: c.id, name: c.name }))}
+              tagSuggestions={tagNames}
+              onUploadCover={handleCoverUpload}
+            />
+            <Outline
+              markdown={content.markdown}
+              title={content.title}
+              onTitleClick={jumpToTitle}
+              onItemClick={jumpToHeading}
+            />
             <WikiLinks
               markdown={content.markdown}
               currentTitle={content.title}
@@ -488,6 +528,27 @@ export function EditorPage() {
           onClose={() => setShowHistory(false)}
         />
       )}
+    </div>
+  )
+}
+
+/** 编辑页顶部轻提示条：非阻断、可关闭、可选自动消失（替代旧的冲突/草稿横幅） */
+function EdNotice({ children, actions, onClose, autoCloseMs }: {
+  children: React.ReactNode
+  actions?: React.ReactNode
+  onClose?: () => void
+  autoCloseMs?: number
+}) {
+  useEffect(() => {
+    if (!onClose || !autoCloseMs) return
+    const t = setTimeout(onClose, autoCloseMs)
+    return () => clearTimeout(t)
+  }, [onClose, autoCloseMs])
+  return (
+    <div className="ed-note">
+      <span className="ed-note-text">{children}</span>
+      {actions && <span className="ed-note-ops">{actions}</span>}
+      {onClose && <button className="ed-note-x" onClick={onClose} title="关闭">✕</button>}
     </div>
   )
 }
