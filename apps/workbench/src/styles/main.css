@@ -253,8 +253,9 @@ input, textarea, select { font-family: var(--font); font-size: 14px; color: var(
 }
 
 /* ============================================================
-   需求 3：侧边栏三态（常驻展开 / 图标轨道 / 悬停悬浮）
-   动画优化：仅动画 width/margin-left，更短时长 + 缓动，减少卡顿
+   需求 3：侧边栏三态（常驻展开 / 图标轨道 / 悬停抽屉）
+   动画架构：常驻↔折叠切换为低频主动操作，仍走 width/margin-left；
+   悬停展开是独立抽屉层，仅动画 transform（合成器线程执行，零重排不卡顿）
    ============================================================ */
 :root { --sidebar-w-collapsed: 64px; }
 .sidebar { transition: width .18s cubic-bezier(.35, .1, .25, 1); will-change: width; }
@@ -296,20 +297,17 @@ input, textarea, select { font-family: var(--font); font-size: 14px; color: var(
 .sidebar.collapsed .sb-gh { justify-content: center; gap: 0; margin: 2px 8px 4px; padding: 10px 0; }
 .sidebar.collapsed .sb-gh span { display: none; }
 
-/* 悬停悬浮：覆盖主内容展开（不推开内容），悬浮态抬升层级 */
-.sidebar.collapsed.peek { width: var(--sidebar-w); z-index: 46;
+/* 悬停抽屉：与图标轨道分离的整块浮层，translateX 滑入滑出——不动 width，避免逐帧重排；
+   visibility 延迟切换保证滑出动画完整播放，隐藏后同时移出焦点序与无障碍树 */
+.sb-drawer { transform: translateX(-102%); visibility: hidden; pointer-events: none;
+  transition: transform .2s cubic-bezier(.22, .68, .3, 1), visibility 0s linear .2s;
+  will-change: transform; z-index: 46; }
+.sb-drawer.open { transform: none; visibility: visible; pointer-events: auto;
+  transition: transform .2s cubic-bezier(.22, .68, .3, 1), visibility 0s;
   box-shadow: 10px 0 44px -8px rgba(60, 110, 180, .4), var(--shadow-overlay); }
-.sidebar.collapsed.peek .brand { justify-content: center; padding: 22px 0 14px; }
-.sidebar.collapsed.peek .brand h1 { font-size: 26px; letter-spacing: .08em; }
-.sidebar.collapsed.peek .nav { padding: 8px 12px 12px; }
-.sidebar.collapsed.peek .navi { justify-content: flex-start; gap: 12px; padding: 10px 14px; }
-.sidebar.collapsed.peek .navi span { display: inline; }
-.sidebar.collapsed.peek .foot { justify-content: flex-start; padding: 16px 20px; }
-.sidebar.collapsed.peek .sb-ctrl { justify-content: flex-start; padding: 8px 14px 4px; margin: 0 8px; }
-.sidebar.collapsed.peek .sb-toggle { background: var(--surface-nested); }
-.sidebar.collapsed.peek .sb-hotkey { display: inline; }
-.sidebar.collapsed.peek .sb-gh { justify-content: flex-start; gap: 12px; margin: 2px 12px 4px; padding: 10px 14px; }
-.sidebar.collapsed.peek .sb-gh span { display: inline; }
+@media (prefers-reduced-motion: reduce) {
+  .sb-drawer { transition: visibility 0s; }
+}
 
 /* GitHub 抽屉（应用内打开仓库，保持当前操作上下文） */
 .gh-drawer-mask { position: fixed; inset: 0; z-index: 95; background: rgba(10, 18, 34, .42);

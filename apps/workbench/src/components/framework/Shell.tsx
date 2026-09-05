@@ -1,12 +1,12 @@
 /**
- * 框架层 · 布局 Shell：三态侧边栏（常驻展开 / 图标轨道 / 悬停悬浮）+ 头像菜单 + 内容区。
+ * 框架层 · 布局 Shell：三态侧边栏（常驻展开 / 图标轨道 / 悬停抽屉）+ 头像菜单 + 内容区。
  * 需求 1：手动切换（底部按钮）/ 快捷键（⌘/Ctrl + B）/ 悬停预览 三条触达路径共存；
  *         状态持久化 localStorage，窄屏自动降级为图标轨道。
  * 需求 3：侧边栏底部内嵌头像菜单（个人中心浮层）。
  * 需求 6：导航入口统一为「设置」，账户并入设置中心。
  */
 import { NavLink, useLocation } from 'react-router-dom'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../../auth'
 import { Icon } from './Icon'
 import { FxEngine } from './FxEngine'
@@ -61,7 +61,6 @@ export function Shell({ children }: { children: ReactNode }) {
   const leaveTimer = useRef<number | undefined>(undefined)
 
   const effective = narrow ? 'collapsed' : mode
-  const expanded = effective === 'pinned' || peek
 
   useEffect(() => {
     const onResize = () => {
@@ -76,6 +75,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const toggleMode = () => {
     const next: SbMode = effective === 'pinned' ? 'collapsed' : 'pinned'
     if (narrow) return
+    closedAt.current = performance.now()
     setMode(next)
     setPeek(false)
     localStorage.setItem(SB_KEY, next)
@@ -95,16 +95,25 @@ export function Shell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('keydown', onKey)
   })
 
-  // 悬停悬浮：进入 120ms 延迟（hover intent）/ 离开 350ms 延迟（防抖）
+  // 悬停抽屉：进入 80ms 延迟（hover intent）/ 离开 350ms 延迟（防抖）
+  // closedAt：程序化收起（点击导航/切换模式）的时刻——指针停在轨道上会因抽屉滑走而触发
+  // 一次“凭空”的 mouseenter，450ms 抑制窗口避免关了又弹
+  const closedAt = useRef(0)
+  const closePeek = useCallback(() => {
+    closedAt.current = performance.now()
+    setPeek(false)
+  }, [])
   const startPeek = () => {
     clearTimeout(leaveTimer.current)
-    if (peek) return
-    enterTimer.current = window.setTimeout(() => setPeek(true), 120)
+    if (peek || performance.now() - closedAt.current < 450) return
+    enterTimer.current = window.setTimeout(() => setPeek(true), 80)
   }
   const stopPeek = () => {
     clearTimeout(enterTimer.current)
     leaveTimer.current = window.setTimeout(() => setPeek(false), 350)
   }
+  /** 指针移入抽屉：取消待执行的收起（抽屉滑入盖住轨道时，轨道会先收到 mouseleave） */
+  const keepPeek = () => { clearTimeout(leaveTimer.current) }
 
   const nav = useMemo(
     () => (
@@ -116,7 +125,7 @@ export function Shell({ children }: { children: ReactNode }) {
             end={it.to === '/'}
             title={it.label}
             className={({ isActive }) => `navi ${isActive ? 'active' : ''}`}
-            onClick={() => setPeek(false)}
+            onClick={closePeek}
           >
             <Icon name={it.icon} />
             <span>{it.label}</span>
@@ -130,10 +139,10 @@ export function Shell({ children }: { children: ReactNode }) {
   if (inLogin) return <>{children}</>
 
   return (
-    <div className={`wb-layout ${effective}${peek ? ' peeking' : ''}`}>
+    <div className={`wb-layout ${effective}`}>
       <FxEngine />
       <aside
-        className={`sidebar ${effective}${peek ? ' peek' : ''}`}
+        className={`sidebar ${effective}`}
         onMouseEnter={effective === 'collapsed' ? startPeek : undefined}
         onMouseLeave={effective === 'collapsed' ? stopPeek : undefined}
       >
@@ -142,12 +151,11 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
         {nav}
         <div className="sb-ctrl">
-          <button className="sb-toggle" onClick={toggleMode} aria-expanded={expanded}
+          <button className="sb-toggle" onClick={toggleMode} aria-expanded={effective === 'pinned'}
             title={effective === 'pinned' ? '折叠侧边栏（⌘/Ctrl + B）' : '展开侧边栏（⌘/Ctrl + B）'}>
             <Icon name={effective === 'pinned' ? 'panelFold' : 'panel'} size={17} />
           </button>
           <span className="sb-hotkey">⌘B</span>
-          {peek && <span className="sb-peek-hint">松开移出自动收起</span>}
         </div>
         <button className="sb-gh" onClick={() => setGhOpen(true)} title="GitHub 仓库（应用内打开）">
           <Icon name="github" size={16} />
@@ -155,7 +163,39 @@ export function Shell({ children }: { children: ReactNode }) {
         </button>
         <div className="foot">
           {user ? (
-            <AvatarMenu size={expanded ? 'lg' : 'sm'} align="left" />
+            <AvatarMenu size={effective === 'pinned' ? 'lg' : 'sm'} align="left" />
+          ) : (
+            <NavLink to="/login" className="foot-login">登录账户</NavLink>
+          )}
+        </div>
+      </aside>
+      {/* 悬停抽屉：折叠态的整块展开浮层（始终挂载，靠 CSS 隐现）。
+          仅动画 transform，由合成器线程执行——不触发 width 重排，重页面下也不掉帧 */}
+      <aside
+        className={`sidebar sb-drawer${peek ? ' open' : ''}`}
+        aria-hidden={!peek}
+        onMouseEnter={keepPeek}
+        onMouseLeave={stopPeek}
+      >
+        <div className="brand" title="云笺集">
+          <h1>云笺集</h1>
+        </div>
+        {nav}
+        <div className="sb-ctrl">
+          <button className="sb-toggle" onClick={toggleMode} aria-expanded={effective === 'pinned'}
+            title="固定展开侧边栏（⌘/Ctrl + B）">
+            <Icon name="panel" size={17} />
+          </button>
+          <span className="sb-hotkey">⌘B</span>
+          {peek && <span className="sb-peek-hint">移出自动收起</span>}
+        </div>
+        <button className="sb-gh" onClick={() => setGhOpen(true)} title="GitHub 仓库（应用内打开）">
+          <Icon name="github" size={16} />
+          <span>GitHub</span>
+        </button>
+        <div className="foot">
+          {user ? (
+            <AvatarMenu size="lg" align="left" />
           ) : (
             <NavLink to="/login" className="foot-login">登录账户</NavLink>
           )}
