@@ -8,14 +8,14 @@
  * 只 mock mailer（捕获验证码文本），requireAuth 不 mock（随登录态真实走通）。
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
-import { startTestApp, type TestApp } from '../test-utils'
-import { hashPassword, generateTOTPSecret, generateTOTP } from '../crypto'
+import { startTestApp, type TestApp } from '@server/test-utils'
+import { hashPassword, generateTOTPSecret, generateTOTP } from '@server/crypto'
 
-vi.mock('../mailer', () => ({
+vi.mock('@server/mailer', () => ({
   smtpStatus: () => ({ ok: true, demo: true }),
   sendMail: vi.fn(async () => ({ sent: true, demoPath: 'test://demo-mail' })),
 }))
-import { sendMail } from '../mailer'
+import { sendMail } from '@server/mailer'
 
 let app: TestApp
 const PW = 'old-password-1'

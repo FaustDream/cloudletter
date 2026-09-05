@@ -4,9 +4,9 @@
  * - 空关键词返回空集；excerpt 围绕关键词截取；命中按 bm25 相关度排序
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
-import { startTestApp, type TestApp } from '../test-utils'
+import { startTestApp, type TestApp } from '@server/test-utils'
 
-vi.mock('../auth', async (importOriginal) => {
+vi.mock('@server/auth', async (importOriginal) => {
   const actual = (await importOriginal()) as any
   return {
     ...actual,
@@ -21,7 +21,7 @@ let app: TestApp
 
 beforeAll(async () => {
   app = await startTestApp()
-  const { initSearchIndex, reindexAllSearch } = await import('../search-index')
+  const { initSearchIndex, reindexAllSearch } = await import('@server/search-index')
   await initSearchIndex()
 
   const mk = (slug: string, title: string, rawMarkdown: string, frontmatter: Record<string, unknown>, publishedAt: string, status = 'published') =>

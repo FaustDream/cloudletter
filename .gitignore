@@ -63,4 +63,5 @@ e2e/test-results/*/
 # e2e 临时测试内容
 e2e/content/posts/
 
+# 项目文档与上下文记忆（本地维护，不入库）
 docs/

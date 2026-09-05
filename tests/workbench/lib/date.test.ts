@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { todayYMD, ymdToDate, addDays, monthMatrix, isYMD } from './date'
+import { todayYMD, ymdToDate, addDays, monthMatrix, isYMD } from '@workbench/lib/date'
 
 /** 本地日期工具（全站统一口径）：按本地时区拼接，杜绝 UTC 把东八区 0-8 点记到昨天 */
 describe('todayYMD', () => {

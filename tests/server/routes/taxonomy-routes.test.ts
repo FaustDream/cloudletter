@@ -2,9 +2,9 @@
  * 分类与标签路由单测（最小功能）：创建/重名 409/改名冲突 409/删除占用 409/删除 404。
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
-import { startTestApp, type TestApp } from '../test-utils'
+import { startTestApp, type TestApp } from '@server/test-utils'
 
-vi.mock('../auth', async (importOriginal) => {
+vi.mock('@server/auth', async (importOriginal) => {
   const actual = (await importOriginal()) as any
   return {
     ...actual,

@@ -13,7 +13,7 @@ import {
   verifyTOTP,
   otpauthUrl,
   generateToken,
-} from './crypto'
+} from '@server/crypto'
 
 describe('口令散列（scrypt）', () => {
   it('hash → verify 往返成功', () => {

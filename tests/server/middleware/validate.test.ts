@@ -2,7 +2,7 @@
  * 轻量校验层单测（最小功能）：必填/类型/长度/枚举/数组成员/未知键过滤/keepEmpty 空串语义。
  */
 import { describe, it, expect } from 'vitest'
-import { validateBody, v, type FieldSpec } from './validate'
+import { validateBody, v, type FieldSpec } from '@server/middleware/validate'
 import type { Request, Response } from 'express'
 
 /** 构造最小 req/res：validateBody 失败时写 422 JSON，返回 null */

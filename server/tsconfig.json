@@ -9,7 +9,13 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "noEmit": true
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@server/*": ["src/*"],
+      "vitest": ["node_modules/vitest"],
+      "express": ["node_modules/@types/express"]
+    }
   },
-  "include": ["src"]
+  "include": ["src", "../tests/server"]
 }

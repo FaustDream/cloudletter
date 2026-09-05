@@ -4,11 +4,11 @@
  * - /battle/today 只列未完成；/battle/attack 真实落库完成 + 掉落一致；重复攻击 409
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
-import { startTestApp, type TestApp } from '../test-utils'
-import { planDrop } from '../game'
-import type * as Battle from './battle'
+import { startTestApp, type TestApp } from '@server/test-utils'
+import { planDrop } from '@server/game'
+import type * as Battle from '@server/routes/battle'
 
-vi.mock('../auth', async (importOriginal) => {
+vi.mock('@server/auth', async (importOriginal) => {
   const actual = (await importOriginal()) as any
   return {
     ...actual,
@@ -33,7 +33,7 @@ async function inject(method: string, path: string, body?: unknown): Promise<{ s
 
 beforeAll(async () => {
   app = await startTestApp()
-  battle = await import('./battle')
+  battle = await import('@server/routes/battle')
 })
 
 afterAll(async () => {

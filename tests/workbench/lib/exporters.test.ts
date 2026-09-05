@@ -1,6 +1,6 @@
 /** 导出模块单测：文件名安全化 / HTML 文档结构 / math·mermaid 资源按需注入 */
 import { describe, expect, it } from 'vitest'
-import { buildPostHtml, sanitizeFilename } from './exporters'
+import { buildPostHtml, sanitizeFilename } from '@workbench/lib/exporters'
 
 const META = {
   title: '通用 UI 设计规范 v1.0',

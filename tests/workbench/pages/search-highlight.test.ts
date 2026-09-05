@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { highlight } from './SearchPage'
+import { highlight } from '@workbench/pages/SearchPage'
 
 /** 检索高亮（最小功能）：命中包 <mark>、未命中部分与 HTML 特殊字符一律转义 */
 describe('highlight', () => {

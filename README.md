@@ -1,0 +1,43 @@
+# 云笺集 · CLOUDLETTER
+
+个人内容工作台：Express + Prisma 后端（`/api/v2/*`，绞杀者模式）+ React 18 个人工作台 SPA + Markdown 内容真相源。
+
+## 目录结构
+
+```
+cloudletter/
+├─ server/           # 后端：Express 4 + Prisma 5 + tsx（端口 3011，/healthz + /api/v2/*）
+├─ apps/workbench/   # 前端：React 18 + Vite + TS（端口 3015，/api 代理至 3011）
+├─ tests/            # 单测统一目录（vitest）：按包与源码文件夹镜像
+│  ├─ server/        #   后端单测（routes/ middleware/ 与源码目录一一对应）
+│  └─ workbench/     #   前端单测（components/ lib/ pages/ 与源码目录一一对应）
+├─ e2e/              # Playwright 端到端测试（独立工作区）
+├─ shared/           # 共享样式 theme.css
+└─ docs/             # DESIGN-SPEC.md 设计规范 + memory/ 上下文记忆
+```
+
+## 单测布局约定
+
+单测文件统一放在根 `tests/` 目录，**按被测源码所在文件夹分组镜像**：
+
+- `tests/server/routes/posts-routes.test.ts` ↔ `server/src/routes/posts-routes.ts`
+- `tests/server/middleware/validate.test.ts` ↔ `server/src/middleware/validate.ts`
+- `tests/workbench/lib/date.test.ts` ↔ `apps/workbench/src/lib/date.ts`
+
+测试文件通过 `@server/*`、`@workbench/*` 路径别名回指各包源码（别名在两包的 `vitest.config.ts` 与 `tsconfig.json` 中同步维护）。
+
+## 常用命令
+
+```bash
+pnpm -C server dev                 # 后端开发服务器（:3011）
+pnpm -C apps/workbench dev         # 前端开发服务器（:3015）
+pnpm -C server test                # 后端单测（vitest run）
+pnpm -C apps/workbench test        # 前端单测（vitest run）
+pnpm -C server typecheck           # 后端类型检查
+pnpm -C apps/workbench typecheck   # 前端类型检查
+pnpm -C apps/workbench build       # 前端生产构建
+```
+
+## 变更记录
+
+- 2026-09-05：散落在 `server/src` 与 `apps/workbench/src` 的 25 个单测文件统一迁移至根 `tests/` 目录，按 `server/`（routes、middleware 镜像源码子目录）与 `workbench/`（components、lib、pages）分组；导入路径改用 `@server/*`、`@workbench/*` 别名，两包 vitest include 与 tsconfig paths/include 同步更新。迁移后 170 个用例全部通过（server 120 + workbench 50），typecheck 无回归。

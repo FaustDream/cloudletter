@@ -2,7 +2,7 @@
  * 本地日期工具单测（最小功能）：ymdLocal 按本地时区取日期并补零；startOfToday 归零时分秒。
  */
 import { describe, it, expect } from 'vitest'
-import { ymdLocal, startOfToday } from './util-date'
+import { ymdLocal, startOfToday } from '@server/util-date'
 
 describe('ymdLocal', () => {
   it('本地时区取日期：23:59 仍属当天（不用 UTC）', () => {

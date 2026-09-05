@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { quickToRange, rangeLabel, DEFAULT_RANGE } from './RangePicker'
+import { quickToRange, rangeLabel, DEFAULT_RANGE } from '@workbench/components/timeline/RangePicker'
 
 describe('时间范围选择器纯函数', () => {
   it('quickToRange：返回合法 YYYY-MM-DD 且 from ≤ to', () => {

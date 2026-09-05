@@ -6,17 +6,17 @@
  * 注意：./auth 会实例化 Prisma，必须等 startTestApp 设置临时 DATABASE_URL 后动态导入。
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
-import { startTestApp, type TestApp } from './test-utils'
-import { hashPassword } from './crypto'
+import { startTestApp, type TestApp } from '@server/test-utils'
+import { hashPassword } from '@server/crypto'
 
 // 隔离 mailer：防止 .env 中 SMTP 配置生效导致真实发信
-vi.mock('./mailer', () => ({
+vi.mock('@server/mailer', () => ({
   smtpStatus: () => ({ ok: true, demo: true }),
   sendMail: async () => ({ sent: true, demoPath: 'test://demo-mail' }),
 }))
 
 let app: TestApp
-let auth: typeof import('./auth')
+let auth: typeof import('@server/auth')
 let userId: string
 let token: string
 
@@ -29,7 +29,7 @@ async function get(path: string, bearer?: string): Promise<{ status: number; bod
 
 beforeAll(async () => {
   app = await startTestApp()
-  auth = await import('./auth')
+  auth = await import('@server/auth')
   const u = await app.prisma.user.create({
     data: { email: 'sess@test.local', passwordHash: hashPassword('pw-123456') },
   })

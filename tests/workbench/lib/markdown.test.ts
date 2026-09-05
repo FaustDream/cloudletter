@@ -1,6 +1,6 @@
 /** lib/markdown 渲染规则单测：math / mermaid 围栏 → 专用结构，其余走默认渲染 */
 import { describe, expect, it } from 'vitest'
-import { renderMarkdown, hasMathFence, hasMermaidFence } from './markdown'
+import { renderMarkdown, hasMathFence, hasMermaidFence } from '@workbench/lib/markdown'
 
 describe('renderMarkdown', () => {
   it('空内容返回空串', () => {

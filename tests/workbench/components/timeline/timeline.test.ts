@@ -5,7 +5,7 @@
  * 全部用相对当天计算的日期，避免跨日硬编码。
  */
 import { describe, it, expect, beforeEach } from 'vitest'
-import { filterNodes, daysAgo, segOf, dayLabel, SEG_LABEL, type TimelineNode } from './timeline'
+import { filterNodes, daysAgo, segOf, dayLabel, SEG_LABEL, type TimelineNode } from '@workbench/components/timeline/timeline'
 
 /** 本地时区 YYYY-MM-DD */
 function ymd(d: Date): string {

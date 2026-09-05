@@ -1,6 +1,6 @@
 /** customBlocks 代码块语言归一单测：别名/未收录语言在解析回灌前归一到规范 id，避免 BlockNote 渲染抛错 */
 import { describe, expect, it } from 'vitest'
-import { canonicalCodeLanguage, normalizeCodeLanguages } from './customBlocks'
+import { canonicalCodeLanguage, normalizeCodeLanguages } from '@workbench/components/editor/customBlocks'
 
 describe('canonicalCodeLanguage', () => {
   it('规范 id 原样保留', () => {

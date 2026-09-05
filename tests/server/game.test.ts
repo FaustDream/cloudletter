@@ -4,7 +4,7 @@
  * - postDrop：已发布 50 / 草稿 0
  */
 import { describe, it, expect } from 'vitest'
-import { planDrop, postDrop } from './game'
+import { planDrop, postDrop } from '@server/game'
 
 describe('planDrop（计划完成掉落）', () => {
   it('同计划 id 结果恒定（时间线与讨伐两侧口径一致的前提）', () => {

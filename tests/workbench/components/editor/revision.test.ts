@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { lineDiff } from './RevisionPanel'
+import { lineDiff } from '@workbench/components/editor/RevisionPanel'
 
 /** 版本对比（最小功能）：基于 LCS 的行级 diff，old 视角 del / new 视角 add */
 describe('lineDiff', () => {

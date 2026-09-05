@@ -12,9 +12,9 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { startTestApp, type TestApp } from '../test-utils'
+import { startTestApp, type TestApp } from '@server/test-utils'
 
-vi.mock('../auth', async (importOriginal) => {
+vi.mock('@server/auth', async (importOriginal) => {
   const actual = (await importOriginal()) as any
   return {
     ...actual,

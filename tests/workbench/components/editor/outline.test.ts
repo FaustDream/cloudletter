@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { extractHeadings, extractWikiLinks } from './Outline'
+import { extractHeadings, extractWikiLinks } from '@workbench/components/editor/Outline'
 
 /** 大纲提取（最小功能）：标题层级、代码围栏过滤 */
 describe('extractHeadings', () => {

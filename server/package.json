@@ -19,7 +19,7 @@
     "verify:data": "tsx src/verify-data-consistency.ts",
     "normalize:frontmatter": "tsx src/normalize-post-frontmatter.ts",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
+    "lint": "eslint . ../tests/server",
     "format": "prettier --write ."
   },
   "dependencies": {

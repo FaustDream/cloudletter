@@ -15,10 +15,10 @@ process.env.DATA_ROOT = root // 隔离版本快照目录，不污染开发数据
 process.env.POSTS_ROOT = join(root, 'posts')
 process.env.SETTINGS_ROOT = join(root, 'settings')
 
-let content: typeof import('./content')
+let content: typeof import('@server/content')
 
 beforeAll(async () => {
-  content = await import('./content')
+  content = await import('@server/content')
 })
 
 afterAll(() => {

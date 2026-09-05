@@ -6,11 +6,11 @@
  * - week-stats：本周窗口字段齐全
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
-import { startTestApp, type TestApp } from '../test-utils'
-import { planDrop } from '../game'
-import { ymdLocal } from '../util-date'
+import { startTestApp, type TestApp } from '@server/test-utils'
+import { planDrop } from '@server/game'
+import { ymdLocal } from '@server/util-date'
 
-vi.mock('../auth', async (importOriginal) => {
+vi.mock('@server/auth', async (importOriginal) => {
   const actual = (await importOriginal()) as any
   return {
     ...actual,
