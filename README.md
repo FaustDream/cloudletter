@@ -8,7 +8,7 @@
 cloudletter/
 ├─ server/           # 后端：Express 4 + Prisma 5 + tsx（端口 3011，/healthz + /api/v2/*）
 ├─ apps/workbench/   # 前端：React 18 + Vite + TS（端口 3015，/api 代理至 3011）
-├─ tests/            # 单测统一目录（vitest）：按包与源码文件夹镜像
+├─ tests/            # 单测统一目录（vitest，本地目录不入库）：按包与源码文件夹镜像
 │  ├─ server/        #   后端单测（routes/ middleware/ 与源码目录一一对应）
 │  └─ workbench/     #   前端单测（components/ lib/ pages/ 与源码目录一一对应）
 ├─ e2e/              # Playwright 端到端测试（独立工作区）
@@ -18,7 +18,7 @@ cloudletter/
 
 ## 单测布局约定
 
-单测文件统一放在根 `tests/` 目录，**按被测源码所在文件夹分组镜像**：
+单测文件统一放在根 `tests/` 目录（**本地目录，已加入 .gitignore 不随仓库分发**），**按被测源码所在文件夹分组镜像**：
 
 - `tests/server/routes/posts-routes.test.ts` ↔ `server/src/routes/posts-routes.ts`
 - `tests/server/middleware/validate.test.ts` ↔ `server/src/middleware/validate.ts`
@@ -40,4 +40,5 @@ pnpm -C apps/workbench build       # 前端生产构建
 
 ## 变更记录
 
-- 2026-09-05：散落在 `server/src` 与 `apps/workbench/src` 的 25 个单测文件统一迁移至根 `tests/` 目录，按 `server/`（routes、middleware 镜像源码子目录）与 `workbench/`（components、lib、pages）分组；导入路径改用 `@server/*`、`@workbench/*` 别名，两包 vitest include 与 tsconfig paths/include 同步更新。迁移后 170 个用例全部通过（server 120 + workbench 50），typecheck 无回归。
+- 2026-09-05（二）：仓库边界重划——`tests/` 转为本地目录不入库（.gitignore 忽略，已提交的测试文件自版本控制移除，本地文件保留、vitest 照常运行）；`docs/`（设计规范 + 上下文记忆）重新纳入版本控制；`.gitignore` 重写分区整理。另：前条记录中"25 个测试文件"应为 23 个（server 14 + workbench 9），已更正。
+- 2026-09-05：散落在 `server/src` 与 `apps/workbench/src` 的 23 个单测文件统一迁移至根 `tests/` 目录，按 `server/`（routes、middleware 镜像源码子目录）与 `workbench/`（components、lib、pages）分组；导入路径改用 `@server/*`、`@workbench/*` 别名，两包 vitest include 与 tsconfig paths/include 同步更新。迁移后 170 个用例全部通过（server 120 + workbench 50），typecheck 无回归。

@@ -1,67 +1,56 @@
-# build output（构建产物不入库：源码 + lockfile 可再生；发版留档用 git tag 记录版本）
-dist/
+# ============================================================
+# 云笺集 · CLOUDLETTER — .gitignore
+# 分区：依赖 / 构建产物 / 运行时数据 / 环境变量 / 测试相关 / 本地工具状态 / 编辑器与系统 / 防误提交
+# 仓库边界约定：
+#   - tests/  = 本地单测目录（不入库，文件保留在本地工作区）
+#   - docs/   = 设计规范 + 上下文记忆，在版本控制内，勿加入忽略
+# ============================================================
 
-# generated types
-.astro/
+# --- 本地单测目录（不随仓库分发，本地 vitest 运行：pnpm -C server test / pnpm -C apps/workbench test）---
+tests/
 
-# dependencies
+# --- 依赖 ---
 node_modules/
 
-# logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
+# --- 构建产物与编译缓存（源码可再生；发版以 git tag 留档）---
+dist/
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+**/node-compile-cache/
+**/tsx-*/
 
-# environment variables
-.env
-.env.production
-
-# macOS-specific files
-.DS_Store
-
-# lockfiles
-package-lock.json
-bun.lockb
-yarn.lock
-
-# ide
-.idea
-*.iml
-
-.vercel
-
-# --- 云笺集 · 运行时产物 / 数据（§10 排除项） ---
-# SQLite 数据库与 WAL 日志
+# --- 运行时数据：SQLite 数据库与 WAL 日志 ---
 *.db
 *.db-journal
 *.db-wal
 *.db-shm
 
-# tsx / TypeScript 编译缓存（tsx 的 node-compile-cache + tsx-<user> 缓存目录）
-**/node-compile-cache/
-**/tsx-*/
-tsconfig.tsbuildinfo
-*.tsbuildinfo
-
-# 本地启动日志（开发辅助）
-.dev-*.log
+# --- 部署包与本地日志 ---
+*.tar.gz
+*.log
 .dev-*.err
 
-# 备份文件
-*.tar.gz
+# --- 环境变量（含密钥，禁止入库；.env.example 模板正常提交）---
+.env
+.env.production
 
+# --- 测试产物（e2e）---
 # Playwright 失败截图/痕迹（保留被跟踪的 .last-run.json）
 e2e/test-results/*/
-
-# 项目数据（AI 助手记忆 / 本地状态，非源码）
-.codebuddy/
-.workbuddy/
-
-# ZCode CLI 本地缓存（工具状态，非源码）
-.zcode/
 # e2e 临时测试内容
 e2e/content/posts/
 
-# 项目文档与上下文记忆（本地维护，不入库）
-docs/
+# --- 本地工具状态（AI 助手记忆 / 本地缓存，非源码）---
+.codebuddy/
+.workbuddy/
+.zcode/
+
+# --- 编辑器 / 操作系统 ---
+.idea
+*.iml
+.DS_Store
+
+# --- 防误提交：非 pnpm 工具链的锁文件（本项目统一用 pnpm，见 pnpm-lock.yaml）---
+package-lock.json
+yarn.lock
+bun.lockb
