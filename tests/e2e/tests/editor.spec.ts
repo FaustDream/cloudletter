@@ -254,4 +254,22 @@ test.describe('工作台 · 编辑体验（工具栏/右栏/滚动/大纲/双链
     await expect(page.locator('.ed-note')).toHaveCount(0)
     await expect.poll(() => page.evaluate((pid) => localStorage.getItem(`cl:editdraft:${pid}`), p.id)).toBeNull()
   })
+
+  test('双链补全：键入 [[ 唤起菜单，点选文章后插入干净的 [[标题]]（无触发符残留）', async ({ page }) => {
+    test.setTimeout(60_000)
+    await login(page)
+    await page.goto(`${BASE}/posts`)
+    await page.getByRole('button', { name: /新建草稿/ }).click()
+    const ed = page.locator('.ed-blocknote .bn-editor')
+    await expect(ed).toBeVisible({ timeout: 15_000 })
+    await ed.click()
+    await page.keyboard.type('前文[[')
+    const sug = page.locator('.bn-suggestion-menu')
+    await expect(sug).toBeVisible({ timeout: 5_000 })
+    await sug.locator('.bn-suggestion-menu-item').first().click()
+    await page.waitForTimeout(400)
+    const text = (await ed.textContent()) ?? ''
+    expect(text).toContain('前文[[')
+    expect(text).not.toContain('[[[[')
+  })
 })

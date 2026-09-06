@@ -28,6 +28,8 @@ import { zhDictionary } from '../../i18n/blocknote-zh'
 import { editorSchema, normalizeCodeLanguages } from './customBlocks'
 import { EditorToolbar } from './EditorToolbar'
 import { matchWikilinkAtOffset } from '../../lib/wikilinkText'
+import { applyDocTransform, createWikilink } from './docActions'
+import { autoFormatMarkdown, recognizeWikilinksInMarkdown } from '../../lib/docTransforms'
 import '@blocknote/mantine/style.css'
 
 const EMPTY_BLOCKS: PartialBlock[] = [{ type: 'paragraph' }]
@@ -97,6 +99,8 @@ export function BlockNoteEditor({
   const [wlHint, setWlHint] = useState<{ name: string; x: number; y: number } | null>(null)
   /** 浮层打开时刻：忽略紧跟其后的那次 click（mouseup → click 序列会误关浮层） */
   const wlOpenedAt = useRef(0)
+  /** 右键编辑区菜单：创建/识别双链、一键排版 */
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const dark = useDarkTheme()
 
   const editor: BlockNoteEditorInstance<any, any, any> = useCreateBlockNote({
@@ -111,14 +115,16 @@ export function BlockNoteEditor({
     },
   })
 
-  /** 外部回灌：markdown → blocks（期间抑制内容变更回抛，避免反馈环导致选区/光标异常甚至崩溃） */
-  const replaceFromMarkdown = async (md: string) => {
+  /** 外部回灌：markdown → blocks（期间抑制内容变更回抛，避免反馈环导致选区/光标异常甚至崩溃）。
+   *  keepOnFail=true（外部值变更路径）：解析失败时保持现有内容不清空——清空正文比内容暂旧更糟。 */
+  const replaceFromMarkdown = async (md: string, keepOnFail = false): Promise<boolean> => {
     let blocks: any[] = []
     if (md.trim()) {
       try {
         blocks = normalizeCodeLanguages(await editor.tryParseMarkdownToBlocks(md))
       } catch (e) {
-        console.error('[BlockNote] markdown 解析失败，退回空文档', e)
+        console.error('[BlockNote] markdown 解析失败', e)
+        if (keepOnFail) return false
       }
     }
     suppressEmit.current = true
@@ -127,6 +133,7 @@ export function BlockNoteEditor({
     } finally {
       suppressEmit.current = false
     }
+    return true
   }
 
   // 挂载：markdown → blocks；订阅变更：blocks → markdown（300ms 合并，避免每次按键全量序列化）
@@ -184,7 +191,8 @@ export function BlockNoteEditor({
     let cancelled = false
     void (async () => {
       if (!cancelled) {
-        await replaceFromMarkdown(value)
+        // 解析失败 → 保持现有内容并同步 lastEmitted（防无限重解析）：内容暂旧但绝不清空
+        await replaceFromMarkdown(value, true)
         if (!cancelled) lastEmitted.current = value
       }
     })()
@@ -242,6 +250,31 @@ export function BlockNoteEditor({
     }
   }
 
+  // 右键菜单：点击任意处/Escape 关闭
+  useEffect(() => {
+    if (!ctxMenu) return
+    const close = () => setCtxMenu(null)
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setCtxMenu(null) }
+    document.addEventListener('click', close)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('click', close)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [ctxMenu])
+
+  const onRootContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setCtxMenu({ x: e.clientX, y: e.clientY })
+  }
+
+  /** 右键/工具栏共用的文档变换动作（带结果提示） */
+  const runDocTransform = (label: string, fn: (md: string) => { md: string; count: number }) => {
+    void applyDocTransform(editor, fn).then((n) => {
+      notify?.(n < 0 ? `${label}：没有需要处理的内容` : `${label}：已处理 ${n} 处（Ctrl+Z 可撤销）`)
+    })
+  }
+
   // 斜杠菜单条目 = 内置默认（含标题/列表/折叠/表格/媒体/表情等）+ 自定义块
   const slashItems = async (query: string): Promise<DefaultReactSuggestionItem[]> => {
     const extra: DefaultReactSuggestionItem[] = [
@@ -281,7 +314,7 @@ export function BlockNoteEditor({
   }
 
   return (
-    <div className="ed-blocknote" onClick={onRootClick} onMouseUp={onRootMouseUp}>
+    <div className="ed-blocknote" onClick={onRootClick} onMouseUp={onRootMouseUp} onContextMenu={onRootContextMenu}>
       {/* 常驻格式工具栏：斜杠菜单/浮动工具栏之外的固定入口 */}
       <EditorToolbar
         editor={editor}
@@ -290,7 +323,9 @@ export function BlockNoteEditor({
         onImageUpload={onPasteImage}
         notify={notify}
       />
-      <BlockNoteView editor={editor} theme={dark ? 'dark' : 'light'} editable>
+      {/* ready 前 editable=false：初版 markdown 尚未解析完成，禁止输入——
+          否则打字/选词落在空文档上，解析完成的 replaceBlocks 会把刚输入的内容一并冲掉 */}
+      <BlockNoteView editor={editor} theme={dark ? 'dark' : 'light'} editable={ready}>
         {/* 斜杠菜单（打字 "/" 唤起）：内置块 + 自定义块 */}
         <SuggestionMenuController triggerCharacter="/" getItems={slashItems} />
         {/* [[ 双链自动补全（光标键入 [[ 后唤起；选区中包含 [[ 不会误触发） */}
@@ -321,6 +356,30 @@ export function BlockNoteEditor({
               </button>
               <button className="bn-wl-close" onClick={() => setWlHint(null)}>知道了</button>
             </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {/* 右键编辑区菜单：一键创建双链等高频动作 */}
+      {ctxMenu && createPortal(
+        <div className="ed-ctx-mask" onClick={() => setCtxMenu(null)} onContextMenu={(e) => e.preventDefault()}>
+          <div className="ed-ctx-menu" style={{ left: ctxMenu.x, top: ctxMenu.y }} onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => {
+                const r = createWikilink(editor)
+                notify?.(r === 'wrapped' ? '已转为双链' : '已插入 [[ ：输入标题过滤，或从补全列表点选文章')
+                setCtxMenu(null)
+              }}
+            >
+              🔗 创建双链
+            </button>
+            <button onClick={() => { runDocTransform('识别双链', (md) => recognizeWikilinksInMarkdown(md, (wikilinkTargets ?? []).map((t) => t.title), { exclude: currentTitle })); setCtxMenu(null) }}>
+              🧲 识别双链
+            </button>
+            <button onClick={() => { runDocTransform('一键排版', autoFormatMarkdown); setCtxMenu(null) }}>
+              🪄 一键排版
+            </button>
           </div>
         </div>,
         document.body,

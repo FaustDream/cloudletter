@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { BlockNoteEditor, PartialBlock } from '@blocknote/core'
 import { autoFormatMarkdown, recognizeWikilinksInMarkdown } from '../../lib/docTransforms'
-import { normalizeCodeLanguages } from './customBlocks'
+import { applyDocTransform, createWikilink, selectedEditorText } from './docActions'
 
 type Editor = BlockNoteEditor<any, any, any>
 
@@ -53,20 +53,15 @@ export function EditorToolbar({ editor, titles, currentTitle, onImageUpload, not
 
   /** 选中文字（DOM Selection 即编辑器选区；无选区返回空并提示） */
   const selectedText = (): string => {
-    const sel = window.getSelection()
-    const text = (sel?.toString() ?? '').trim()
+    const text = selectedEditorText()
     if (!text) notify?.('请先选中要处理的文字', 'err')
     return text
   }
 
   /** 文档级变换：markdown 往返 + replaceBlocks（事务提交，Ctrl+Z 可整体撤销） */
   const applyTransform = async (label: string, fn: (md: string) => { md: string; count: number }) => {
-    const md = await editor.blocksToMarkdownLossy(editor.document)
-    const { md: next, count } = fn(md)
-    if (!count) { notify?.(`${label}：没有需要处理的内容`); return }
-    const blocks = normalizeCodeLanguages(await editor.tryParseMarkdownToBlocks(next))
-    editor.replaceBlocks(editor.document, blocks as PartialBlock<any>[])
-    notify?.(`${label}：已处理 ${count} 处（Ctrl+Z 可撤销）`)
+    const n = await applyDocTransform(editor, fn)
+    notify?.(n < 0 ? `${label}：没有需要处理的内容` : `${label}：已处理 ${n} 处（Ctrl+Z 可撤销）`)
   }
 
   const insertAfter = (partial: PartialBlock<any>) => {
@@ -137,9 +132,9 @@ export function EditorToolbar({ editor, titles, currentTitle, onImageUpload, not
       {btn('numbered', '有序列表', block.type === 'numberedListItem', () => toggleBlockType('numberedListItem'), '1.')}
       {btn('check', '待办列表', block.type === 'checkListItem', () => toggleBlockType('checkListItem'), '☑')}
       <i className="ed-tb-sep" />
-      {btn('wikilink', '双链：把选中文字包成 [[标题]]（也可直接输入 [[ 唤起补全）', false, () => {
-        const text = selectedText()
-        if (text) { editor.insertInlineContent(`[[${text}]] ` as any); notify?.('已转为双链') }
+      {btn('wikilink', '双链：选中文字→包裹；未选中→插入 [[ 并唤起文章补全，点选即完成', false, () => {
+        const r = createWikilink(editor)
+        notify?.(r === 'wrapped' ? '已转为双链' : '已插入 [[ ：输入标题过滤，或从补全列表点选文章')
       }, <span className="ed-tb-wl">[[ ]]</span>)}
       {btn('recognize', '识别双链：把正文里出现的其他文章标题自动包成 [[ ]]', false, () => {
         void applyTransform('识别双链', (md) => recognizeWikilinksInMarkdown(md, titles ?? [], { exclude: currentTitle }))
