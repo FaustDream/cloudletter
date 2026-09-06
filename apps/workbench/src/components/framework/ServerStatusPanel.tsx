@@ -56,7 +56,7 @@ export function ServerStatusPanel() {
         <>
           <div className="stp-row">
             <span className="stp-k">CPU</span>
-            <span className={`stp-v ${cpuTone(st.cpu)}`}>{st.cpu.toFixed(0)}%</span>
+            <span className={`stp-v ${cpuTone(st.cpu)}`}>{st.cpu.toFixed(1)}%</span>
             <span className={`stp-bar ${cpuTone(st.cpu)}`}><i style={{ width: `${Math.min(100, st.cpu)}%` }} /></span>
           </div>
           <div className="stp-row">
@@ -67,7 +67,7 @@ export function ServerStatusPanel() {
           <div className="stp-row">
             <span className="stp-k">网络</span>
             {st.net ? (
-              <span className="stp-v">↓ {st.net.up} · ↑ {st.net.down} KB/s</span>
+              <span className="stp-v">↓ {st.net.down} · ↑ {st.net.up} KB/s</span>
             ) : (
               <span className="stp-v dim-row">不可用</span>
             )}
