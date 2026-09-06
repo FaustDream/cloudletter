@@ -116,4 +116,6 @@ EOF
 - **`NODE_ENV=production` 会剪掉 devDependencies**：pnpm install 在该环境下不装 tsx/prisma CLI，而 systemd 直跑后端、FTS 清理、db push 全依赖它们——远端 install 前 `unset NODE_ENV`，装完核对 `node_modules/.bin` 里 tsx/prisma 在位（2026-09-05 实战）；
 - **tar 解压会叠加陈旧前端产物**：服务器 `apps/workbench/dist` 每次解包只增不减，旧哈希 chunk 被 `cp` 带进 workbench 越积越多（入口 HTML 引用新哈希，不易察觉）。解包前先 `rm -rf /srv/cloudletter/apps/workbench/dist`，部署后核对 `workbench/assets` 文件数与本地 dist 一致（2026-09-05 实战）；
 - **`.env.production` 不入库**：SMTP/CORS 凭据只在服务器上（0600）；仓库与文档禁止出现服务器密钥；
-- 本机 Windows Git Bash 用 `curl -d` 直接发中文 JSON 会产生乱码，造数/调试请用 `python urllib`（UTF-8 安全）。
+- 本机 Windows Git Bash 用 `curl -d` 直接发中文 JSON 会产生乱码，造数/调试请用 `python urllib`（UTF-8 安全）；
+- `NODE_ENV=production` 会让 pnpm 安装跳过 devDependencies（tsx/prisma 缺失，服务无法启动）——安装步骤一律 `env -u NODE_ENV pnpm install` 并 `test -x node_modules/.bin/tsx` 自检；
+- 并行会话的工作区可能存在未提交 WIP 导致 `tsc -b` 失败：出包改用 `git worktree add <dir> HEAD` 干净检出，只叠加本次自己的改动文件构建，不碰对方工作区（node_modules 用 `mklink /J` 目录联接复用）。
