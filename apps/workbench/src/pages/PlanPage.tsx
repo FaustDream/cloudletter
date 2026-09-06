@@ -14,13 +14,14 @@ const LEVELS: Record<string, { label: string; color: string }> = {
   P0: { label: 'P0 · 紧急', color: 'var(--danger)' },
   P1: { label: 'P1 · 重要', color: 'var(--warn)' },
   P2: { label: 'P2 · 一般', color: 'var(--ok)' },
+  P4: { label: 'P4 · 不紧急', color: 'var(--text-tertiary)' },
 }
 import { todayYMD } from '../lib/date'
 import { celebrate, praise } from '../lib/celebrate'
 import { Dropdown } from '../components/framework/Dropdown'
 import { planStyle, setPlanStyle, PLAN_STYLE_LABELS, type PlanStyle } from '../lib/layout'
 
-interface PlanForm { text: string; level: 'P0' | 'P1' | 'P2'; note: string; dueDate: string }
+interface PlanForm { text: string; level: 'P0' | 'P1' | 'P2' | 'P4'; note: string; dueDate: string }
 
 const EMPTY_FORM: PlanForm = { text: '', level: 'P1', note: '', dueDate: todayYMD() }
 
@@ -121,8 +122,8 @@ export function PlanPage({ withHeader = true }: { withHeader?: boolean }) {
     )
   }
 
-  // 分组视图：P0 紧急 / P1 重要 / P2 一般（未完成在前，组内保持原排序）
-  const grouped = ls === 'group' ? (['P0', 'P1', 'P2'] as const).map((lv) => ({
+  // 分组视图：P0 紧急 / P1 重要 / P2 一般 / P4 不紧急（组内保持原排序）
+  const grouped = ls === 'group' ? (['P0', 'P1', 'P2', 'P4'] as const).map((lv) => ({
     label: LEVELS[lv].label,
     list: items.filter((i) => i.level === lv),
   })).filter((s) => s.list.length > 0) : null
@@ -130,7 +131,7 @@ export function PlanPage({ withHeader = true }: { withHeader?: boolean }) {
   return (
     <>
       <PageHeader
-        title={withHeader ? '今日计划' : undefined}
+        title={withHeader ? '计划' : undefined}
         subtitle={withHeader ? `已完成 ${done} / ${items.length} ${overdue > 0 ? `· ${overdue} 项已逾期` : ''}` : undefined}
         actions={
           <>
@@ -196,8 +197,9 @@ export function PlanPage({ withHeader = true }: { withHeader?: boolean }) {
                   { value: 'P0', label: 'P0 · 紧急' },
                   { value: 'P1', label: 'P1 · 重要' },
                   { value: 'P2', label: 'P2 · 一般' },
+                  { value: 'P4', label: 'P4 · 不紧急' },
                 ]}
-                onChange={(v) => setForm({ ...form, level: v as 'P0' | 'P1' | 'P2' })}
+                onChange={(v) => setForm({ ...form, level: v as 'P0' | 'P1' | 'P2' | 'P4' })}
               />
             </Field>
             <Field label="截止时间">

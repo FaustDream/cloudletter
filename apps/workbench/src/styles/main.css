@@ -1957,7 +1957,7 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 /* ============================================================
    日期胶囊（通用骨架 Capsule · 骨架固定 · 样式抽离为主题变量）
    同一套 var(--cap-*) 主题变体复用于：
-   悬浮日期定位（.tb-jump）· 每日小结胶囊（.tb-summary）· 设置页预览（.capsule-demo）
+   每日小结胶囊（.tb-summary）· 设置页预览（.capsule-demo）
    新增主题 = 追加一组 CSS 变量，骨架与组件代码零改动
    ============================================================ */
 /* 通用胶囊骨架：图标 + 主文本 + 附加件 */
@@ -2234,9 +2234,9 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 .uni3d-card .um { margin-top: 6px; font-size: 11px; color: var(--text-tertiary); font-family: var(--mono); }
 
 /* ---- 速记居中弹窗 + FAB ---- */
-.nmodal { width: 100%; max-width: 540px; background: var(--surface-solid); border-radius: var(--radius-sheet);
+.nmodal { width: 100%; max-width: 540px; margin: auto; background: var(--surface-solid); border-radius: var(--radius-sheet);
   box-shadow: var(--shadow-overlay); border: 1px solid var(--border); padding: 22px 24px;
-  display: flex; flex-direction: column; gap: 12px; animation: pop .22s ease; max-height: 92vh; overflow-y: auto; }
+  display: flex; flex-direction: column; gap: 12px; animation: pop .22s ease; max-height: calc(100dvh - 48px); overflow-y: auto; }
 .nmodal h3 { font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
 .nmodal h3 .kick { font-size: 11px; color: var(--text-tertiary); font-weight: 500; margin-left: auto; }
 .nmodal textarea { min-height: 96px; resize: vertical; line-height: 1.7; }
@@ -3337,3 +3337,15 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 .ed-ctx-menu button { display: flex; align-items: center; gap: 8px; border: none; background: transparent;
   color: var(--text); font-size: 12.8px; padding: 8px 10px; border-radius: 8px; cursor: pointer; text-align: left; }
 .ed-ctx-menu button:hover { background: var(--accent-muted); color: var(--accent); }
+
+/* ============================================================
+   日常 × 计划联动：专注计划选择 + 专注执行历史（番茄 × 计划）
+   ============================================================ */
+.focus-plan-row { margin: 2px 0 4px; }
+.focuslog-list { display: flex; flex-direction: column; }
+.focuslog-row { display: flex; align-items: center; gap: 14px; padding: 9px 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 8%, transparent); font-size: 13px; }
+.focuslog-row:last-child { border-bottom: none; }
+.focuslog-row .fl-time { font-family: var(--mono); color: var(--text-tertiary); flex: 0 0 auto; }
+.focuslog-row .fl-min { color: var(--accent); font-weight: 700; flex: 0 0 auto; }
+.focuslog-row .fl-plan { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -176,8 +176,8 @@ export function GoalsPage({ withHeader = true }: { withHeader?: boolean }) {
   return (
     <>
       <PageHeader
-        title={withHeader ? '长期目标' : undefined}
-        subtitle={withHeader ? `共 ${items.length} 个目标 · 目标 → 拆解 → 今日计划 / 习惯` : undefined}
+        title={withHeader ? '目标' : undefined}
+        subtitle={withHeader ? `共 ${items.length} 个目标 · 拆解到计划与习惯，长期推进` : undefined}
         actions={
           <>
             <div className="seg" style={{ marginRight: 12 }} aria-label="目标布局切换">

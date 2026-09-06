@@ -1,11 +1,13 @@
 /** 速记居中弹窗 —— 全局可用（Shell 挂载）；灵感=灵感笔记（与文章共用分类/标签），
- *  计划=直接进今日计划（PlanItem：紧急度 level / 完成时间 dueDate / 标题 text / 详情 note） */
+ *  计划=直接进今日计划（PlanItem：紧急度 level / 完成时间 dueDate / 标题 text / 详情 note）。
+ *  弹窗可拖拽（按住标题栏），位置记忆；经 experience 开关决定 XP 文案 */
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api, type Category, type NoteType } from '../../api'
 import { useToast } from '../framework/Toast'
 import { Dropdown } from '../framework/Dropdown'
 import { MarkdownEditor } from '../editor/MarkdownEditor'
+import { readGamePrefs } from '../../lib/gamePrefs'
 
 /** 速记模式：灵感 | 计划 */
 const NOTE_TYPES: Array<[string, string]> = [['inspiration', '💡 灵感'], ['plan', '📋 计划']]
@@ -20,10 +22,21 @@ function loadFabPos(): { x: number; y: number } | null {
   return null
 }
 
+/** 弹窗拖拽位置记忆（按住标题栏拖动）；null = 默认居中 */
+const QN_POS_KEY = 'cl_qn_pos'
+function loadQnPos(): { x: number; y: number } | null {
+  try {
+    const s = localStorage.getItem(QN_POS_KEY)
+    if (s) { const p = JSON.parse(s); if (typeof p.x === 'number' && typeof p.y === 'number') return p }
+  } catch { /* 忽略损坏 */ }
+  return null
+}
+
 const LEVELS = [
   { value: 'P0', label: 'P0 · 紧急' },
   { value: 'P1', label: 'P1 · 重要' },
   { value: 'P2', label: 'P2 · 一般' },
+  { value: 'P4', label: 'P4 · 不紧急' },
 ]
 
 export function QuickNoteModal({ onSaved }: { onSaved?: () => void }) {
@@ -101,6 +114,67 @@ export function QuickNoteModal({ onSaved }: { onSaved?: () => void }) {
     toast('速记按钮已复位到左下角')
   }
 
+  /* ── 弹窗拖拽：按住标题栏移动，位置记忆（双击标题栏复位居中） ── */
+  const [qnPos, setQnPos] = useState<{ x: number; y: number } | null>(loadQnPos)
+  const modalRef = useRef<HTMLDivElement>(null)
+  const qnDrag = useRef<{ bx: number; by: number; gx: number; gy: number; moved: boolean } | null>(null)
+  const qnPosRef = useRef<{ x: number; y: number } | null>(qnPos)
+
+  useEffect(() => {
+    const clampX = (x: number) => Math.min(Math.max(8, x), window.innerWidth - 120)
+    const clampY = (y: number) => Math.min(Math.max(8, y), window.innerHeight - 80)
+    const onMove = (e: PointerEvent) => {
+      const d = qnDrag.current
+      if (!d) return
+      const dx = e.clientX - d.gx, dy = e.clientY - d.gy
+      if (!d.moved && Math.hypot(dx, dy) > 5) d.moved = true
+      if (!d.moved) return
+      const pos = { x: clampX(d.bx + dx), y: clampY(d.by + dy) }
+      qnPosRef.current = pos
+      setQnPos(pos)
+    }
+    const onUp = () => {
+      const d = qnDrag.current
+      if (!d) return
+      qnDrag.current = null
+      if (d.moved) {
+        try {
+          const now = qnPosRef.current
+          if (now) localStorage.setItem(QN_POS_KEY, JSON.stringify(now))
+        } catch { /* 忽略 */ }
+      }
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+    }
+  }, [])
+
+  const onTitleDown = (e: React.PointerEvent<HTMLHeadingElement>) => {
+    if (e.button !== 0 || qnDrag.current) return
+    const r = modalRef.current?.getBoundingClientRect()
+    if (!r) return
+    e.preventDefault()
+    qnDrag.current = { bx: r.left, by: r.top, gx: e.clientX, gy: e.clientY, moved: false }
+    try { e.currentTarget.setPointerCapture(e.pointerId) } catch { /* 忽略 */ }
+  }
+  const onTitleClick = () => {
+    if (qnDrag.current?.moved) return
+    // 单击标题不做任何事（双击 = 复位居中）
+  }
+  const onTitleReset = () => {
+    if (qnDrag.current?.moved) return
+    qnDrag.current = null
+    qnPosRef.current = null
+    setQnPos(null)
+    try { localStorage.removeItem(QN_POS_KEY) } catch { /* 忽略 */ }
+    toast('速记弹窗已复位到居中')
+  }
+
   useEffect(() => {
     // ⌘/Ctrl + N（可含 Shift）唤起；Esc 关闭（总览页专用，全局 ⌘⇧N 已让路）
     const onKey = (e: KeyboardEvent) => {
@@ -138,7 +212,7 @@ export function QuickNoteModal({ onSaved }: { onSaved?: () => void }) {
       tags: parseTags(),
       date: new Date().toISOString().slice(0, 10),
     })
-    toast('已存入灵感笔记 · +10 XP')
+    toast(readGamePrefs().xp ? '已存入灵感笔记 · +10 XP' : '已存入灵感笔记')
   }
 
   const savePlan = async () => {
@@ -180,8 +254,15 @@ export function QuickNoteModal({ onSaved }: { onSaved?: () => void }) {
       )}
       {open && createPortal(
         <div className="overlay" onClick={close}>
-          <div className="nmodal" onClick={(e) => e.stopPropagation()}>
-            <h3>速记 <span className="kick">灵感 / 计划 · Ctrl/⌘+N 唤起 · Esc 关闭</span></h3>
+          <div
+            ref={modalRef}
+            className="nmodal"
+            style={qnPos ? { position: 'fixed', left: qnPos.x, top: qnPos.y, right: 'auto', bottom: 'auto', margin: 0 } : undefined}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 onPointerDown={onTitleDown} onClick={onTitleClick} onDoubleClick={onTitleReset} title="按住拖动 · 双击复位居中" style={{ cursor: 'grab', userSelect: 'none' }}>
+              速记 <span className="kick">灵感 / 计划 · Ctrl/⌘+N 唤起 · Esc 关闭</span>
+            </h3>
             <div className="type-pills">
               {NOTE_TYPES.map(([k, l]) => (
                 <button key={k} className={`tpill-opt${type === k ? ' on' : ''}`} type="button" onClick={() => setType(k as NoteType)}>{l}</button>
@@ -220,7 +301,7 @@ export function QuickNoteModal({ onSaved }: { onSaved?: () => void }) {
             <div className="nactions">
               <button className="btn ghost" type="button" onClick={close}>取消</button>
               <button className="btn" type="button" onClick={save} disabled={saving}>
-                {saving ? '保存中…' : type === 'inspiration' ? '存入灵感笔记 · +XP' : '加入今日计划'}
+                {saving ? '保存中…' : type === 'inspiration' ? (readGamePrefs().xp ? '存入灵感笔记 · +XP' : '存入灵感笔记') : '加入今日计划'}
               </button>
             </div>
           </div>

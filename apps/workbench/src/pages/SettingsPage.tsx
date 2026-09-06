@@ -23,6 +23,7 @@ import { api, ApiError, type User } from '../api'
 import { applyDensity, applyTheme, THEME_REGISTRY, activeCloudTheme, saveCloudTheme as saveCloudThemePref, readCustomTheme, writeCustomTheme, clearCustomTheme, CUSTOM_VAR_KEYS, type ThemePref, type DensityPref } from '../lib/theme'
 import { todayYMD } from '../lib/date'
 import { timelineLayout, setTimelineLayout, type TimelineLayout } from '../lib/layout'
+import { readGamePrefs, writeGamePrefs, type GamePrefs } from '../lib/gamePrefs'
 import { exportDataBundle } from './settingsHelpers'
 import { CAPSULE_THEMES, readTheme, writeTheme, listDayThemes, writeDayTheme, removeDayTheme, clearDayThemes, themeLabel, LAYOUT_THEMES, readLayoutTheme, writeLayoutTheme, POMODORO_THEMES, type ThemeVariant } from '../lib/componentTheme'
 import { Capsule } from '../components/framework/Capsule'
@@ -30,11 +31,12 @@ import { readPomodoroPrefs, writePomodoroPref, type PomodoroPrefs, type Pomodoro
 import { DateCal } from '../components/framework/DateCal'
 import { GrantsPanel } from '../components/settings/GrantsPanel'
 
-type GroupId = 'account' | 'prefs' | 'site' | 'notify' | 'privacy' | 'shortcuts' | 'data' | 'integrations' | 'about'
+type GroupId = 'account' | 'prefs' | 'game' | 'site' | 'notify' | 'privacy' | 'shortcuts' | 'data' | 'integrations' | 'about'
 
 const GROUPS: { id: GroupId; label: string; icon: string; desc: string }[] = [
   { id: 'account', label: '账户', icon: 'user', desc: '头像、资料、邮箱、密码与两步验证、登录设备' },
   { id: 'prefs', label: '偏好', icon: 'setting', desc: '主题系统、密度、默认入口、布局风格' },
+  { id: 'game', label: '游戏', icon: 'flame', desc: '讨伐、经验升级（实验性功能，默认关闭）' },
   { id: 'site', label: '站点设置', icon: 'server', desc: '站名 Logo favicon 字体 主色 背景 布局 动画 自定义 CSS' },
   { id: 'notify', label: '通知', icon: 'bell', desc: '浏览器 / 系统 / 邮件 / 站内通知开关与权限' },
   { id: 'privacy', label: '隐私与安全', icon: 'shield', desc: '可见性、活动日志、日志导出与导入' },
@@ -133,6 +135,13 @@ export function SettingsPage() {
   const [density, setDensity] = useState<DensityPref>((localStorage.getItem('cl_density') as DensityPref) || 'standard')
   const [defPage, setDefPage] = useState(localStorage.getItem('cl_default_page') || '/')
   const [tlLayout, setTlLayout] = useState<TimelineLayout>(timelineLayout)
+  // 游戏化开关（讨伐 / 经验升级，默认关闭，待优化后再放出）
+  const [game, setGame] = useState<GamePrefs>(readGamePrefs)
+  const saveGame = (p: GamePrefs) => {
+    setGame(p)
+    writeGamePrefs(p)
+    toast(p.battle || p.xp ? '游戏化功能已开启（本机偏好，立即生效）' : '游戏化功能已全部关闭')
+  }
   // 组件主题偏好（骨架不变 · 样式抽离）
   const [capsuleTheme, setCapsuleThemeState] = useState(() => readTheme('capsule', CAPSULE_THEMES, 'glass'))
   const [dayOverrides, setDayOverrides] = useState<Record<string, string>>(() => listDayThemes())
@@ -709,6 +718,26 @@ export function SettingsPage() {
                 </Row>
               </Sec>
             </>
+          )}
+
+          {g === 'game' && (
+            <Sec icon="flame" title="游戏化（实验）" tip="讨伐与经验升级正在重做，先默认隐藏；开关为本机偏好，保存后立即生效">
+              <Row k="讨伐模式" tip="总览讨伐卡与 3D 宇宙的 ⚔️ 入口（关闭时相关界面全部隐藏）">
+                <div className="seg">
+                  <button type="button" className={`seg-btn${game.battle ? ' on' : ''}`} onClick={() => saveGame({ ...game, battle: true })}>开启</button>
+                  <button type="button" className={`seg-btn${!game.battle ? ' on' : ''}`} onClick={() => saveGame({ ...game, battle: false })}>关闭（默认）</button>
+                </div>
+              </Row>
+              <Row k="经验与等级" tip="头像等级徽标 / 升级庆祝动效 / +XP 提示">
+                <div className="seg">
+                  <button type="button" className={`seg-btn${game.xp ? ' on' : ''}`} onClick={() => saveGame({ ...game, xp: true })}>开启</button>
+                  <button type="button" className={`seg-btn${!game.xp ? ' on' : ''}`} onClick={() => saveGame({ ...game, xp: false })}>关闭（默认）</button>
+                </div>
+              </Row>
+              <Row k="说明">
+                <span className="dim" style={{ fontSize: 12.5 }}>两项默认关闭；经验数据仍在后台累积，重新开启后等级按全部沉淀计算，不会丢失。</span>
+              </Row>
+            </Sec>
           )}
 
           {g === 'site' && (

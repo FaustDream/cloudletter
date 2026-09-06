@@ -74,6 +74,7 @@ export function TimelineCity({ days, dash, filter, active, onOpenDetail }: Props
       note: { n: totals.note ?? 0, pct: 0, done: 0, chars: 0, streak: 0, income: 0 },
       checkin: { n: totals.checkin ?? 0, streak: dash?.checkin.maxStreak ?? 0, pct: 0, done: 0, chars: 0, income: 0 },
       ledger: { n: totals.ledger ?? 0, income: dash?.ledger.income ?? 0, pct: 0, done: 0, chars: 0, streak: 0 },
+      focus: { n: totals.focus ?? 0, pct: 0, done: 0, chars: 0, streak: 0, income: 0 },
     }
   }, [dash])
 
@@ -120,6 +121,29 @@ export function TimelineCity({ days, dash, filter, active, onOpenDetail }: Props
 
       {/* 第二层：城市本体（可缩放平移） */}
       <div className="city-world" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
+        {/* 动画小人：工地工人挥锤 + 行人穿城（火柴人 · 纯氛围装饰） */}
+        <span className="city-folk worker" aria-hidden="true">
+          <svg viewBox="0 0 44 60">
+            <circle cx="16" cy="8" r="4.6" />
+            <line x1="16" y1="13" x2="16" y2="32" />
+            <line x1="16" y1="18" x2="8" y2="25" />
+            <g className="cw-hammer"><line x1="16" y1="18" x2="26" y2="12" /><line x1="26" y1="12" x2="31" y2="10" strokeWidth="4.5" /></g>
+            <line x1="16" y1="32" x2="10" y2="48" />
+            <line x1="16" y1="32" x2="22" y2="48" />
+          </svg>
+          <i className="cw-dust" />
+        </span>
+        <span className="city-folk walker" aria-hidden="true">
+          <svg viewBox="0 0 40 60">
+            <circle cx="20" cy="8" r="4.6" />
+            <line x1="20" y1="13" x2="20" y2="31" />
+            <g className="cw-swing a"><line x1="20" y1="17" x2="27" y2="24" /></g>
+            <g className="cw-swing b"><line x1="20" y1="17" x2="13" y2="24" /></g>
+            <g className="cw-swing c"><line x1="20" y1="31" x2="26" y2="47" /></g>
+            <g className="cw-swing d"><line x1="20" y1="31" x2="14" y2="47" /></g>
+          </svg>
+        </span>
+
         {/* 中央核心广场 */}
         <div className="city-core" style={{ left: '50%', top: '50%' }}>
           <div className="city-core-ring r1" />

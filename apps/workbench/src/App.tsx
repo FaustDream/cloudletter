@@ -1,4 +1,4 @@
-/** 工作台路由：内容(总览/文章/灵感/分类标签/检索) + 日常(目标三合一) + 记账 + 账号，旧路径重定向 */
+/** 工作台路由：内容(总览/文章/灵感/分类标签/检索) + 日常 + 计划/目标/习惯 + 记账 + 账号，旧路径重定向 */
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth'
 import { Shell } from './components/framework/Shell'
@@ -13,6 +13,9 @@ import { NotesPage } from './pages/NotesPage'
 import { OrganizePage } from './pages/OrganizePage'
 import { SearchPage } from './pages/SearchPage'
 import { GoalsHomePage } from './pages/GoalsHomePage'
+import { GoalsPage } from './pages/GoalsPage'
+import { PlanPage } from './pages/PlanPage'
+import { CheckinPage } from './pages/CheckinPage'
 import { DailyPage } from './pages/DailyPage'
 import { QuickNotesPage } from './pages/QuickNotesPage'
 import { WorkPlanPage } from './pages/WorkPlanPage'
@@ -75,7 +78,11 @@ export default function App() {
                       {/* 日常 */}
                       <Route path="daily" element={<DailyPage />} />
                       <Route path="workplan" element={<WorkPlanPage />} />
+                      {/* 目标三件套：独立页（旧聚合页 /goals-home 保留兼容） */}
                       <Route path="goals-home" element={<GoalsHomePage />} />
+                      <Route path="goals" element={<GoalsPage />} />
+                      <Route path="plan" element={<PlanPage />} />
+                      <Route path="checkin" element={<CheckinPage />} />
                       {/* 记账 */}
                       <Route path="ledger" element={<LedgerPage />} />
                       {/* 设置（账户已并入设置中心） */}
@@ -84,9 +91,6 @@ export default function App() {
                       <Route path="account" element={<Redirect to="/settings" />} />
                       <Route path="categories" element={<Redirect to="/organize?tab=category" />} />
                       <Route path="tags" element={<Redirect to="/organize?tab=tag" />} />
-                      <Route path="plan" element={<Redirect to="/goals-home?tab=plan" />} />
-                      <Route path="checkin" element={<Redirect to="/goals-home?tab=checkin" />} />
-                      <Route path="goals" element={<Redirect to="/goals-home?tab=goal" />} />
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
                     </RouteBoundary>

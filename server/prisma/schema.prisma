@@ -137,7 +137,7 @@ model SiteSetting {
 model PlanItem {
   id        String   @id @default(cuid())
   text      String
-  level     String   @default("P1") // P0 | P1 | P2
+  level     String   @default("P1") // P0 | P1 | P2 | P4（P4=不紧急）
   note      String   @default("")
   done      Boolean  @default(false)
   dueDate   String   @default("") // YYYY-MM-DD，空 = 无截止
@@ -148,6 +148,21 @@ model PlanItem {
 
   @@index([dueDate])
   @@index([done])
+}
+
+// 番茄专注执行记录（日常 × 计划联动）：选定计划专注后落一条，
+// planTitle 为计划名快照（计划后续改名/删除不影响历史展示）
+model FocusLog {
+  id        String   @id @default(cuid())
+  planId    String   @default("") // 关联的今日计划 id，空 = 自由专注
+  planTitle String   @default("") // 计划名快照
+  minutes   Int      @default(25) // 本次专注分钟数
+  date      String // YYYY-MM-DD
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+  @@index([planId])
 }
 
 // 习惯打卡（log: {"YYYY-MM-DD": true}，逐日记录）

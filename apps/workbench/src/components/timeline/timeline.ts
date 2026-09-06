@@ -1,6 +1,6 @@
 /** 双视图时间轴共享类型与视觉规范（鱼骨 + 节点宇宙，同一份数据两种渲染） */
 
-export type TimelineType = 'journal' | 'note' | 'plan' | 'checkin' | 'ledger' | 'goal'
+export type TimelineType = 'journal' | 'note' | 'plan' | 'checkin' | 'ledger' | 'goal' | 'focus'
 
 export interface TimelineNode {
   id: string
@@ -20,7 +20,7 @@ export interface TimelineDay {
   items: TimelineNode[]
 }
 
-/** 6 类型：标签 + 色值（统一规范：无紫，青替目标色） */
+/** 7 类型：标签 + 色值（统一规范：无紫，青替目标色） */
 export const TL_TYPES: Array<[TimelineType, string]> = [
   ['journal', '日志'],
   ['note', '灵感'],
@@ -28,6 +28,7 @@ export const TL_TYPES: Array<[TimelineType, string]> = [
   ['checkin', '习惯'],
   ['ledger', '记账'],
   ['goal', '目标'],
+  ['focus', '专注'],
 ]
 export const TL_COLOR: Record<TimelineType, string> = {
   journal: '#185FA5',
@@ -36,6 +37,7 @@ export const TL_COLOR: Record<TimelineType, string> = {
   checkin: '#059669',
   ledger: '#DC2626',
   goal: '#0E7490',
+  focus: '#475569',
 }
 export const TL_DESC: Record<TimelineType, string> = {
   journal: '文章 / 长日志',
@@ -44,6 +46,7 @@ export const TL_DESC: Record<TimelineType, string> = {
   checkin: '习惯打卡',
   ledger: '一笔账',
   goal: '目标进度',
+  focus: '番茄专注',
 }
 
 /** 按类型过滤节点 */

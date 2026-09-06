@@ -5,6 +5,7 @@
  * - ledger   记账本：kind/cat/amount/note/date
  * - goals    长期目标：name/emoji/desc/current/target/unit
  * - notes    灵感笔记/速记：title/body/date + 与文章共用的分类(categoryId)与标签(tags)
+ * - focus    番茄专注执行记录：planId/planTitle/minutes/date（日常 × 计划联动）
  * - worktask 工作计划：date/text/note/done/doneAt
  */
 import { Router } from 'express'
@@ -192,7 +193,7 @@ workbench.get('/week-stats', ah(async (req, res) => {
 workbench.get('/dashboard', ah(async (_req, res) => {
   const today = ymdLocal(new Date())
   const month = today.slice(0, 7)
-  const [posts, plans, checkins, ledgers, goals, notes, worktasks] = await Promise.all([
+  const [posts, plans, checkins, ledgers, goals, notes, worktasks, focusLogs] = await Promise.all([
     prisma.post.findMany({ select: { id: true, status: true, charCount: true } }),
     prisma.planItem.findMany(),
     prisma.checkinItem.findMany(),
@@ -200,6 +201,7 @@ workbench.get('/dashboard', ah(async (_req, res) => {
     prisma.goalItem.findMany(),
     prisma.noteItem.findMany(),
     prisma.workTask.findMany(),
+    prisma.focusLog.findMany(),
   ])
   // X X 习惯：逐日打卡总量 + 今日打卡 + 最大连续
   let checkedDays = 0
@@ -230,6 +232,7 @@ workbench.get('/dashboard', ah(async (_req, res) => {
       ledger: ledgers.length,
       goal: goals.length,
       worktask: worktasks.length,
+      focus: focusLogs.length,
     },
     chars: posts.reduce((a, p) => a + (p.charCount || 0), 0),
     plan: { total: plans.length, done: plans.filter((p) => p.done).length },
@@ -286,8 +289,8 @@ function sysNetBytes(): NetSample | null {
     const raw = fs.readFileSync('/proc/net/dev', 'utf-8')
     let rx = 0, tx = 0
     for (const line of raw.split('\n').slice(2)) {
-      // 每行格式: iface: rx_bytes rx_packets ... tx_bytes ...（rx 第1个数字，tx 第9个数字）
-      const m = line.match(/:\s*(\d+)\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+(\d+)/)
+      // 每行格式: iface: rx_bytes rx_packets×7 tx_bytes ...（rx 第1个数字，tx 第9个数字，中间恰好 7 列）
+      const m = line.match(/:\s*(\d+)\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+(\d+)/)
       if (!m) continue
       rx += Number(m[1]); tx += Number(m[2])
     }
@@ -297,35 +300,51 @@ function sysNetBytes(): NetSample | null {
   }
 }
 
+/** CPU 占用率：两采样点 tick 差值折算（%），总差值为 0 时按 0 处理 */
+function cpuPctOf(prev: { idle: number; total: number }, cur: { idle: number; total: number }): number {
+  const dTotal = cur.total - prev.total
+  const dIdle = cur.idle - prev.idle
+  return dTotal > 0 ? Math.min(100, Math.max(0, ((dTotal - dIdle) / dTotal) * 100)) : 0
+}
+
 /** 状态采样缓存：TTL 1.1s，避免多前端轮询时重复做耗时采样 */
 let statusCache: { data: StatusSnapshot; t: number } | null = null
+/** 上次采样基线：跨请求差值窗口（≈前端轮询间隔）比进程内 120ms 窗口读数更稳 */
+let lastSample: { cpu: { idle: number; total: number }; net: NetSample | null; t: number } | null = null
+
+/** 组装快照（内存口径全程一致） */
+function mkSnapshot(cpu: number, net: { up: number; down: number } | null): StatusSnapshot {
+  const total = os.totalmem()
+  const used = total - os.freemem()
+  return { cpu, mem: { used, total, percent: Math.round((used / total) * 100) }, net }
+}
 
 async function sampleSnapshot(): Promise<StatusSnapshot> {
   const now = Date.now()
   if (statusCache && now - statusCache.t < 1100) return statusCache.data
 
-  const aCpu = sysCpuSample()
-  const aNet = sysNetBytes()
+  const cpu = sysCpuSample()
+  const net = sysNetBytes()
+  // 距上次请求 1~30s：直接用跨请求累计差值（长窗口），CPU 与网络都无需二次采样
+  const ls = lastSample
+  if (ls && net && ls.net && now - ls.t >= 1000 && now - ls.t <= 30_000 && net.rx >= ls.net.rx && net.tx >= ls.net.tx) {
+    const dt = (now - ls.t) / 1000
+    const data = mkSnapshot(cpuPctOf(ls.cpu, cpu), { up: (net.tx - ls.net.tx) / dt / 1024, down: (net.rx - ls.net.rx) / dt / 1024 }) // KB/s
+    statusCache = { data, t: now }
+    lastSample = { cpu, net, t: now }
+    return data
+  }
+  // 兜底：首采或计数器回绕时，进程内 120ms 双采样
   await new Promise((r) => setTimeout(r, 120))
-  const bCpu = sysCpuSample()
-  const bNet = sysNetBytes()
-
-  const cpuIdle = bCpu.idle - aCpu.idle
-  const cpuTotal = bCpu.total - aCpu.total
-  const mem = os.totalmem() - os.freemem()
-
-  let net: { up: number; down: number } | null = null
-  if (aNet && bNet && bNet.tx >= aNet.tx && bNet.rx >= aNet.rx) {
-    const dt = 0.12 // 采样间隔秒
-    net = { up: (bNet.rx - aNet.rx) / dt / 1024, down: (bNet.tx - aNet.tx) / dt / 1024 } // KB/s
+  const cpu2 = sysCpuSample()
+  const net2 = sysNetBytes()
+  let netRate: { up: number; down: number } | null = null
+  if (net && net2 && net2.rx >= net.rx && net2.tx >= net.tx) {
+    netRate = { up: (net2.tx - net.tx) / 0.12 / 1024, down: (net2.rx - net.rx) / 0.12 / 1024 } // KB/s
   }
-
-  const data: StatusSnapshot = {
-    cpu: cpuTotal > 0 ? Math.min(100, Math.max(0, ((cpuTotal - cpuIdle) / cpuTotal) * 100)) : 0,
-    mem: { used: mem, total: os.totalmem(), percent: Math.round((mem / os.totalmem()) * 100) },
-    net,
-  }
+  const data = mkSnapshot(cpuPctOf(cpu, cpu2), netRate)
   statusCache = { data, t: Date.now() }
+  lastSample = { cpu: cpu2, net: net2, t: Date.now() }
   return data
 }
 
@@ -345,7 +364,7 @@ workbench.get('/server-status', ah(async (_req, res) => {
 
 /** ============ 双视图时间轴聚合（按天混排：文章/笔记/计划/习惯/记账/目标） ============ */
 
-type TNodeType = 'journal' | 'note' | 'plan' | 'checkin' | 'ledger' | 'goal'
+type TNodeType = 'journal' | 'note' | 'plan' | 'checkin' | 'ledger' | 'goal' | 'focus'
 interface TNode { id: string; t: TNodeType; title: string; sub: string; date: string; xp?: number; gold?: number; tags?: string[]; ts?: string }
 interface TDay { date: string; xp: number; gold: number; items: TNode[] }
 
@@ -368,7 +387,7 @@ export async function timelineData(opts: { limit?: number; from?: string; to?: s
   // 文章是唯一含大字段（rawMarkdown 镜像）的表：按窗口过滤 + 投影列，
   // 正文改用 charCount，不再把整篇镜像拉进内存
   const since = hasRange ? new Date(fromRaw + 'T00:00:00') : new Date(Date.now() - 90 * 864e5)
-  const [posts, plans, checkins, ledgers, goals, notes, worktasks] = await Promise.all([
+  const [posts, plans, checkins, ledgers, goals, notes, worktasks, focusLogs] = await Promise.all([
     prisma.post.findMany({
       where: { OR: [{ publishedAt: { gte: since } }, { updatedAt: { gte: since } }] },
       select: {
@@ -383,6 +402,7 @@ export async function timelineData(opts: { limit?: number; from?: string; to?: s
     prisma.goalItem.findMany(),
     prisma.noteItem.findMany({ include: NOTE_INCLUDE }),
     prisma.workTask.findMany(),
+    prisma.focusLog.findMany(),
   ])
 
   const dayMap = new Map<string, TDay>()
@@ -421,6 +441,19 @@ for (const n of notes) {
     date: ymd(n.date), xp: 10,
     tags: n.tags.map((x) => x.tag.name),
     ts: n.createdAt ? n.createdAt.toISOString() : undefined,
+  })
+}
+
+// 番茄专注执行记录（日常 × 计划联动）→ 时间轴「专注」节点（不发 XP/金币，非游戏化范畴）
+for (const f of focusLogs) {
+  push(f.date || ymd(f.createdAt), {
+    id: 'focus:' + f.id,
+    t: 'focus',
+    title: `🍅 专注 ${f.minutes} 分钟`,
+    sub: f.planTitle ? `计划 · ${f.planTitle}` : '自由专注',
+    date: ymd(f.date), xp: 0,
+    tags: ['专注'],
+    ts: f.createdAt ? f.createdAt.toISOString() : undefined,
   })
 }
 
@@ -555,6 +588,7 @@ const FIELDS: Record<string, string[]> = {
   goals: ['name', 'emoji', 'desc', 'current', 'target', 'unit', 'relatedPlanIds', 'relatedCheckinIds'],
   notes: ['title', 'body', 'date', 'categoryId'],
   worktask: ['date', 'text', 'note', 'done', 'doneAt', 'order'],
+  focus: ['planId', 'planTitle', 'minutes', 'date'],
 }
 
 const MODEL: Record<string, string> = {
@@ -564,6 +598,7 @@ const MODEL: Record<string, string> = {
   goals: 'goalItem',
   notes: 'noteItem',
   worktask: 'workTask',
+  focus: 'focusLog',
 }
 
 
@@ -613,6 +648,12 @@ const WB_SCHEMA: Record<string, Record<string, FieldSpec>> = {
     done: v.bool(),
     doneAt: v.str(),
     order: v.num(),
+  },
+  focus: {
+    planId: { ...v.str(), max: 64 },
+    planTitle: { ...v.str(), max: 500 },
+    minutes: { ...v.num(), min: 1, max: 600 },
+    date: v.str(),
   },
 }
 
@@ -715,6 +756,7 @@ workbench.get('/:scope', ah(async (req, res) => {
   const orderBy: Record<string, string> =
     scope === 'plan' ? { done: 'asc' }
       : scope === 'worktask' ? { date: 'asc' }
+      : scope === 'focus' ? { date: 'asc' }
       : { createdAt: 'asc' }
   if (scope === 'notes') {
     const rows = await prisma.noteItem.findMany({ orderBy, include: NOTE_INCLUDE })
@@ -769,7 +811,7 @@ workbench.post('/:scope', ah(async (req, res) => {
   if (!body) return
   // 创建时必填校验（缺关键列 → 422，而非 DB 约束 500）
   const requiredAtCreate: Record<string, string> = {
-    plan: 'text', checkin: 'name', ledger: 'kind', notes: 'title', goals: 'name', worktask: 'text',
+    plan: 'text', checkin: 'name', ledger: 'kind', notes: 'title', goals: 'name', worktask: 'text', focus: 'minutes',
   }
   const need = requiredAtCreate[scope]
   if (need && (body[need] === undefined || body[need] === '')) {

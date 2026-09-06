@@ -35,7 +35,7 @@ const SPEED_LABEL = ['静止', '慢', '中', '快']
 const MAX_FLOAT = 3
 /** 节点类型 → 表情（调皮一点） */
 const TYPE_EMOJI: Record<TimelineType, string> = {
-  journal: '✍️', note: '💡', plan: '✅', checkin: '🔥', ledger: '💰', goal: '🎯',
+  journal: '✍️', note: '💡', plan: '✅', checkin: '🔥', ledger: '💰', goal: '🎯', focus: '🍅',
 }
 
 const ORBITS = [26, 42, 58]
@@ -58,11 +58,12 @@ interface FloatBubble {
 
 interface PairInfo { kind: 'date' | 'type'; a: THREE.Mesh; b: THREE.Mesh }
 
-export function TimelineUniverse3d({ days, filter, avatar, onBack, onOpenGame }: {
+export function TimelineUniverse3d({ days, filter, avatar, battle = true, onOpenGame }: {
   days: TimelineDay[]
   filter: TimelineType | 'all'
   avatar: string
-  onBack?: () => void
+  /** 讨伐开关（设置 → 游戏）：关闭时隐藏 ⚔️ 入口 */
+  battle?: boolean
   /** 游戏入口：跳回时光长河并展开讨伐卡 */
   onOpenGame?: () => void
 }) {
@@ -152,6 +153,38 @@ export function TimelineUniverse3d({ days, filter, avatar, onBack, onOpenGame }:
     sg.setAttribute('position', new THREE.BufferAttribute(spos, 3))
     const stars = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 1.1, sizeAttenuation: true, transparent: true, opacity: 0.4 }))
     scene.add(stars)
+
+    // ── 流星粒子：随机陨石拖尾划过（转动时的生命感）；加色混合下颜色越黑越隐形 ──
+    const METEOR_N = 7
+    const meteorGeo = new THREE.BufferGeometry()
+    const mPos = new Float32Array(METEOR_N * 6)   // 每颗：头 + 尾两个顶点
+    const mCol = new Float32Array(METEOR_N * 6)
+    meteorGeo.setAttribute('position', new THREE.BufferAttribute(mPos, 3))
+    meteorGeo.setAttribute('color', new THREE.BufferAttribute(mCol, 3))
+    const meteorMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false })
+    const meteors = new THREE.LineSegments(meteorGeo, meteorMat)
+    meteors.frustumCulled = false
+    meteors.renderOrder = 2
+    const meteorSeeds: { p: THREE.Vector3; v: THREE.Vector3; life: number; max: number; hue: THREE.Color }[] = []
+    const METEOR_HUES = [new THREE.Color(0xbfd9ff), new THREE.Color(0xffe2b0), new THREE.Color(0xcdefff)]
+    const respawnMeteor = (m: ReturnType<typeof makeMeteor>, initial: boolean) => {
+      const r = 90 + Math.random() * 190
+      const th = Math.random() * Math.PI * 2, ph = Math.acos(2 * Math.random() - 1)
+      m.p.set(r * Math.sin(ph) * Math.cos(th), r * Math.cos(ph), r * Math.sin(ph) * Math.sin(th))
+      m.v.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(34 + Math.random() * 46)
+      m.max = 1.6 + Math.random() * 2.2
+      m.life = initial ? Math.random() * m.max : m.max
+      m.hue = METEOR_HUES[Math.floor(Math.random() * METEOR_HUES.length)]
+    }
+    function makeMeteor() {
+      return { p: new THREE.Vector3(), v: new THREE.Vector3(), life: 0, max: 1, hue: METEOR_HUES[0] }
+    }
+    for (let i = 0; i < METEOR_N; i++) {
+      const m = makeMeteor()
+      respawnMeteor(m, true)
+      meteorSeeds.push(m)
+    }
+    if (!reduced) scene.add(meteors)
 
     // ── 7 中心太阳（去掉人物 + 发光暖晕） ──
     const sun = new THREE.Mesh(
@@ -478,7 +511,7 @@ export function TimelineUniverse3d({ days, filter, avatar, onBack, onOpenGame }:
     }
 
     /** 点击：命中节点 → 强调该节点关系网；命中连线 → 强调该段与两端节点 */
-    const onClick = (e: PointerEvent) => {
+    const onClick = (e: MouseEvent) => {
       const rc = box.getBoundingClientRect()
       const nx = ((e.clientX - rc.left) / rc.width) * 2 - 1
       const ny = -((e.clientY - rc.top) / rc.height) * 2 + 1
@@ -593,6 +626,25 @@ export function TimelineUniverse3d({ days, filter, avatar, onBack, onOpenGame }:
     const clock = new THREE.Clock()
     let raf = 0
     let bubbleTimer = 1500
+    const mTail = new THREE.Vector3()
+    /** 流星推进：头尾顶点 + 加色亮度包络（尾端全黑隐形） */
+    function updateMeteors(dt: number) {
+      meteorSeeds.forEach((m, i) => {
+        m.life -= dt
+        if (m.life <= 0) respawnMeteor(m, false)
+        m.p.addScaledVector(m.v, dt)
+        const k = Math.min(1, Math.max(0, 1 - m.life / m.max))
+        const b = Math.sin(k * Math.PI) * 0.9
+        mTail.copy(m.p).addScaledVector(m.v, -0.09)
+        const o = i * 6
+        mPos[o] = m.p.x; mPos[o + 1] = m.p.y; mPos[o + 2] = m.p.z
+        mPos[o + 3] = mTail.x; mPos[o + 4] = mTail.y; mPos[o + 5] = mTail.z
+        mCol[o] = m.hue.r * b; mCol[o + 1] = m.hue.g * b; mCol[o + 2] = m.hue.b * b
+        mCol[o + 3] = 0; mCol[o + 4] = 0; mCol[o + 5] = 0
+      })
+      meteorGeo.attributes.position.needsUpdate = true
+      meteorGeo.attributes.color.needsUpdate = true
+    }
     // 性能自适应：EMA 帧耗时评估，超阈值降质（先降像素比，再隔帧重绘）
     const frameStat = { ema: 0, count: 0, degrade: 0, lastPick: 0, frame: 0, errCount: 0 }
     const DPR_FULL = Math.min(devicePixelRatio, 1.5)
@@ -632,6 +684,7 @@ export function TimelineUniverse3d({ days, filter, avatar, onBack, onOpenGame }:
         controls.autoRotateSpeed = 0.35 * speedRef.current
         if (heavy) {
           writeGeo()
+          updateMeteors(dt)
           // 选中关系：相机平滑拉近到关系中心（跟随节点移动），快速定位
           if (focusNodes && focusNodes.size) {
             const c = new THREE.Vector3()
@@ -708,6 +761,7 @@ export function TimelineUniverse3d({ days, filter, avatar, onBack, onOpenGame }:
       emojiTex.forEach((tx) => tx.dispose())
       disposals.forEach((d) => d.dispose())
       sg.dispose(); (stars.material as THREE.Material).dispose()
+      meteorGeo.dispose(); meteorMat.dispose(); scene.remove(meteors)
       mergedGeo.dispose(); merged.material.dispose(); scene.remove(merged)
       radialGeo.dispose(); radialMat.dispose(); scene.remove(radial)
       hlGeo.dispose(); hlMat.dispose(); scene.remove(hl)
@@ -748,9 +802,8 @@ export function TimelineUniverse3d({ days, filter, avatar, onBack, onOpenGame }:
   return (
     <div className={`uni3d${focusMode ? ' full' : ''}`}>
       <div ref={boxRef} className="uni3d-canvas" />
-      {/* 左上：标题 + 返回 */}
+      {/* 左上：标题（返回快捷入口已按需求移除，切换世界走顶部分类导航） */}
       <div className="uni3d-mini">
-        <button className="uni3d-back" onClick={onBack} title="返回时光长河">← 时光长河</button>
         <span className="uni3d-title">{avatar}的节点宇宙 · {totalNodes} 颗节点</span>
       </div>
       {/* 右上：图例面板（避开头像区 · 可折叠 · 悬停看提示，需要时才占用画面） */}
@@ -792,8 +845,8 @@ export function TimelineUniverse3d({ days, filter, avatar, onBack, onOpenGame }:
         <button className="ub-btn" onClick={() => setFocusMode((f) => !f)}>专注模式</button>
         <button className="ub-btn" onClick={() => { const c = camRef.current; if (c) { c.camera.position.copy(c.initPos); c.controls.target.copy(c.initTarget); c.camera.updateProjectionMatrix() } }} disabled={!camRef.current} title="回到初始视角">重置视角</button>
         <button className={`ub-btn${floatOn ? ' on' : ''}`} onClick={() => setFloatOn((v) => !v)}>内容浮现 {floatOn ? '开' : '关'}</button>
-        <button className="ub-btn game" onClick={() => onOpenGame?.()} title="游戏·讨伐：回到时光长河并展开讨伐卡">⚔️ 讨伐</button>
-        <span className="ub-div" />
+        {battle && <button className="ub-btn game" onClick={() => onOpenGame?.()} title="游戏·讨伐：回到时光长河并展开讨伐卡">⚔️ 讨伐</button>}
+        {battle && <span className="ub-div" />}
         <span className="ub-label">时间游标</span>
         <span className="ub-cursor">
           <input type="range" min={0} max={cursorMax} value={cursor}

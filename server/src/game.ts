@@ -21,17 +21,18 @@ function seededInRange(seed: number, min: number, max: number): number {
   return min + (seed % (span + 1))
 }
 
-export type PlanLevel = 'P0' | 'P1' | 'P2'
+export type PlanLevel = 'P0' | 'P1' | 'P2' | 'P4'
 
 const PLAN_RANGES: Record<PlanLevel, { xp: [number, number]; gold: [number, number] }> = {
   P0: { xp: [35, 50], gold: [6, 10] },
   P1: { xp: [25, 38], gold: [4, 7] },
   P2: { xp: [8, 15], gold: [1, 3] },
+  P4: { xp: [3, 6], gold: [0, 1] },
 }
 
 /** 计划完成掉落：等级档位 × 计划 id 确定性随机 */
 export function planDrop(planId: string, level: string): { xp: number; gold: number } {
-  const tier: PlanLevel = level === 'P0' ? 'P0' : level === 'P1' ? 'P1' : 'P2'
+  const tier: PlanLevel = level === 'P0' ? 'P0' : level === 'P1' ? 'P1' : level === 'P4' ? 'P4' : 'P2'
   const r = PLAN_RANGES[tier]
   const s1 = hash32(`xp:${planId}`)
   const s2 = hash32(`gold:${planId}`)

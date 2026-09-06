@@ -8,10 +8,11 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTimer } from 'react-timer-hook'
-import { api, type NoteItem, type TimelineDay, type WorkTask } from '../api'
+import { api, type FocusLog, type NoteItem, type PlanItem, type TimelineDay, type WorkTask } from '../api'
 import { useToast } from '../components/framework/Toast'
 import { PageHeader } from '../components/framework/PageHeader'
 import { WorkTimeBanner } from '../components/framework/WorkTimeBanner'
+import { Dropdown } from '../components/framework/Dropdown'
 import { todayYMD } from '../lib/date'
 import { fetchSchedule, isWorkTime, type Schedule } from '../lib/schedule'
 import { celebrate, praise } from '../lib/celebrate'
@@ -51,6 +52,32 @@ export function DailyPage() {
   const [phase, setPhase] = useState<Phase>('focus')
   const [cycle, setCycle] = useState(0) // 本会话已完成的专注轮数
 
+  /* ── 日常 × 计划联动：番茄选定计划 → 专注执行记录（时间轴/历史可查） ── */
+  const [plans, setPlans] = useState<PlanItem[]>([])
+  const [focusPlanId, setFocusPlanId] = useState('') // 本轮番茄专注的计划（空 = 自由专注）
+  const [focusLogs, setFocusLogs] = useState<FocusLog[]>([])
+
+  const loadPlans = useCallback(() => {
+    api.get<{ items: PlanItem[] }>('/workbench/plan').then((r) => setPlans(r.items)).catch(() => {})
+  }, [])
+  useEffect(loadPlans, [loadPlans])
+
+  const loadFocusLogs = useCallback(() => {
+    api.get<{ items: FocusLog[] }>('/workbench/focus').then((r) => setFocusLogs(r.items)).catch(() => {})
+  }, [])
+  useEffect(loadFocusLogs, [loadFocusLogs])
+
+  /** 本轮专注选定的计划（可能已被删/改，找不到视为自由专注） */
+  const focusPlan = useMemo(() => plans.find((p) => p.id === focusPlanId) ?? null, [plans, focusPlanId])
+  const focusPlanRef = useRef(focusPlan)
+  useEffect(() => { focusPlanRef.current = focusPlan })
+
+  const todayFocusLogs = useMemo(
+    () => focusLogs.filter((f) => (f.date || '').slice(0, 10) === today),
+    [focusLogs, today],
+  )
+  const todayFocusMin = useMemo(() => todayFocusLogs.reduce((s, f) => s + (f.minutes || 0), 0), [todayFocusLogs])
+
   /* ── 工作时段与今日工作计划（工作时间优先展示） ── */
   const [schedule, setSchedule] = useState<Schedule | null>(null)
   const [workTasks, setWorkTasks] = useState<WorkTask[]>([])
@@ -89,10 +116,10 @@ export function DailyPage() {
   useEffect(loadNotes, [loadNotes])
 
   const todayTomatoes = useMemo(
-    () => notes.filter((n) => n.title.startsWith('🍅') && (n.date || '').slice(0, 10) === today).length,
-    [notes, today],
+    () => notes.filter((n) => n.title.startsWith('🍅') && (n.date || '').slice(0, 10) === today).length + todayFocusLogs.length,
+    [notes, today, todayFocusLogs],
   )
-  // 今日累计专注分钟（从已写入时间线的番茄记录解析）
+  // 今日累计专注分钟（灵感番茄记录解析 + 专注执行记录）
   const todayMin = useMemo(() => {
     let m = 0
     for (const n of notes) {
@@ -101,15 +128,16 @@ export function DailyPage() {
         if (mm) m += mm
       }
     }
-    return m
-  }, [notes, today])
+    return m + todayFocusMin
+  }, [notes, today, todayFocusMin])
   // 本周番茄数（周一为一周起点）
   const weekTomatoes = useMemo(() => {
     const now = new Date()
     const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7))
     const start = monday.toISOString().slice(0, 10)
     return notes.filter((n) => n.title.startsWith('🍅') && String(n.date).slice(0, 10) >= start).length
-  }, [notes])
+      + focusLogs.filter((f) => (f.date || '').slice(0, 10) >= start).length
+  }, [notes, focusLogs])
   const dailyGoal = cfg.dailyGoal
   const goalPct = dailyGoal > 0 ? Math.min(100, Math.round((todayTomatoes / dailyGoal) * 100)) : 0
 
@@ -145,17 +173,27 @@ export function DailyPage() {
   }, [timer])
 
   const recordFocus = useCallback(async (auto: boolean) => {
+    const { cfg: g } = goRef.current
     try {
-      await api.post('/workbench/notes', {
-        title: `🍅 专注 ${goRef.current.cfg.focus} 分钟`,
-        body: `${todayYMD()} 完成一轮 ${goRef.current.cfg.focus} 分钟专注（${auto ? '计时结束' : '手动收尾'}）`,
-        tags: ['习惯'],
-        date: todayYMD(),
-      })
-      loadNotes()
-      toast(`🍅 专注完成，已记入时间线 · ${praise()}`)
+      const plan = focusPlanRef.current
+      if (plan) {
+        // 选定计划 → 写专注执行记录（时间轴「专注」节点 + 日常页历史可查）
+        await api.post('/workbench/focus', { planId: plan.id, planTitle: plan.text, minutes: g.focus, date: todayYMD() })
+        loadFocusLogs()
+        toast(`🍅 专注 ${g.focus} 分钟 · 「${plan.text}」已记入执行历史`)
+      } else {
+        // 自由专注 → 维持现状写灵感笔记（标签=习惯）
+        await api.post('/workbench/notes', {
+          title: `🍅 专注 ${g.focus} 分钟`,
+          body: `${todayYMD()} 完成一轮 ${g.focus} 分钟专注（${auto ? '计时结束' : '手动收尾'}）`,
+          tags: ['习惯'],
+          date: todayYMD(),
+        })
+        loadNotes()
+        toast(`🍅 专注完成，已记入时间线 · ${praise()}`)
+      }
     } catch (e: any) { toast(e?.message || '记录失败', 'err') }
-  }, [loadNotes, toast])
+  }, [focusPlanRef, loadFocusLogs, loadNotes, toast])
 
   /** 完成当前专注轮：记录 + 庆祝 + 自动进入休息（或停止等待） */
   const completeFocus = useCallback(async (auto: boolean) => {
@@ -300,6 +338,20 @@ export function DailyPage() {
                 ))}
                 <em>{cycle % cfg.every} / {cfg.every}</em>
               </div>
+              {/* 日常 × 计划联动：选定计划，专注结束记入该计划的执行历史 */}
+              <div className="focus-plan-row">
+                <Dropdown
+                  value={focusPlanId}
+                  align="left"
+                  width={230}
+                  options={[
+                    { value: '', label: '🆓 自由专注（记灵感）' },
+                    ...plans.map((p) => ({ value: p.id, label: `${p.done ? '✅' : '📋'} ${p.text.slice(0, 20)}` })),
+                  ]}
+                  onChange={setFocusPlanId}
+                  ariaLabel="专注计划"
+                />
+              </div>
               <div className="focus-ops">
                 {phase === 'focus' ? (
                   !timer.isRunning
@@ -329,6 +381,22 @@ export function DailyPage() {
             </div>
           </div>
         </div>
+
+        {/* 专注执行历史（今日）：选定计划的番茄在这里留痕，时间轴同步可见 */}
+        {todayFocusLogs.length > 0 && (
+          <div className="card daily-focuslog">
+            <div className="sec-title">🗒 专注执行历史 · 今日 {todayFocusLogs.length} 次 / {todayFocusMin} 分钟</div>
+            <div className="focuslog-list">
+              {todayFocusLogs.map((f) => (
+                <div key={f.id} className="focuslog-row">
+                  <span className="fl-time">{(f.createdAt || '').slice(11, 16)}</span>
+                  <span className="fl-min">🍅 {f.minutes} 分钟</span>
+                  <span className="fl-plan">{f.planTitle || '自由专注'}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* 今日回顾：全宽大输入区 */}
         <div className="card daily-review">

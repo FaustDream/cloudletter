@@ -202,17 +202,30 @@ export interface RevDetail extends RevMeta {
 
 /* ========== 工作台模块（/workbench/:scope） ========== */
 
-export type WbScope = 'plan' | 'checkin' | 'ledger' | 'goals' | 'notes' | 'worktask'
+export type WbScope = 'plan' | 'checkin' | 'ledger' | 'goals' | 'notes' | 'worktask' | 'focus'
 
 export interface PlanItem {
   id: string
   text: string
-  level: 'P0' | 'P1' | 'P2'
+  level: 'P0' | 'P1' | 'P2' | 'P4'
   note: string
   done: boolean
   dueDate: string
   doneAt: string
   order: number
+  createdAt: string
+  updatedAt: string
+}
+
+/** 番茄专注执行记录（日常 × 计划联动）：选定计划专注后落一条 */
+export interface FocusLog {
+  id: string
+  /** 关联的今日计划 id，空 = 自由专注 */
+  planId: string
+  /** 计划名快照 */
+  planTitle: string
+  minutes: number
+  date: string
   createdAt: string
   updatedAt: string
 }
@@ -288,7 +301,7 @@ export type WbItem = PlanItem | CheckinItem | LedgerEntry | GoalItem | NoteItem
 
 /* ========== 双视图时间轴（/workbench/timeline） ========== */
 
-export type TimelineType = 'journal' | 'note' | 'plan' | 'checkin' | 'ledger' | 'goal'
+export type TimelineType = 'journal' | 'note' | 'plan' | 'checkin' | 'ledger' | 'goal' | 'focus'
 
 export interface TimelineNode {
   id: string

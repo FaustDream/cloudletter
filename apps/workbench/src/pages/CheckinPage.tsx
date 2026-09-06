@@ -131,7 +131,7 @@ export function CheckinPage({ withHeader = true }: { withHeader?: boolean }) {
   return (
     <>
       <PageHeader
-        title={withHeader ? '习惯打卡' : undefined}
+        title={withHeader ? '习惯' : undefined}
         subtitle={withHeader ? `今日已完成 ${todayDone} / ${items.length}` : undefined}
         actions={
           <>

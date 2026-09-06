@@ -56,6 +56,8 @@ function statOf(dash: DashboardStats | null, key: TimelineType): { value: number
       return { value: dash.totals.ledger, label: '记账', sub: `本月 收 +¥${dash.ledger.monthIncome.toFixed(0)} / 支 -¥${dash.ledger.monthExpense.toFixed(0)}` }
     case 'goal':
       return { value: dash.totals.goal, label: '目标', sub: `平均进度 ${dash.goal.pct}%`, pct: dash.goal.pct }
+    case 'focus':
+      return { value: dash.totals.focus ?? 0, label: '专注', sub: '番茄执行记录' }
   }
 }
 

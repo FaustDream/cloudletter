@@ -19,6 +19,7 @@ import { EmptyState } from '../components/framework/EmptyState'
 import { Loading } from '../components/framework/Loading'
 import { RangePicker, DEFAULT_RANGE, quickToRange, type RangeState } from '../components/timeline/RangePicker'
 import { addDays, todayYMD } from '../lib/date'
+import { readGamePrefs, type GamePrefs } from '../lib/gamePrefs'
 
 /** 四种独立世界观 */
 type View = 'fish' | 'uni' | 'city' | 'core'
@@ -80,6 +81,13 @@ export function OverviewPage() {
   const [loadErr, setLoadErr] = useState(false)
   const [dashErr, setDashErr] = useState(false)
   const [gameSignal, setGameSignal] = useState(0)
+  // 游戏化开关（设置 → 游戏）：讨伐 / 经验升级 默认关闭
+  const [game, setGame] = useState<GamePrefs>(readGamePrefs)
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => { if (e.key === 'cl_game_prefs') setGame(readGamePrefs()) }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
   const [detailNode, setDetailNode] = useState<TimelineNode | null>(null)
 
   const load = () => {
@@ -111,14 +119,13 @@ export function OverviewPage() {
     try { localStorage.setItem(RANGE_KEY, JSON.stringify(range)) } catch { /* 忽略 */ }
   }, [range])
 
-  // HUD 游戏化（按当前筛选折算）
+  // HUD 游戏化（按当前筛选折算）：等级徽标 + 升级检测（经验/金币不再展示在右上角，仅保留折算逻辑）
   const hud = useMemo(() => {
-    let xp = 0, gold = 0
+    let xp = 0
     for (const d of days) {
-      for (const it of filterNodes(d.items, filter)) { xp += it.xp || 0; gold += it.gold || 0 }
+      for (const it of filterNodes(d.items, filter)) xp += it.xp || 0
     }
-    const lv = Math.max(1, Math.floor(xp / 500) + 1)
-    return { xp, gold, lv, seg: xp % 500, segMax: 500 }
+    return { xp, lv: Math.max(1, Math.floor(xp / 500) + 1) }
   }, [days, filter])
 
   // 升级检测（真实的经验增长才播特效）
@@ -200,15 +207,10 @@ export function OverviewPage() {
         </div>
       )}
 
-      {/* HUD：独立浮窗右上（portal 到 body） */}
+      {/* HUD：独立浮窗右上（portal 到 body）。经验/金币已按需求撤下，只留头像 */}
       {createPortal(
         <div className="hud">
-          <span className="hud-pill" title={filter === 'all' ? '当前等级（沉淀折算）' : '当前筛选下的等级'}>
-            <b>{filter === 'all' ? `LV ${hud.lv}` : `筛选 LV ${hud.lv}`}</b>
-            <span className="xpbar"><i style={{ width: `${Math.min(100, (hud.seg / hud.segMax) * 100)}%` }} /></span>
-            <b>{hud.xp.toLocaleString()} XP</b></span>
-          <span className="hud-pill hud-gold" title="记账折算的金币">🪙 <b>{hud.gold.toLocaleString()}</b></span>
-          <AvatarMenu size="sm" align="right" badge={String(hud.lv)} />
+          <AvatarMenu size="sm" align="right" badge={game.xp ? String(hud.lv) : undefined} />
         </div>,
         document.body,
       )}
@@ -231,13 +233,16 @@ export function OverviewPage() {
                   <div className="sub">时间不是线，而是一条有你所有痕迹的河流 · 滚轮切换时间尺度</div>
                 </div>
               </div>
-              {days.length === 0
-                ? <EmptyState variant="hero" icon="🌱">河床上还没有卵石 · 点「⚡ 速记」丢下第一颗</EmptyState>
-                : <div className="river-scroll" onWheel={onRiverWheel}><TimelineBubbles days={days} filter={filter} split={split} onMoved={load} onOpenDetail={setDetailNode} active /></div>}
+              {/* 滚轮容器必须常驻：空态也留在河面内，否则滑到「当天」无数据时滚轮档位失灵（卡死） */}
+              <div className="river-scroll" onWheel={onRiverWheel}>
+                {days.length === 0
+                  ? <EmptyState variant="hero" icon="🌱">河床上还没有卵石 · 滚轮或上方档位切回更大的时间尺度，回到有痕迹的日子</EmptyState>
+                  : <TimelineBubbles days={days} filter={filter} split={split} onMoved={load} onOpenDetail={setDetailNode} />}
+              </div>
             </>
           )}
           {view === 'uni' && days.length > 0 && (
-            <TimelineUniverse3d days={days} filter={filter} avatar={avatar} onBack={() => setView('fish')} onOpenGame={() => { setView('fish'); setGameSignal(Date.now()) }} />
+            <TimelineUniverse3d days={days} filter={filter} avatar={avatar} battle={game.battle} onOpenGame={() => { setView('fish'); setGameSignal(Date.now()) }} />
           )}
           {view === 'uni' && days.length === 0 && (
             <EmptyState variant="hero" icon="🌌">宇宙中心尚无一星 · 数据连接尚未形成</EmptyState>
@@ -254,8 +259,8 @@ export function OverviewPage() {
       {/* 时间流节点完整详情（四个世界共用） */}
       <TimelineDetailDrawer node={detailNode} onClose={() => setDetailNode(null)} />
 
-      {levelUp && <LevelUpOverlay level={hud.lv} />}
-      <BattleCard onSlain={load} openSignal={gameSignal} />
+      {game.xp && levelUp && <LevelUpOverlay level={hud.lv} />}
+      {game.battle && <BattleCard onSlain={load} openSignal={gameSignal} />}
     </>
   )
 }
