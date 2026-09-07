@@ -25,3 +25,22 @@ export function collectTaxonomyItems(
     notes: notes.filter((n) => hitNote(n, name)).sort((a, b) => (b.date || '').localeCompare(a.date || '')),
   }
 }
+
+/** 按名解析分类 id（Notion 式下拉保存前的名→id 换算）：
+ *  命中既有分类直接返回 id；否则经 create 落库新建后返回新 id；
+ *  空名返回 ''；新建失败也返回 ''（内容按无分类保存，不阻断保存）。 */
+export async function resolveCategoryIdByName(
+  cats: Array<{ id: string; name: string }>,
+  name: string,
+  create: (name: string) => Promise<{ id: string; name: string }>,
+): Promise<string> {
+  const n = name.trim()
+  if (!n) return ''
+  const hit = cats.find((c) => c.name === n)
+  if (hit) return hit.id
+  try {
+    return (await create(n)).id
+  } catch {
+    return ''
+  }
+}

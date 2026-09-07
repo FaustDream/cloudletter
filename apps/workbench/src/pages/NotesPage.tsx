@@ -1,6 +1,8 @@
 /** 灵感笔记：5 种布局（卡片/列表/时间线/瀑布流/便利贴，页头即点即换）；
  *  点卡片 → 右侧抽屉直接编辑详情（标题/分类/标签/富文本正文），随手记=抽屉新建，
- *  默认分类/标签「灵感」，与文章共用。计划类速记已并入今日计划。 */
+ *  默认分类/标签「灵感」，与文章共用；分类/标签=Notion 式下拉（可搜索新建）。
+ *  编辑器非受控（value 仅初值、外部不回灌），杜绝受控回灌把输入重置（表现如撤销）。
+ *  计划类速记已并入今日计划。 */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api, type Category, type NoteItem, type NoteStatus } from '../api'
@@ -8,16 +10,15 @@ import { Icon } from '../components/framework/Icon'
 import { confirmDialog } from '../components/framework/Modal'
 import { Drawer } from '../components/framework/Drawer'
 import { MarkdownEditor } from '../components/editor/MarkdownEditor'
+import { TagMultiSelect } from '../components/editor/TagMultiSelect'
 import { Dropdown } from '../components/framework/Dropdown'
 import { Field } from '../components/framework/Modal'
 import { useToast } from '../components/framework/Toast'
 import { PageHeader } from '../components/framework/PageHeader'
 import { EmptyState } from '../components/framework/EmptyState'
 import { todayYMD } from '../lib/date'
+import { resolveCategoryIdByName } from '../lib/taxonomy'
 import { noteStyle, setNoteStyle, NOTE_STYLES, NOTE_STYLE_LABELS, type NoteStyle } from '../lib/layout'
-
-/** 标签输入 → 标签数组（逗号/中文逗号分隔） */
-const parseTags = (s: string) => s.split(/[,，]/).map((t) => t.trim()).filter(Boolean)
 
 /** 灵感状态字典：label=显示文案；filter 值 ''=全部 */
 const NOTE_STATUS: Array<{ value: NoteStatus | ''; label: string }> = [
@@ -38,7 +39,9 @@ export function NotesPage() {
   /** 编辑抽屉：editingNote=null 且抽屉开 = 新建随手记 */
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editingNote, setEditingNote] = useState<NoteItem | null>(null)
-  const [form, setForm] = useState<{ title: string; body: string; categoryId: string; tags: string; status: NoteStatus }>({ title: '', body: '', categoryId: '', tags: '灵感', status: 'pending' })
+  const [form, setForm] = useState<{ title: string; body: string; categoryName: string; tagNames: string[]; status: NoteStatus }>({ title: '', body: '', categoryName: '', tagNames: ['灵感'], status: 'pending' })
+  /** 全站标签池（Notion 式标签下拉候选） */
+  const [tagPool, setTagPool] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [style, setStyle] = useState<NoteStyle>(noteStyle)
   const toast = useToast()
@@ -59,12 +62,22 @@ export function NotesPage() {
   }, [])
   useEffect(load, [load])
 
-  // 分类下拉数据（新建默认取「灵感」分类）
+  // 分类/标签下拉数据（新建默认取「灵感」分类与标签）
   useEffect(() => {
     api.get<{ items: Category[] }>('/categories').then((r) => setCats(r.items)).catch(() => {})
   }, [])
+  useEffect(() => {
+    api.get<{ items: Array<{ id: string; name: string }> }>('/tags').then((r) => setTagPool(r.items.map((t) => t.name))).catch(() => {})
+  }, [])
 
-  const defaultCategoryId = useMemo(() => cats.find((c) => c.name === '灵感')?.id ?? '', [cats])
+  const defaultCategoryName = useMemo(() => cats.find((c) => c.name === '灵感')?.name ?? '', [cats])
+
+  /** Notion 式下拉「新建分类」：立即落库并同步本页候选（「分类标签」菜单可见） */
+  const createCategory = async (name: string): Promise<{ id: string; name: string }> => {
+    const r = await api.post<{ item: Category }>('/categories', { name })
+    setCats((list) => (list.some((c) => c.id === r.item.id) ? list : [...list, r.item]))
+    return r.item
+  }
 
   // 分类标签页内容抽屉深链：/notes?focus=<id> → 直接打开该笔记编辑
   useEffect(() => {
@@ -83,13 +96,13 @@ export function NotesPage() {
   )
 
   const openCreate = () => {
-    setForm({ title: '', body: '', categoryId: defaultCategoryId, tags: '灵感', status: 'pending' })
+    setForm({ title: '', body: '', categoryName: defaultCategoryName, tagNames: ['灵感'], status: 'pending' })
     setEditingNote(null)
     setDrawerOpen(true)
   }
   const openNote = (n: NoteItem) => {
     setEditingNote(n)
-    setForm({ title: n.title, body: n.body, categoryId: n.categoryId ?? '', tags: n.tags.join(', '), status: n.status })
+    setForm({ title: n.title, body: n.body, categoryName: n.category?.name ?? '', tagNames: [...n.tags], status: n.status })
     setDrawerOpen(true)
   }
 
@@ -100,8 +113,8 @@ export function NotesPage() {
       const payload = {
         title: form.title.trim() || form.body.trim().split('\n')[0].slice(0, 120),
         body: form.body,
-        categoryId: form.categoryId,
-        tags: parseTags(form.tags),
+        categoryId: await resolveCategoryIdByName(cats, form.categoryName, createCategory),
+        tags: form.tagNames,
         status: form.status,
       }
       if (editingNote) {
@@ -208,12 +221,15 @@ export function NotesPage() {
             <input type="text" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="一句话标题" autoFocus />
           </Field>
           <div className="grid g-3">
-            <Field label="分类（与文章共用）">
-              <Dropdown
-                value={form.categoryId}
-                align="left"
-                options={[{ value: '', label: '无分类' }, ...cats.map((c) => ({ value: c.id, label: c.name }))]}
-                onChange={(v) => setForm((f) => ({ ...f, categoryId: v }))}
+            <Field label="分类（可搜索新建）">
+              <TagMultiSelect
+                multiple={false}
+                ariaLabel="分类（与文章共用，可搜索新建）"
+                placeholder="选择或新建分类…"
+                tags={form.categoryName ? [form.categoryName] : []}
+                suggestions={cats.map((c) => c.name)}
+                onCreate={createCategory}
+                onChange={(names) => setForm((f) => ({ ...f, categoryName: names[0] ?? '' }))}
               />
             </Field>
             <Field label="状态">
@@ -224,12 +240,18 @@ export function NotesPage() {
                 onChange={(v) => setForm((f) => ({ ...f, status: v as NoteStatus }))}
               />
             </Field>
-            <Field label="标签（逗号分隔，与文章共用）">
-              <input type="text" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="如：灵感，学习" />
+            <Field label="标签（可搜索新建）">
+              <TagMultiSelect
+                ariaLabel="标签（与文章共用，可搜索新建）"
+                placeholder="添加标签…"
+                tags={form.tagNames}
+                suggestions={tagPool}
+                onChange={(tagNames) => setForm((f) => ({ ...f, tagNames }))}
+              />
             </Field>
           </div>
           <Field label="内容">
-            <MarkdownEditor value={form.body} onChange={(md) => setForm((f) => ({ ...f, body: md }))} minHeight={380} />
+            <MarkdownEditor value={form.body} onChange={(md) => setForm((f) => ({ ...f, body: md }))} minHeight={120} uncontrolled />
           </Field>
         </Drawer>
       )}

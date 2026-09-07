@@ -8,6 +8,7 @@ import { useToast } from '../framework/Toast'
 import { Dropdown } from '../framework/Dropdown'
 import { MarkdownEditor } from '../editor/MarkdownEditor'
 import { TagMultiSelect } from '../editor/TagMultiSelect'
+import { resolveCategoryIdByName } from '../../lib/taxonomy'
 import { readGamePrefs } from '../../lib/gamePrefs'
 
 /** 速记模式：灵感 | 计划 */
@@ -201,19 +202,12 @@ export function QuickNoteModal({ onSaved }: { onSaved?: () => void }) {
   }, [open, cats.length])
 
   /** 保存时解析分类 id：优先按名匹配已有分类，否则新建（下拉内「新建」已落库的可直接命中） */
-  const resolveCategoryId = async (): Promise<string> => {
-    const name = categoryName.trim()
-    if (!name) return ''
-    const hit = cats.find((c) => c.name === name)
-    if (hit) return hit.id
-    try {
-      const r = await api.post<{ item: Category }>('/categories', { name })
+  const resolveCategoryId = (name: string): Promise<string> =>
+    resolveCategoryIdByName(cats, name, async (n) => {
+      const r = await api.post<{ item: Category }>('/categories', { name: n })
       setCats((list) => [...list, r.item])
-      return r.item.id
-    } catch {
-      return ''
-    }
-  }
+      return r.item
+    })
 
   const close = () => {
     setOpen(false); setText(''); setTagNames(['灵感']); setCategoryName(''); setPlanTitle(''); setPlanNote(''); setLevel('P1'); setDueDate('')
@@ -225,7 +219,7 @@ export function QuickNoteModal({ onSaved }: { onSaved?: () => void }) {
     await api.post('/workbench/notes', {
       title: body.split('\n')[0].slice(0, 120) || '（无标题）',
       body,
-      categoryId: await resolveCategoryId(),
+      categoryId: await resolveCategoryId(categoryName),
       tags: tagNames,
       date: new Date().toISOString().slice(0, 10),
     })

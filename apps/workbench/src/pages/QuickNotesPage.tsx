@@ -2,6 +2,8 @@
  * 速记汇总：集中查看全部速记灵感（计划类速记已并入今日计划，在「目标 → 今日计划」管理）。
  * 列表展示标题、内容预览、创建时间与共用分类/标签；
  * 点击 → 详情侧栏（全文渲染）→ 编辑弹窗（文章编辑器内核）→ 保存。
+ * 编辑弹窗：分类/标签=Notion 式下拉（可搜索新建）；编辑器非受控（value 仅初值、
+ * 外部不回灌），杜绝受控回灌把输入重置（表现如撤销）。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, type Category, type NoteItem } from '../api'
@@ -10,10 +12,11 @@ import { Modal, Field, confirmDialog } from '../components/framework/Modal'
 import { Drawer } from '../components/framework/Drawer'
 import { MarkdownView } from '../components/framework/MarkdownView'
 import { MarkdownEditor } from '../components/editor/MarkdownEditor'
-import { Dropdown } from '../components/framework/Dropdown'
+import { TagMultiSelect } from '../components/editor/TagMultiSelect'
 import { useToast } from '../components/framework/Toast'
 import { PageHeader } from '../components/framework/PageHeader'
 import { EmptyState } from '../components/framework/EmptyState'
+import { resolveCategoryIdByName } from '../lib/taxonomy'
 
 export function QuickNotesPage() {
   const [items, setItems] = useState<NoteItem[]>([])
@@ -23,7 +26,9 @@ export function QuickNotesPage() {
   /** 详情：note 全量展示；编辑：编辑态（detail 为空时也可从新建进入） */
   const [detail, setDetail] = useState<NoteItem | null>(null)
   const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState<{ title: string; body: string; categoryId: string; tags: string }>({ title: '', body: '', categoryId: '', tags: '灵感' })
+  const [form, setForm] = useState<{ title: string; body: string; categoryName: string; tagNames: string[] }>({ title: '', body: '', categoryName: '', tagNames: ['灵感'] })
+  /** 全站标签池（Notion 式标签下拉候选） */
+  const [tagPool, setTagPool] = useState<string[]>([])
   const [creating, setCreating] = useState(false)
   const [saving, setSaving] = useState(false)
   const toast = useToast()
@@ -40,8 +45,18 @@ export function QuickNotesPage() {
   useEffect(() => {
     api.get<{ items: Category[] }>('/categories').then((r) => setCats(r.items)).catch(() => {})
   }, [])
+  useEffect(() => {
+    api.get<{ items: Array<{ id: string; name: string }> }>('/tags').then((r) => setTagPool(r.items.map((t) => t.name))).catch(() => {})
+  }, [])
 
-  const defaultCategoryId = useMemo(() => cats.find((c) => c.name === '灵感')?.id ?? '', [cats])
+  const defaultCategoryName = useMemo(() => cats.find((c) => c.name === '灵感')?.name ?? '', [cats])
+
+  /** Notion 式下拉「新建分类」：立即落库并同步本页候选（「分类标签」菜单可见） */
+  const createCategory = async (name: string): Promise<{ id: string; name: string }> => {
+    const r = await api.post<{ item: Category }>('/categories', { name })
+    setCats((list) => (list.some((c) => c.id === r.item.id) ? list : [...list, r.item]))
+    return r.item
+  }
 
   const sorted = useMemo(
     () => [...items].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))),
@@ -56,16 +71,14 @@ export function QuickNotesPage() {
     })
   }, [sorted, kw])
 
-  const parseTags = () => form.tags.split(/[,，]/).map((s) => s.trim()).filter(Boolean)
-
   const openCreate = () => {
-    setForm({ title: '', body: '', categoryId: defaultCategoryId, tags: '灵感' })
+    setForm({ title: '', body: '', categoryName: defaultCategoryName, tagNames: ['灵感'] })
     setCreating(true)
     setEditing(true)
   }
 
   const openEdit = (n: NoteItem) => {
-    setForm({ title: n.title, body: n.body, categoryId: n.categoryId ?? '', tags: n.tags.join(', ') })
+    setForm({ title: n.title, body: n.body, categoryName: n.category?.name ?? '', tagNames: [...n.tags] })
     setDetail(n)
     setEditing(true)
   }
@@ -77,8 +90,8 @@ export function QuickNotesPage() {
       const payload = {
         title: form.title.trim() || form.body.trim().split('\n')[0].slice(0, 120),
         body: form.body,
-        categoryId: form.categoryId,
-        tags: parseTags(),
+        categoryId: await resolveCategoryIdByName(cats, form.categoryName, createCategory),
+        tags: form.tagNames,
       }
       if (creating) {
         await api.post('/workbench/notes', { ...payload, date: new Date().toISOString().slice(0, 10) })
@@ -191,20 +204,29 @@ export function QuickNotesPage() {
             <input type="text" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="一句话标题" autoFocus />
           </Field>
           <div className="grid g-2">
-            <Field label="分类（与文章共用）">
-              <Dropdown
-                value={form.categoryId}
-                align="left"
-                options={[{ value: '', label: '无分类' }, ...cats.map((c) => ({ value: c.id, label: c.name }))]}
-                onChange={(v) => setForm((f) => ({ ...f, categoryId: v }))}
+            <Field label="分类（可搜索新建）">
+              <TagMultiSelect
+                multiple={false}
+                ariaLabel="分类（与文章共用，可搜索新建）"
+                placeholder="选择或新建分类…"
+                tags={form.categoryName ? [form.categoryName] : []}
+                suggestions={cats.map((c) => c.name)}
+                onCreate={createCategory}
+                onChange={(names) => setForm((f) => ({ ...f, categoryName: names[0] ?? '' }))}
               />
             </Field>
-            <Field label="标签（逗号分隔，与文章共用）">
-              <input type="text" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="如：灵感，学习" />
+            <Field label="标签（可搜索新建）">
+              <TagMultiSelect
+                ariaLabel="标签（与文章共用，可搜索新建）"
+                placeholder="添加标签…"
+                tags={form.tagNames}
+                suggestions={tagPool}
+                onChange={(tagNames) => setForm((f) => ({ ...f, tagNames }))}
+              />
             </Field>
           </div>
           <Field label="内容">
-            <MarkdownEditor value={form.body} onChange={(md) => setForm((f) => ({ ...f, body: md }))} minHeight={260} />
+            <MarkdownEditor value={form.body} onChange={(md) => setForm((f) => ({ ...f, body: md }))} minHeight={120} uncontrolled />
           </Field>
         </Modal>
       )}

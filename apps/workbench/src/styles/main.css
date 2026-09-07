@@ -2265,6 +2265,10 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 /* 正文区底部 64px 内边距是给文章编辑页留的，弹窗里会形成大块空地，收紧 */
 .nmodal .mded .bn-editor { padding-bottom: 4px; }
 .nmodal .nactions { margin-top: 0; padding-top: 2px; }
+/* 灵感抽屉/速记汇总弹窗同款高度自适应：正文底边贴合保存按钮上方分割线，随内容增长、无大片空白
+   （全局 .ed-blocknote .bn-container 有 min-height:300px 强撑，一次性编辑表单内压平） */
+.drawer .mded .bn-container, .modal .mded .bn-container { min-height: 120px; }
+.drawer .mded .bn-editor, .modal .mded .bn-editor { padding-bottom: 12px; }
 .fab { position: fixed; left: 26px; bottom: 26px; z-index: 40; display: flex; align-items: center; gap: 8px;
   background: linear-gradient(135deg, var(--accent), var(--accent-deep)); color: var(--on-accent);
   border: none; cursor: grab; touch-action: none; user-select: none;
