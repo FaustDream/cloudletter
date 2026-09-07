@@ -2261,6 +2261,9 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 .nmodal .mded { flex: 0 1 auto; min-height: 0; border: none; border-bottom: 1px solid var(--border);
   border-radius: 0; background: transparent; overflow: visible; }
 .nmodal .mded .ed-blocknote { min-height: 120px; }
+.nmodal .mded .bn-container { min-height: 120px; }
+/* 正文区底部 64px 内边距是给文章编辑页留的，弹窗里会形成大块空地，收紧 */
+.nmodal .mded .bn-editor { padding-bottom: 4px; }
 .nmodal .nactions { margin-top: 0; padding-top: 2px; }
 .fab { position: fixed; left: 26px; bottom: 26px; z-index: 40; display: flex; align-items: center; gap: 8px;
   background: linear-gradient(135deg, var(--accent), var(--accent-deep)); color: var(--on-accent);
