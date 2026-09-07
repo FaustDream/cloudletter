@@ -18,10 +18,12 @@ function EditorSkeleton() {
   )
 }
 
-export function MarkdownEditor({ value, onChange, minHeight = 220 }: {
+export function MarkdownEditor({ value, onChange, minHeight = 220, uncontrolled = false }: {
   value: string
   onChange: (markdown: string) => void
   minHeight?: number
+  /** 非受控模式：value 仅作初值，外部值变更不回灌（随手记等一次性编辑场景） */
+  uncontrolled?: boolean
 }) {
   return (
     <div className="mded" style={{ ['--mded-h' as string]: `${minHeight}px` }}>
@@ -29,6 +31,7 @@ export function MarkdownEditor({ value, onChange, minHeight = 220 }: {
         <BlockNoteEditor
           value={value}
           onChange={onChange}
+          uncontrolled={uncontrolled}
           onPasteImage={async (file) => { const r = await uploadImage(file); return r?.url ?? null }}
         />
       </Suspense>

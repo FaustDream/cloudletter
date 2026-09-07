@@ -7,6 +7,7 @@ import { api, type Category, type NoteType } from '../../api'
 import { useToast } from '../framework/Toast'
 import { Dropdown } from '../framework/Dropdown'
 import { MarkdownEditor } from '../editor/MarkdownEditor'
+import { TagMultiSelect } from '../editor/TagMultiSelect'
 import { readGamePrefs } from '../../lib/gamePrefs'
 
 /** 速记模式：灵感 | 计划 */
@@ -42,10 +43,11 @@ const LEVELS = [
 export function QuickNoteModal({ onSaved }: { onSaved?: () => void }) {
   const [open, setOpen] = useState(false)
   const [type, setType] = useState<NoteType>('inspiration')
-  // 灵感表单
+  // 灵感表单（非受控编辑器：value 仅初值，编辑内容不回灌，杜绝“打字变撤销/丢字”）
   const [text, setText] = useState('')
-  const [tags, setTags] = useState('灵感')
-  const [categoryId, setCategoryId] = useState('')
+  const [tagNames, setTagNames] = useState<string[]>(['灵感'])
+  const [categoryName, setCategoryName] = useState<string>('')
+  const [tagPool, setTagPool] = useState<string[]>([])
   const [cats, setCats] = useState<Category[]>([])
   // 计划表单（直接进今日计划）
   const [planTitle, setPlanTitle] = useState('')
@@ -185,22 +187,37 @@ export function QuickNoteModal({ onSaved }: { onSaved?: () => void }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // 打开时补齐分类下拉（灵感笔记默认「灵感」分类）
+  // 打开时补齐分类/标签下拉数据（灵感笔记默认「灵感」分类与标签）
   useEffect(() => {
     if (!open || cats.length > 0) return
-    api.get<{ items: Category[] }>('/categories')
-      .then((r) => {
-        setCats(r.items)
-        setCategoryId((v) => v || r.items.find((c) => c.name === '灵感')?.id || '')
-      })
-      .catch(() => {})
+    api.get<{ items: Category[] }>('/categories').then((r) => {
+      setCats(r.items)
+      const def = r.items.find((c) => c.name === '灵感')
+      setCategoryName((v) => v || (def?.name ?? ''))
+    }).catch(() => {})
+    api.get<{ items: Array<{ id: string; name: string }> }>('/tags').then((r) => {
+      setTagPool((pool) => (pool.length ? pool : r.items.map((t) => t.name)))
+    }).catch(() => {})
   }, [open, cats.length])
 
-  const close = () => {
-    setOpen(false); setText(''); setTags('灵感'); setPlanTitle(''); setPlanNote(''); setLevel('P1'); setDueDate('')
+  /** 保存时解析分类 id：优先按名匹配已有分类，否则新建（下拉内「新建」已落库的可直接命中） */
+  const resolveCategoryId = async (): Promise<string> => {
+    const name = categoryName.trim()
+    if (!name) return ''
+    const hit = cats.find((c) => c.name === name)
+    if (hit) return hit.id
+    try {
+      const r = await api.post<{ item: Category }>('/categories', { name })
+      setCats((list) => [...list, r.item])
+      return r.item.id
+    } catch {
+      return ''
+    }
   }
 
-  const parseTags = () => tags.split(/[,，]/).map((s) => s.trim()).filter(Boolean)
+  const close = () => {
+    setOpen(false); setText(''); setTagNames(['灵感']); setCategoryName(''); setPlanTitle(''); setPlanNote(''); setLevel('P1'); setDueDate('')
+  }
 
   const saveInspiration = async () => {
     const body = text.trim()
@@ -208,8 +225,8 @@ export function QuickNoteModal({ onSaved }: { onSaved?: () => void }) {
     await api.post('/workbench/notes', {
       title: body.split('\n')[0].slice(0, 120) || '（无标题）',
       body,
-      categoryId,
-      tags: parseTags(),
+      categoryId: await resolveCategoryId(),
+      tags: tagNames,
       date: new Date().toISOString().slice(0, 10),
     })
     toast(readGamePrefs().xp ? '已存入灵感笔记 · +10 XP' : '已存入灵感笔记')
@@ -270,16 +287,24 @@ export function QuickNoteModal({ onSaved }: { onSaved?: () => void }) {
             </div>
             {type === 'inspiration' ? (
               <>
-                <MarkdownEditor value={text} onChange={setText} minHeight={150} />
+                <MarkdownEditor value={text} onChange={setText} minHeight={120} uncontrolled />
                 <div className="grid g-2 qn-row">
-                  <Dropdown
-                    value={categoryId}
-                    align="left"
-                    options={[{ value: '', label: '无分类' }, ...cats.map((c) => ({ value: c.id, label: c.name }))]}
-                    onChange={setCategoryId}
-                    ariaLabel="分类"
+                  <TagMultiSelect
+                    multiple={false}
+                    ariaLabel="分类（与文章共用，可新建）"
+                    placeholder="选择分类…"
+                    tags={categoryName ? [categoryName] : []}
+                    suggestions={cats.map((c) => c.name)}
+                    onChange={(next) => setCategoryName(next[0] ?? '')}
                   />
-                  <input type="text" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="标签，逗号分隔（默认灵感）" />
+                  <TagMultiSelect
+                    multiple
+                    ariaLabel="标签（与文章共用，可新建）"
+                    placeholder="添加标签…"
+                    tags={tagNames}
+                    suggestions={tagPool}
+                    onChange={setTagNames}
+                  />
                 </div>
               </>
             ) : (

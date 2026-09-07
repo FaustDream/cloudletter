@@ -30,6 +30,9 @@ import { EditorToolbar } from './EditorToolbar'
 import { matchWikilinkAtOffset } from '../../lib/wikilinkText'
 import { applyDocTransform, createWikilink } from './docActions'
 import { autoFormatMarkdown, recognizeWikilinksInMarkdown } from '../../lib/docTransforms'
+import {
+  collectListStyles, applyListStylesToBlocks, injectListStyleComments, extractListStyleComments,
+} from '../../lib/listStyles'
 import '@blocknote/mantine/style.css'
 
 const EMPTY_BLOCKS: PartialBlock[] = [{ type: 'paragraph' }]
@@ -69,6 +72,7 @@ export function BlockNoteEditor({
   onOpenWikilink,
   currentTitle,
   notify,
+  uncontrolled = false,
 }: {
   value: string
   onChange: (markdown: string) => void
@@ -82,6 +86,9 @@ export function BlockNoteEditor({
   currentTitle?: string
   /** 轻提示（编辑页 toast） */
   notify?: (message: string, kind?: 'ok' | 'err') => void
+  /** 非受控模式：value 只作首屏初值，外部值变更不再回灌（弹窗随手记等一次性编辑场景），
+   *  彻底杜绝「回灌 replaceBlocks → 内容被重置」类撤销/丢字问题 */
+  uncontrolled?: boolean
 }) {
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
@@ -116,12 +123,15 @@ export function BlockNoteEditor({
   })
 
   /** 外部回灌：markdown → blocks（期间抑制内容变更回抛，避免反馈环导致选区/光标异常甚至崩溃）。
-   *  keepOnFail=true（外部值变更路径）：解析失败时保持现有内容不清空——清空正文比内容暂旧更糟。 */
+   *   keepOnFail=true（外部值变更路径）：解析失败时保持现有内容不清空——清空正文比内容暂旧更糟。
+   *   入口先剥离列表样式注释（lib/listStyles），解析后回写块 props，保证样式跨 markdown 往返存活。 */
   const replaceFromMarkdown = async (md: string, keepOnFail = false): Promise<boolean> => {
+    const { md: cleanMd, styles } = extractListStyleComments(md)
     let blocks: any[] = []
-    if (md.trim()) {
+    if (cleanMd.trim()) {
       try {
-        blocks = normalizeCodeLanguages(await editor.tryParseMarkdownToBlocks(md))
+        blocks = normalizeCodeLanguages(await editor.tryParseMarkdownToBlocks(cleanMd))
+        applyListStylesToBlocks(blocks, styles)
       } catch (e) {
         console.error('[BlockNote] markdown 解析失败', e)
         if (keepOnFail) return false
@@ -156,7 +166,9 @@ export function BlockNoteEditor({
             // onEditorContentChange 可能被回灌 Suppress 段再次触发，此刻仍处于抑制窗口则跳过
             if (suppressEmit.current) return
             const md = await editor.blocksToMarkdownLossy(editor.document)
-            if (md === lastEmitted.current) return
+            // 列表标记样式：收集非默认 listStyle → 以 HTML 注释注入 markdown（真相源持久化）
+            const out = injectListStyleComments(md, collectListStyles(editor.document as unknown as Array<{ type: string; props?: Record<string, unknown>; children?: unknown }>))
+            if (out === lastEmitted.current) return
             // 竞态防御：文档仍有文字却序列化出空串（双击选词等场景偶发）——跳过本次上抛，
             // 否则父组件值变空会触发空文档回灌，整篇正文被清空且撤销无效（2026-09-05 实测复现）
             const docHasText = editor.document.some((b) => Array.isArray(b.content) && b.content.some((c) => {
@@ -167,8 +179,8 @@ export function BlockNoteEditor({
               console.warn('[BlockNote] 序列化异常得到空串，已跳过本次同步以防正文被清空')
               return
             }
-            lastEmitted.current = md
-            onChangeRef.current(md)
+            lastEmitted.current = out
+            onChangeRef.current(out)
           } catch (e) {
             console.error('[BlockNote] markdown 序列化失败', e)
           }
@@ -184,9 +196,10 @@ export function BlockNoteEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor])
 
-  // 外部值变更（版本恢复 / 载入文章）：仅当确实不同于最近上抛值时重新解析回灌
+  // 外部值变更（版本恢复 / 载入文章）：仅当确实不同于最近上抛值时重新解析回灌；
+  // 非受控模式（随手记弹窗）关闭该通道，编辑期间外部永不强推内容
   useEffect(() => {
-    if (!ready) return
+    if (!ready || uncontrolled) return
     if (value === lastEmitted.current) return
     let cancelled = false
     void (async () => {

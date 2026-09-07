@@ -14,6 +14,7 @@ import {
   type CodeBlockPreview,
 } from '@blocknote/core'
 import katex from 'katex'
+import { isLocalVideoUrl, resolveVideoEmbed } from '../../lib/embedUrl'
 
 type Editor = any
 type Block = any
@@ -159,16 +160,7 @@ function CalloutView({ block, editor, contentRef }: {
   )
 }
 
-/* ═══════════ 嵌入网页（B站 / YouTube / 链接卡） ═══════════ */
-
-/** 解析 B站 / YouTube 视频地址 → 内嵌播放器 URL；其余返回 null（渲染链接卡） */
-export function resolveVideoEmbed(url: string): { src: string; host: 'youtube' | 'bilibili' } | null {
-  const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{6,})/)
-  if (yt) return { src: `https://www.youtube.com/embed/${yt[1]}`, host: 'youtube' }
-  const bili = url.match(/bilibili\.com\/video\/(BV[\w]+)/)
-  if (bili) return { src: `https://player.bilibili.com/player.html?bvid=${bili[1]}&autoplay=0`, host: 'bilibili' }
-  return null
-}
+/* ═══════════ 嵌入网页（在线视频 / 链接卡 / 本地视频） ═══════════ */
 
 const EmbedBlock = createReactBlockSpec(
   {
@@ -184,11 +176,15 @@ const EmbedBlock = createReactBlockSpec(
   },
 )
 
+const EMBED_HOST_LABEL: Record<string, string> = {
+  youtube: 'YouTube 视频', bilibili: 'B站视频', youku: '优酷视频', qqvideo: '腾讯视频', local: '本地视频',
+}
+
 function EmbedView({ block, editor }: { block: Block; editor: Editor }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const url: string = block.props.url
-  const embed = resolveVideoEmbed(url)
+  const embed = url ? resolveVideoEmbed(url) : null
   let host = ''
   try { host = url ? new URL(url).hostname : '' } catch { host = '' }
 
@@ -199,7 +195,7 @@ function EmbedView({ block, editor }: { block: Block; editor: Editor }) {
         <input
           autoFocus
           value={draft}
-          placeholder="粘贴 B站 / YouTube 或任意网页链接…"
+          placeholder="粘贴视频/B站/YouTube/网页链接，或本地上传的视频地址…"
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && draft.trim()) {
@@ -218,25 +214,46 @@ function EmbedView({ block, editor }: { block: Block; editor: Editor }) {
     )
   }
 
-  return (
-    <div className="cl-embed">
-      {embed ? (
+  // 本地视频（自建图床）：<video controls> 直接播放
+  if (isLocalVideoUrl(url)) {
+    return (
+      <div className="cl-embed cl-embed-local">
+        <video className="cl-embed-player" src={url} controls preload="metadata" playsInline />
+        <div className="cl-embed-ops">
+          <button onClick={() => { setDraft(url); setEditing(true) }}>更换链接</button>
+        </div>
+      </div>
+    )
+  }
+
+  // 在线视频：iframe 内嵌播放器直接播放
+  if (embed) {
+    return (
+      <div className="cl-embed">
         <iframe
           className="cl-embed-player"
           src={embed.src}
-          title={embed.host === 'bilibili' ? 'B站视频' : 'YouTube 视频'}
+          title={EMBED_HOST_LABEL[embed.host] ?? '嵌入视频'}
           allowFullScreen
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
         />
-      ) : (
-        <a className="cl-embed-card" href={url} target="_blank" rel="noreferrer noopener">
-          <span className="cl-embed-badge">链接</span>
-          <span className="cl-embed-info">
-            <b>{host || url}</b>
-            <em>{url}</em>
-          </span>
-        </a>
-      )}
+        <div className="cl-embed-ops">
+          <button onClick={() => { setDraft(url); setEditing(true) }}>更换链接</button>
+        </div>
+      </div>
+    )
+  }
+
+  // 其余站点：链接卡片
+  return (
+    <div className="cl-embed">
+      <a className="cl-embed-card" href={url} target="_blank" rel="noreferrer noopener">
+        <span className="cl-embed-badge">链接</span>
+        <span className="cl-embed-info">
+          <b>{host || url}</b>
+          <em>{url}</em>
+        </span>
+      </a>
       <div className="cl-embed-ops">
         <button onClick={() => { setDraft(url); setEditing(true) }}>更换链接</button>
       </div>
@@ -246,9 +263,22 @@ function EmbedView({ block, editor }: { block: Block; editor: Editor }) {
 
 /* ═══════════ Schema：默认块 + 增强代码块 + 自定义块 ═══════════ */
 
+/**
+ * 列表标记样式 prop：非默认值会渲染为 .bn-block-content 的 data-list-style 属性（CSS 生效），
+ * markdown 真相源经 BlockNoteEditor 的注释桥（lib/listStyles）持久化
+ */
+function patchListSchemas() {
+  const stock = { ...defaultBlockSpecs } as Record<string, { config?: { propSchema?: Record<string, unknown> } }>
+  for (const [type, def] of [['bulletListItem', 'disc'], ['numberedListItem', 'decimal']] as const) {
+    const spec = stock[type]
+    if (spec?.config?.propSchema) spec.config.propSchema = { ...spec.config.propSchema, listStyle: { default: def } }
+  }
+  return stock as typeof defaultBlockSpecs
+}
+
 export const editorSchema = BlockNoteSchema.create({
   blockSpecs: {
-    ...defaultBlockSpecs,
+    ...patchListSchemas(),
     codeBlock: createCodeBlockSpec({ defaultLanguage: 'text', supportedLanguages: SUPPORTED_LANGUAGES }),
     callout: CalloutBlock(),
     embed: EmbedBlock(),

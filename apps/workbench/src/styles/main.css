@@ -2256,6 +2256,12 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 .qn-row { margin-top: 2px; }
 .nmodal .grid.g-2 { align-items: center; }
 .nmodal input[type='text'], .nmodal input[type='date'] { min-height: 38px; }
+/* 高度自适应：内容随文字增长，内容区底边即保存按钮上方分割线，无大片空白 */
+.nmodal { gap: 10px; }
+.nmodal .mded { flex: 0 1 auto; min-height: 0; border: none; border-bottom: 1px solid var(--border);
+  border-radius: 0; background: transparent; overflow: visible; }
+.nmodal .mded .ed-blocknote { min-height: 120px; }
+.nmodal .nactions { margin-top: 0; padding-top: 2px; }
 .fab { position: fixed; left: 26px; bottom: 26px; z-index: 40; display: flex; align-items: center; gap: 8px;
   background: linear-gradient(135deg, var(--accent), var(--accent-deep)); color: var(--on-accent);
   border: none; cursor: grab; touch-action: none; user-select: none;
@@ -2778,6 +2784,53 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 .ed-tb-swatch { width: 16px; height: 16px; border-radius: 999px; border: 1px solid var(--border); cursor: pointer; }
 .ed-tb-swatch.on { outline: 2px solid var(--accent); outline-offset: 1px; }
 .ed-tb-wl { font-size: 11px; letter-spacing: -.02em; }
+/* ── 工具栏重制扩展：弹层/标题下拉/输入弹层/列表标记样式 ── */
+.ed-tb-btn:disabled { opacity: .38; cursor: not-allowed; }
+.ed-tb-btn svg { display: block; }
+.tb-b { font-weight: 900; font-family: Georgia, serif; }
+.tb-i { font-style: italic; font-family: Georgia, serif; }
+.tb-u { text-decoration: underline; text-underline-offset: 2px; }
+.tb-s { text-decoration: line-through; }
+.ed-tb-popwrap { position: relative; }
+.ed-tb-pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 41; background: var(--surface-solid);
+  border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-overlay); padding: 6px;
+  display: flex; flex-direction: column; gap: 2px; min-width: 168px; }
+.ed-tb-pop .ed-tb-color-mask { z-index: 40; }
+.ed-tb-hd-label { font-size: 11.5px; color: var(--text-tertiary); padding: 0 2px 0 1px; white-space: nowrap; }
+.ed-tb-hd-menu { min-width: 132px; }
+.ed-tb-hd-item { display: flex; align-items: center; gap: 8px; border: none; background: transparent; color: var(--text-secondary);
+  font-size: 12.5px; padding: 5px 8px; border-radius: 7px; cursor: pointer; text-align: left; }
+.ed-tb-hd-item:hover { background: var(--accent-muted); color: var(--accent); }
+.ed-tb-hd-item.on { background: var(--accent-muted); color: var(--accent); font-weight: 700; }
+.ed-tb-input-pop { gap: 6px; min-width: 260px; }
+.ed-tb-input-pop input { background: var(--surface-nested); border: 1px solid var(--border-input); color: var(--text);
+  border-radius: 8px; height: 30px; padding: 0 9px; font-size: 12.5px; outline: none; width: 100%; box-sizing: border-box; }
+.ed-tb-input-pop input:focus { border-color: var(--accent); }
+.ed-tb-input-line { display: flex; gap: 6px; }
+.ed-tb-input-line input { flex: 1; }
+.ed-tb-pop-btn { border: none; background: var(--accent); color: var(--on-accent); border-radius: 8px; padding: 0 12px;
+  font-size: 12.5px; font-weight: 600; cursor: pointer; flex: 0 0 auto; }
+.ed-tb-pop-btn:disabled { opacity: .45; cursor: not-allowed; }
+.ed-tb-wide { display: flex; align-items: center; gap: 6px; border: none; background: var(--accent-muted); color: var(--accent);
+  border-radius: 8px; padding: 7px 10px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+/* 列表标记样式：下拉里的样式预览（真实 marker 形态） */
+.ed-tb-listmark { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 1px solid currentColor; margin-left: 2px; }
+.ed-tb-listmark[data-marker='disc'] { background: currentColor; }
+.ed-tb-listmark[data-marker='square'] { border-radius: 2px; background: currentColor; }
+.ed-tb-omark { display: inline-block; min-width: 16px; text-align: center; font-family: var(--mono); font-size: 11px;
+  border-bottom: 1px solid currentColor; margin-left: 2px; }
+/* 列表标记样式生效：块 props 非默认 → .bn-block-content 带 data-list-style，由 CSS 决定 ul/ol 标记形态 */
+.bn-block-content[data-content-type='bulletListItem'][data-list-style='circle'] > ul { list-style-type: circle; }
+.bn-block-content[data-content-type='bulletListItem'][data-list-style='square'] > ul { list-style-type: square; }
+.bn-block-content[data-content-type='numberedListItem'][data-list-style='lower-alpha'] > ol { list-style-type: lower-alpha; }
+.bn-block-content[data-content-type='numberedListItem'][data-list-style='upper-alpha'] > ol { list-style-type: upper-alpha; }
+.bn-block-content[data-content-type='numberedListItem'][data-list-style='lower-roman'] > ol { list-style-type: lower-roman; }
+.bn-block-content[data-content-type='numberedListItem'][data-list-style='upper-roman'] > ol { list-style-type: upper-roman; }
+/* 折叠列表（toggleListItem）：块内自带折叠箭头，仅确保常态可见 */
+.bn-block-content[data-content-type='toggleListItem'] .bn-toggle { cursor: pointer; }
+/* 嵌入视频（本地 / 在线）：统一播放器高度 */
+.cl-embed-player { width: 100%; }
+.cl-embed-local video.cl-embed-player { max-height: 420px; background: #000; border-radius: 10px; }
 .ed-blocknote .bn-container { min-height: 300px; border: none; background: transparent; }
 .ed-blocknote .bn-editor { padding: 4px 8px 64px; background: transparent;
   font-family: var(--font-sans, inherit); color: var(--text); }
