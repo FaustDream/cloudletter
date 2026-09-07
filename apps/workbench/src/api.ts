@@ -270,11 +270,16 @@ export interface GoalItem {
 /** 速记弹窗的记录模式（仅 UI 概念）：灵感=灵感笔记；计划=直接进今日计划 */
 export type NoteType = 'inspiration' | 'plan'
 
+/** 灵感笔记状态：pending=待使用 / used=已使用 / expired=已过期 */
+export type NoteStatus = 'pending' | 'used' | 'expired'
+
 export interface NoteItem {
   id: string
   title: string
   body: string
   date: string
+  /** 灵感状态：待使用（默认）/ 已使用 / 已过期 */
+  status: NoteStatus
   /** 与文章共用的分类（null = 未分类） */
   categoryId: string | null
   category?: { id: string; name: string; slug: string } | null

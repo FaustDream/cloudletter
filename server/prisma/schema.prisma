@@ -214,6 +214,8 @@ model NoteItem {
   category   Category? @relation(fields: [categoryId], references: [id])
   tags       NoteTag[]
   date       String
+  // 状态机：pending=待使用（默认） / used=已使用 / expired=已过期
+  status     String    @default("pending")
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 

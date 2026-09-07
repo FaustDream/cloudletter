@@ -3,7 +3,7 @@
  *  默认分类/标签「灵感」，与文章共用。计划类速记已并入今日计划。 */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { api, type Category, type NoteItem } from '../api'
+import { api, type Category, type NoteItem, type NoteStatus } from '../api'
 import { Icon } from '../components/framework/Icon'
 import { confirmDialog } from '../components/framework/Modal'
 import { Drawer } from '../components/framework/Drawer'
@@ -19,15 +19,26 @@ import { noteStyle, setNoteStyle, NOTE_STYLES, NOTE_STYLE_LABELS, type NoteStyle
 /** 标签输入 → 标签数组（逗号/中文逗号分隔） */
 const parseTags = (s: string) => s.split(/[,，]/).map((t) => t.trim()).filter(Boolean)
 
+/** 灵感状态字典：label=显示文案；filter 值 ''=全部 */
+const NOTE_STATUS: Array<{ value: NoteStatus | ''; label: string }> = [
+  { value: '', label: '全部' },
+  { value: 'pending', label: '待使用' },
+  { value: 'used', label: '已使用' },
+  { value: 'expired', label: '已过期' },
+]
+const NOTE_STATUS_LABEL: Record<NoteStatus, string> = { pending: '待使用', used: '已使用', expired: '已过期' }
+
 export function NotesPage() {
   const [sp, setSp] = useSearchParams()
   const [items, setItems] = useState<NoteItem[]>([])
   const [cats, setCats] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
+  /** 状态筛选：''=全部（默认），避免漏看旧灵感 */
+  const [statusFilter, setStatusFilter] = useState<NoteStatus | ''>('')
   /** 编辑抽屉：editingNote=null 且抽屉开 = 新建随手记 */
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editingNote, setEditingNote] = useState<NoteItem | null>(null)
-  const [form, setForm] = useState<{ title: string; body: string; categoryId: string; tags: string }>({ title: '', body: '', categoryId: '', tags: '灵感' })
+  const [form, setForm] = useState<{ title: string; body: string; categoryId: string; tags: string; status: NoteStatus }>({ title: '', body: '', categoryId: '', tags: '灵感', status: 'pending' })
   const [saving, setSaving] = useState(false)
   const [style, setStyle] = useState<NoteStyle>(noteStyle)
   const toast = useToast()
@@ -65,18 +76,20 @@ export function NotesPage() {
   }, [sp, items, setSp])
 
   const sorted = useMemo(
-    () => [...items].sort((a, b) => String(b.date).localeCompare(String(a.date))),
-    [items],
+    () => [...items]
+      .filter((n) => !statusFilter || n.status === statusFilter)
+      .sort((a, b) => String(b.date).localeCompare(String(a.date))),
+    [items, statusFilter],
   )
 
   const openCreate = () => {
-    setForm({ title: '', body: '', categoryId: defaultCategoryId, tags: '灵感' })
+    setForm({ title: '', body: '', categoryId: defaultCategoryId, tags: '灵感', status: 'pending' })
     setEditingNote(null)
     setDrawerOpen(true)
   }
   const openNote = (n: NoteItem) => {
     setEditingNote(n)
-    setForm({ title: n.title, body: n.body, categoryId: n.categoryId ?? '', tags: n.tags.join(', ') })
+    setForm({ title: n.title, body: n.body, categoryId: n.categoryId ?? '', tags: n.tags.join(', '), status: n.status })
     setDrawerOpen(true)
   }
 
@@ -89,6 +102,7 @@ export function NotesPage() {
         body: form.body,
         categoryId: form.categoryId,
         tags: parseTags(form.tags),
+        status: form.status,
       }
       if (editingNote) {
         const saved = await api.put<NoteItem>(`/workbench/notes/${editingNote.id}`, payload)
@@ -126,6 +140,13 @@ export function NotesPage() {
         subtitle={`共 ${items.length} 条 · 分类标签与文章共用`}
         actions={
           <>
+            <div className="seg" style={{ marginRight: 12 }} aria-label="状态筛选">
+              {NOTE_STATUS.map((s) => (
+                <button key={s.value} type="button" className={`seg-btn ${statusFilter === s.value ? 'on' : ''}`} onClick={() => setStatusFilter(s.value)}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
             <div className="seg" style={{ marginRight: 12 }} aria-label="笔记布局切换">
               {NOTE_STYLES.map((s) => (
                 <button key={s} type="button" className={`seg-btn ${style === s ? 'on' : ''}`} onClick={() => { setNoteStyle(s); setStyle(s) }}>
@@ -156,6 +177,7 @@ export function NotesPage() {
                 <div className="nb">{n.body.replace(/[#*`>\-[\]]/g, '').slice(0, 140) || '（暂无内容）'}</div>
                 <div className="nm">
                   {n.category?.name && <span className="chip">{n.category.name}</span>}
+                  <span className={`chip nst st-${n.status}`} title={`状态：${NOTE_STATUS_LABEL[n.status]}`}>{NOTE_STATUS_LABEL[n.status]}</span>
                   {n.tags.slice(0, 2).map((t) => <span key={t} className="chip">#{t}</span>)}
                   <span className="dt">{n.date}</span>
                 </div>
@@ -185,13 +207,21 @@ export function NotesPage() {
           <Field label="标题（留空自动取正文首行）">
             <input type="text" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="一句话标题" autoFocus />
           </Field>
-          <div className="grid g-2">
+          <div className="grid g-3">
             <Field label="分类（与文章共用）">
               <Dropdown
                 value={form.categoryId}
                 align="left"
                 options={[{ value: '', label: '无分类' }, ...cats.map((c) => ({ value: c.id, label: c.name }))]}
                 onChange={(v) => setForm((f) => ({ ...f, categoryId: v }))}
+              />
+            </Field>
+            <Field label="状态">
+              <Dropdown
+                value={form.status}
+                align="left"
+                options={NOTE_STATUS.filter((s): s is { value: NoteStatus; label: string } => s.value !== '').map((s) => ({ value: s.value, label: s.label }))}
+                onChange={(v) => setForm((f) => ({ ...f, status: v as NoteStatus }))}
               />
             </Field>
             <Field label="标签（逗号分隔，与文章共用）">

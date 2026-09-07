@@ -432,12 +432,16 @@ export async function timelineData(opts: { limit?: number; from?: string; to?: s
   }
 
 // 灵感笔记 → 与文章共用标签体系（tags 为正式标签名）；计划类速记已并入今日计划
+// 状态标识：非「待使用」的笔记在预览前加前缀（如 已使用 · …）
+const NOTE_STATUS_LABEL: Record<string, string> = { used: '已使用', expired: '已过期' }
 for (const n of notes) {
+  const mark = NOTE_STATUS_LABEL[n.status]
+  const sub = mark ? `${mark} · ${n.body ? n.body.slice(0, 120) : n.title || '灵感'}` : n.body ? n.body.slice(0, 120) : '灵感'
   push(n.date || ymd(n.createdAt), {
     id: 'note:' + n.id,
     t: 'note',
     title: n.title || '（无标题）',
-    sub: n.body ? n.body.slice(0, 120) : '灵感',
+    sub,
     date: ymd(n.date), xp: 10,
     tags: n.tags.map((x) => x.tag.name),
     ts: n.createdAt ? n.createdAt.toISOString() : undefined,
@@ -586,7 +590,7 @@ const FIELDS: Record<string, string[]> = {
   checkin: ['name', 'emoji', 'desc', 'log', 'streak'],
   ledger: ['kind', 'cat', 'amount', 'note', 'date'],
   goals: ['name', 'emoji', 'desc', 'current', 'target', 'unit', 'relatedPlanIds', 'relatedCheckinIds'],
-  notes: ['title', 'body', 'date', 'categoryId'],
+  notes: ['title', 'body', 'date', 'categoryId', 'status'],
   worktask: ['date', 'text', 'note', 'done', 'doneAt', 'order'],
   focus: ['planId', 'planTitle', 'minutes', 'date'],
 }
@@ -639,6 +643,8 @@ const WB_SCHEMA: Record<string, Record<string, FieldSpec>> = {
     date: v.str(),
     // keepEmpty：'' 保留 = 「无分类」语义（默认空串会被校验层按缺失丢弃）
     categoryId: { ...v.str(), max: 64, keepEmpty: true },
+    // 状态：待使用/已使用/已过期（创建缺省 pending）
+    status: { ...v.str(), oneOf: ['pending', 'used', 'expired'] },
     tags: v.arr(v.str(), 0, 20),
   },
   worktask: {
@@ -679,6 +685,7 @@ interface NoteWithTax {
   title: string
   body: string
   date: string
+  status: string
   categoryId: string | null
   createdAt: Date
   updatedAt: Date
@@ -727,6 +734,8 @@ async function createNote(clean: Record<string, unknown>, body: Record<string, u
       title: typeof clean.title === 'string' ? clean.title : '',
       body: typeof clean.body === 'string' ? clean.body : '',
       date: typeof clean.date === 'string' ? clean.date : ymdLocal(new Date()),
+      // 状态缺省「待使用」
+      status: typeof clean.status === 'string' ? clean.status : 'pending',
       categoryId: await resolveCategoryId(clean.categoryId, true),
     },
   })
@@ -738,10 +747,11 @@ async function createNote(clean: Record<string, unknown>, body: Record<string, u
 
 /** 更新灵感笔记：''分类=清空、未传不动；tags 传数组时重建关联 */
 async function updateNote(id: string, clean: Record<string, unknown>, body: Record<string, unknown>) {
-  const data: { title?: string; body?: string; date?: string; categoryId?: string | null } = {}
+  const data: { title?: string; body?: string; date?: string; status?: string; categoryId?: string | null } = {}
   if (typeof clean.title === 'string') data.title = clean.title
   if (typeof clean.body === 'string') data.body = clean.body
   if (typeof clean.date === 'string') data.date = clean.date
+  if (typeof clean.status === 'string') data.status = clean.status
   if (clean.categoryId !== undefined) data.categoryId = await resolveCategoryId(clean.categoryId, false)
   const updated = await prisma.noteItem.update({ where: { id }, data })
   if (body.tags !== undefined) await syncNoteTags(id, body.tags)

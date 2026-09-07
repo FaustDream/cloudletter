@@ -1016,6 +1016,12 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
   color: var(--text-tertiary); cursor: pointer; display: grid; place-items: center; }
 .note .ndel:hover { color: var(--danger); background: var(--danger-muted); }
 
+/* 灵感状态徽标：待使用=信息蓝 / 已使用=成功绿 / 已过期=警示琥珀 */
+.note .nst { cursor: default; font-size: 11px; letter-spacing: .02em; }
+.note .nst.st-pending { color: var(--info); background: color-mix(in srgb, var(--info) 12%, transparent); border-color: color-mix(in srgb, var(--info) 40%, transparent); }
+.note .nst.st-used { color: var(--ok); background: var(--ok-muted); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.note .nst.st-expired { color: var(--warn); background: var(--warn-muted); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+
 /* ============================================================
    灵感笔记风格（页头切换器即点即换，偏好持久化 cl_note_style）：
    card 卡片网格（默认）/ list 列表行 / timeline 纵向时间线 / masonry 瀑布流 / sticky 便利贴
