@@ -93,7 +93,7 @@ const SUPPORTED_LANGUAGES: Record<string, { name: string; aliases?: string[]; cr
 /* ═══════════ Callout 提示框 ═══════════ */
 
 const CALLOUT_EMOJIS = ['💡', '⚠️', '✅', 'ℹ️', '🔥', '📌', '❓', '🎯']
-const CALLOUT_TONES = ['blue', 'green', 'yellow', 'red', 'gray', 'purple'] as const
+const CALLOUT_TONES = ['blue', 'green', 'yellow', 'red', 'gray', 'cyan'] as const
 
 const CalloutBlock = createReactBlockSpec(
   {

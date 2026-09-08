@@ -98,6 +98,8 @@ export function BlockNoteEditor({
   onOpenWikilinkRef.current = onOpenWikilink
   /** 最近一次上抛的 markdown：外部 value 与之相同时不回灌，防光标跳动 */
   const lastEmitted = useRef(value)
+  /** 最近一次用户编辑时刻：replaceFromMarkdown 的迟到落地守卫用（用户解析期间输入 → 放弃回写） */
+  const lastUserEditAt = useRef(0)
   /** 外部回灌抑制标志：markdown→blocks 触发的 onEditorContentChange 一律不回抛 */
   const suppressEmit = useRef(false)
   const [ready, setReady] = useState(false)
@@ -110,7 +112,10 @@ export function BlockNoteEditor({
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const dark = useDarkTheme()
 
-  const editor: BlockNoteEditorInstance<any, any, any> = useCreateBlockNote({
+  /** options 引用终身稳定：useCreateBlockNote 对 options 身份敏感（实测每次渲染的新对象
+   *  会令编辑器实例反复重建、多实例绑同一 DOM，表现为打字失效/内容被"撤销"清空）。
+   *  uploadFile 经 ref 解引用，保持捕获最新回调。 */
+  const editorOptionsRef = useRef({
     schema: editorSchema,
     dictionary: zhDictionary as any,
     uploadFile: async (file: File): Promise<string> => {
@@ -121,11 +126,15 @@ export function BlockNoteEditor({
       return url
     },
   })
+  const editor: BlockNoteEditorInstance<any, any, any> = useCreateBlockNote(editorOptionsRef.current)
 
   /** 外部回灌：markdown → blocks（期间抑制内容变更回抛，避免反馈环导致选区/光标异常甚至崩溃）。
    *   keepOnFail=true（外部值变更路径）：解析失败时保持现有内容不清空——清空正文比内容暂旧更糟。
-   *   入口先剥离列表样式注释（lib/listStyles），解析后回写块 props，保证样式跨 markdown 往返存活。 */
+   *   入口先剥离列表样式注释（lib/listStyles），解析后回写块 props，保证样式跨 markdown 往返存活。
+   *   迟到落地守卫：解析（异步）期间若用户已输入（lastUserEditAt 晚于本次启动），放弃整篇回写——
+   *   否则迟到的 replaceBlocks 会覆盖用户刚输入的内容，感知为「内容被撤回」（2026-09-08 浏览器实测复现）。 */
   const replaceFromMarkdown = async (md: string, keepOnFail = false): Promise<boolean> => {
+    const replaceStartedAt = Date.now()
     const { md: cleanMd, styles } = extractListStyleComments(md)
     let blocks: any[] = []
     if (cleanMd.trim()) {
@@ -137,6 +146,7 @@ export function BlockNoteEditor({
         if (keepOnFail) return false
       }
     }
+    if (lastUserEditAt.current > replaceStartedAt) return false
     suppressEmit.current = true
     try {
       editor.replaceBlocks(editor.document, (blocks.length ? blocks : EMPTY_BLOCKS) as PartialBlock<any>[])
@@ -159,6 +169,8 @@ export function BlockNoteEditor({
       editor.onEditorContentChange(() => {
         // 外部回灌导致的变更不经过用户编辑，直接忽略（防解析反馈环）
         if (suppressEmit.current) return
+        // 用户编辑时刻（立即记录，不等 300ms 防抖）——迟到 replaceBlocks 的放弃依据
+        lastUserEditAt.current = Date.now()
         clearTimeout(timer)
         timer = setTimeout(async () => {
           if (disposed) return

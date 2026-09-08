@@ -230,7 +230,7 @@ export function GoalsPage({ withHeader = true }: { withHeader?: boolean }) {
           <Field label="图标">
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {EMOJIS.map((e) => (
-                <button key={e} className={`seg-btn ${form.emoji === e ? 'on' : ''}`} style={{ fontSize: 16, padding: '6px 10px' }} onClick={() => setForm({ ...form, emoji: e })} type="button">{e}</button>
+                <button key={e} className={`seg-btn ${form.emoji === e ? 'on' : ''}`} style={{ fontSize: 'var(--fs-xl)', padding: '6px 10px' }} onClick={() => setForm({ ...form, emoji: e })} type="button">{e}</button>
               ))}
             </div>
           </Field>
@@ -261,7 +261,7 @@ export function GoalsPage({ withHeader = true }: { withHeader?: boolean }) {
         >
           <div className="link-list">
             {linkItems.length === 0 ? (
-              <div className="dim" style={{ fontSize: 13, padding: '12px 4px' }}>
+              <div className="dim" style={{ fontSize: 'var(--fs-body)', padding: '12px 4px' }}>
                 暂无{link.type === 'plan' ? '今日计划' : '习惯'}，可先到「目标 → 今日计划/习惯打卡」创建
               </div>
             ) : (

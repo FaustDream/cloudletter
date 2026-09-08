@@ -153,7 +153,7 @@ export function CheckinPage({ withHeader = true }: { withHeader?: boolean }) {
         <EmptyState>载入中…</EmptyState>
       ) : items.length === 0 ? (
         <EmptyState style={{ padding: '36px 20px' }}>
-          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>创建习惯，开始每天打卡</div>
+          <div style={{ fontSize: 'var(--fs-lg)', fontWeight: 700, marginBottom: 6 }}>创建习惯，开始每天打卡</div>
           <div style={{ marginBottom: 16, color: 'var(--text-tertiary)' }}>创建习惯 → 每天勾选打卡 → 培养连续记录</div>
           <button className="btn slim" onClick={openCreate}>
             <Icon name="plus" size={14} /> 创建第一个习惯

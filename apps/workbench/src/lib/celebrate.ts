@@ -4,7 +4,7 @@
  * - praise()：随机鼓励语，供 toast / 完成提示使用
  */
 
-const PARTICLE_COLORS = ['#ffd166', '#ef476f', '#06d6a0', '#118ab2', '#8b5cf6', '#f4a261', '#ffffff']
+const PARTICLE_COLORS = ['#ffd166', '#ef476f', '#06d6a0', '#118ab2', '#38bdf8', '#f4a261', '#ffffff']
 
 export function praise(): string {
   const phrases = [

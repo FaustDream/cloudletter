@@ -47,6 +47,7 @@ tests/e2e/content/posts/
 .codebuddy/
 .workbuddy/
 .zcode/
+.playwright-cli/
 
 # --- 编辑器 / 操作系统 ---
 .idea

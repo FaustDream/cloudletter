@@ -33,27 +33,23 @@ export interface CloudTheme {
   custom?: boolean
 }
 
-/** 内置主题注册表（扩展接口：push 新主题到该数组即可全局生效） */
+/** 内置主题注册表（扩展接口：push 新主题到该数组即可全局生效；色值遵循无紫约束） */
 export const THEME_REGISTRY: CloudTheme[] = [
   { id: 'default', label: '云笺蓝', base: 'light', vars: { '--accent': '#2f6df6', '--accent-2': '#3f9e7d' }, swatch: ['#2f6df6', '#3f9e7d'] },
   { id: 'default-dark', label: '暮色深蓝', base: 'dark', vars: {}, swatch: ['#131c2c', '#2f6df6'] },
-  { id: 'ink', label: '墨韵灰', base: 'light', vars: { '--accent': '#334155', '--accent-2': '#64748b', '--bg': '#f5f5f4', '--surface': '#fafaf9', '--text': '#1c1917' }, swatch: ['#334155', '#64748b'] },
-  { id: 'ink-dark', label: '子夜墨', base: 'dark', vars: { '--accent': '#94a3b8', '--accent-2': '#e2e8f0', '--text': '#e7e5e4', '--bg': '#0c0a09' }, swatch: ['#94a3b8', '#e2e8f0'] },
-  { id: 'forest', label: '青藤绿', base: 'light', vars: { '--accent': '#059669', '--accent-2': '#0d9488', '--bg': '#f0fdf4', '--surface': '#f8faf8' }, swatch: ['#059669', '#0d9488'] },
-  { id: 'forest-dark', label: '雾杉暗', base: 'dark', vars: { '--accent': '#34d399', '--accent-2': '#2dd4bf', '--text': '#d1fae5', '--bg': '#042f2e' }, swatch: ['#34d399', '#2dd4bf'] },
-  { id: 'sunset', label: '落日橙', base: 'light', vars: { '--accent': '#ea580c', '--accent-2': '#c026d3', '--bg': '#fff7ed', '--surface': '#fffaf5' }, swatch: ['#ea580c', '#c026d3'] },
-  { id: 'midnight', label: '星夜紫', base: 'dark', vars: { '--accent': '#8b5cf6', '--accent-2': '#6366f1', '--text': '#ede9fe', '--bg': '#150f2e' }, swatch: ['#8b5cf6', '#6366f1'] },
+  { id: 'ink', label: '墨韵灰', base: 'light', vars: { '--accent': '#334155', '--accent-2': '#64748b' }, swatch: ['#334155', '#64748b'] },
+  { id: 'ink-dark', label: '子夜墨', base: 'dark', vars: { '--accent': '#94a3b8', '--accent-2': '#e2e8f0' }, swatch: ['#94a3b8', '#e2e8f0'] },
+  { id: 'forest', label: '青藤绿', base: 'light', vars: { '--accent': '#059669', '--accent-2': '#0d9488' }, swatch: ['#059669', '#0d9488'] },
+  { id: 'forest-dark', label: '雾杉暗', base: 'dark', vars: { '--accent': '#34d399', '--accent-2': '#2dd4bf' }, swatch: ['#34d399', '#2dd4bf'] },
+  { id: 'sunset', label: '落日橙', base: 'light', vars: { '--accent': '#ea580c', '--accent-2': '#d97706' }, swatch: ['#ea580c', '#d97706'] },
+  { id: 'midnight', label: '星夜青', base: 'dark', vars: { '--accent': '#06b6d4', '--accent-2': '#38bdf8' }, swatch: ['#06b6d4', '#38bdf8'] },
 ]
 
 const CUSTOM_KEY = 'cl_theme_custom'
 const THEME_KEY = 'cl_theme'
-const CUSTOM_VAR_KEYS: Array<{ key: string; label: string }> = [
-  { key: '--bg', label: '背景色' },
-  { key: '--surface', label: '表面色（卡片）' },
-  { key: '--text', label: '文字色' },
+const CUSTOM_VAR_KEYS: Array<{ key: keyof ThemeVars; label: string }> = [
   { key: '--accent', label: '主色（强调）' },
-  { key: '--accent-2', label: '辅色（渐变）' },
-  { key: '--radius', label: '圆角（如 16px）' },
+  { key: '--accent-2', label: '辅色（品牌渐变）' },
 ]
 
 /** 用户自定义主题（编辑核心变量后保存） */
@@ -100,12 +96,7 @@ export function saveCloudTheme(id: string): void {
   localStorage.setItem('cl_cloud_theme', id)
 }
 
-/** 解析某主题的亮/暗骨架 */
-function baseDarkOf(t: CloudTheme): boolean {
-  return t.base === 'dark' || (t.base === 'auto' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches)
-}
-
-/** 应用主题：骨架（light/dark）+ 主题变量注入 <html style> */
+/** 应用主题：骨架（light/dark）+ 主题变量注入 <html style>（白名单过滤） */
 export function applyCloudTheme(): void {
   const theme = activeCloudTheme()
   const css = document.documentElement.style
@@ -113,7 +104,7 @@ export function applyCloudTheme(): void {
   const pref = (localStorage.getItem(THEME_KEY) as ThemeBase) || 'auto'
   const darkNow = pref === 'dark' || (pref === 'auto' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches)
   document.documentElement.dataset.theme = darkNow ? 'dark' : 'light'
-  // 注入主题变量
+  // 注入主题变量（仅色板白名单；--accent 派生发光变量）
   css.removeProperty('--accent')
   css.removeProperty('--accent-glow')
   css.removeProperty('--accent-2')
@@ -121,27 +112,15 @@ export function applyCloudTheme(): void {
   if (theme) {
     for (const [k, val] of Object.entries(theme.vars)) {
       if (!val) continue
-      if (k === '--bg' || k === '--surface' || k === '--text' || k === '--radius') {
-        vars[k] = val
-        continue
-      }
       if (k === '--accent') {
         vars['--accent'] = val
-        vars['--accent-soft'] = colorMix(val, 0.12)
         vars['--accent-glow'] = `rgba(${hexToRgb(val)}, .35)`
         continue
       }
       if (k === '--accent-2') { vars['--accent-2'] = val; continue }
-      vars[k] = val
     }
   }
   for (const [k, val] of Object.entries(vars)) css.setProperty(k, val)
-}
-
-/** 颜色 → rgba 字符串（用于 accent 的透明变体） */
-function colorMix(hex: string, alpha: number): string {
-  const [r, g, b] = hexToRgb(hex).split(',').map(Number)
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
 function hexToRgb(hex: string): string {

@@ -6,6 +6,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Icon } from '../../components/framework/Icon'
+import { TL_COLOR } from '../../components/timeline/timeline'
 import type { Category, PostListItem, Tag } from '../../api'
 
 interface OrgData {
@@ -14,7 +15,8 @@ interface OrgData {
   posts: PostListItem[]
 }
 
-const CAT_PALETTE = ['#2563eb', '#0891b2', '#10a37f', '#f59e0b', '#e2544b', '#7c3aed']
+/** 分类/标签着色板：与时间线类型色统一（无紫，DESIGN-SPEC §9） */
+const CAT_PALETTE = Object.values(TL_COLOR)
 const hashColor = (s: string) => {
   let h = 0
   for (const c of s) h = (h * 31 + c.charCodeAt(0)) | 0

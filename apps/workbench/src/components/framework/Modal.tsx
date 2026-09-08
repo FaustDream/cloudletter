@@ -1,6 +1,6 @@
 /**
  * 框架层 · 统一弹窗（Modal / Dialog）：
- * - 遮罩 position: fixed 覆盖全视口（含侧边栏/顶栏），backdrop blur
+ * - 遮罩为透明捕获层（fixed 全视口，点击外部关闭；不变暗、不加 backdrop 模糊，DESIGN-SPEC §9）
  * - 危险级别：info / warning / danger / success（标题图标 + 强调色）
  * - 四档尺寸：sm(400) / md(560) / lg(720) / xl(960)
  * - 进入/退出动效、Esc 关闭、body 滚动锁定、焦点管理（初始聚焦 + Tab 循环 + 关闭还原）
@@ -124,13 +124,17 @@ export function Modal({ title, onClose, children, footer, type = 'info', size = 
   )
 }
 
-/** 定义表单行布局：label + 控件 */
-export function Field({ label, children }: { label: string; children: ReactNode }) {
+/** 定义表单行布局：label + 控件。
+ *  as='div'：富文本编辑器（contenteditable）等非 labelable 控件必须用它——
+ *  浏览器会把 label 内的点击做控件焦点转发，包住 contenteditable 会导致
+ *  点击落点/焦点被劫持（打字无效、误触工具栏按钮）。 */
+export function Field({ label, children, as = 'label' }: { label: string; children: ReactNode; as?: 'label' | 'div' }) {
+  const Tag = as === 'div' ? 'div' : 'label'
   return (
-    <label className="mfield">
+    <Tag className="mfield">
       <span>{label}</span>
       {children}
-    </label>
+    </Tag>
   )
 }
 

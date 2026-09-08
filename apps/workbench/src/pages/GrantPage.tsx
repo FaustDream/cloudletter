@@ -160,7 +160,7 @@ function GuestPosts() {
         }}>
           <div className="wn">{p.title}</div>
           {p.summary && <div className="wsub">{p.summary}</div>}
-          <div className="dim" style={{ fontSize: 12 }}>{p.publishedAt?.slice(0, 10)} · {p.charCount} 字{p.tags.length ? ` · ${p.tags.map((t) => `#${t}`).join(' ')}` : ''}</div>
+          <div className="dim" style={{ fontSize: 'var(--fs-sm)' }}>{p.publishedAt?.slice(0, 10)} · {p.charCount} 字{p.tags.length ? ` · ${p.tags.map((t) => `#${t}`).join(' ')}` : ''}</div>
         </div>
       ))}
     </div>
@@ -182,7 +182,7 @@ function GuestNotes() {
         <div key={n.id} className="grant-item">
           <div className="wn">💡 {n.title || '（无标题）'}</div>
           {n.body && <MarkdownView value={n.body} empty="" />}
-          <div className="dim" style={{ fontSize: 12 }}>
+          <div className="dim" style={{ fontSize: 'var(--fs-sm)' }}>
             {n.date}{n.category?.name ? ` · ${n.category.name}` : ''}{n.tags.length ? ` · ${n.tags.map((t) => `#${t}`).join(' ')}` : ''}
           </div>
         </div>
@@ -239,7 +239,7 @@ function GuestPlan() {
       {items.map((p) => (
         <div key={p.id} className={`grant-item ${p.done ? 'done' : ''}`}>
           <div className="wn">{p.done ? '✅ ' : '☐ '}[{p.level}] {p.text}</div>
-          {p.dueDate && <div className="dim" style={{ fontSize: 12 }}>截止 {p.dueDate}</div>}
+          {p.dueDate && <div className="dim" style={{ fontSize: 'var(--fs-sm)' }}>截止 {p.dueDate}</div>}
         </div>
       ))}
     </div>

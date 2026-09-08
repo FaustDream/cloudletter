@@ -250,7 +250,7 @@ export function NotesPage() {
               />
             </Field>
           </div>
-          <Field label="内容">
+          <Field label="内容" as="div">
             <MarkdownEditor value={form.body} onChange={(md) => setForm((f) => ({ ...f, body: md }))} minHeight={120} uncontrolled />
           </Field>
         </Drawer>

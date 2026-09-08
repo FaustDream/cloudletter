@@ -6,7 +6,8 @@
   "description": "云笺集 · 个人工作台（以原型为 UI 基准：总览/文章/写作/管理/工作台模块）",
   "scripts": {
     "dev": "vite --port 3015",
-    "build": "tsc -b && vite build",
+    "check:design": "node scripts/check-tokens.mjs",
+    "build": "node scripts/check-tokens.mjs && tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

@@ -4,8 +4,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { api } from '../api'
 import { Icon } from '../components/framework/Icon'
-import { Modal } from '../components/framework/Modal'
 import { FxEngine } from '../components/framework/FxEngine'
+import { TotpField, type TfaRecoverState } from './login/TotpField'
+import { ResetPanel } from './login/ResetPanel'
+import { ResetPasswordModal } from './login/ResetPasswordModal'
+import { CaptchaModal } from './login/CaptchaModal'
+import { LockModal } from './login/LockModal'
 
 type Mode = 'pwd' | 'code'
 type Help = null | 'forgot'
@@ -13,6 +17,13 @@ type Help = null | 'forgot'
 /** “记住我”：本地保存邮箱与勾选状态，登录成功时写入 */
 const REMEMBER_EMAIL_KEY = 'cl_remember_email'
 const REMEMBER_FLAG_KEY = 'cl_remember_flag'
+
+/** 登录接口错误包络（ApiError 形状；网络故障为 TypeError） */
+interface LoginError {
+  code?: string
+  message?: string
+  details?: { captchaId?: string; captchaSvg?: string; remainSeconds?: number }
+}
 
 export function LoginPage() {
   const { login } = useAuth()
@@ -31,39 +42,14 @@ export function LoginPage() {
   const [totp, setTotp] = useState('')
   const [totpStep, setTotpStep] = useState(false)
   /** 两步验证邮箱安全恢复（需求 7：无法完成验证时的托底） */
-  const [tfaRecover, setTfaRecover] = useState<{ open: boolean; step: 'send' | 'confirm'; code: string; busy: boolean; msg: string; err: string }>({
+  const [tfaRecover, setTfaRecover] = useState<TfaRecoverState>({
     open: false, step: 'send', code: '', busy: false, msg: '', err: '',
   })
-  const sendTfaRecovery = async () => {
-    setTfaRecover((v) => ({ ...v, busy: true, msg: '', err: '' }))
-    try {
-      const r = await api.post('/auth/2fa/recovery-request', { email: email.trim() })
-      if ((r as any)?.mode === 'demo' && (r as any)?.dev?.code) {
-        setTfaRecover((v) => ({ ...v, step: 'confirm', msg: `演示环境恢复码：${(r as any).dev.code}（邮件已落盘）` }))
-      } else {
-        setTfaRecover((v) => ({ ...v, step: 'confirm', msg: '恢复码已发送至绑定邮箱（15 分钟有效，仅一次）' }))
-      }
-    } catch (ex: any) {
-      setTfaRecover((v) => ({ ...v, err: ex?.message ?? '发送失败，请重试' }))
-    } finally { setTfaRecover((v) => ({ ...v, busy: false })) }
-  }
-  const confirmTfaRecovery = async () => {
-    setTfaRecover((v) => ({ ...v, busy: true, msg: '', err: '' }))
-    try {
-      await api.post('/auth/2fa/recovery-confirm', { email: email.trim(), code: tfaRecover.code.trim() })
-      setTfaRecover((v) => ({ ...v, msg: '两步验证已安全重置，请用密码重新登录并尽快重新绑定验证器' }))
-      setTotpStep(false)
-      setTotp('')
-    } catch (ex: any) {
-      setTfaRecover((v) => ({ ...v, err: ex?.message ?? '验证失败，请重试' }))
-    } finally { setTfaRecover((v) => ({ ...v, busy: false })) }
-  }
   const [busy, setBusy] = useState(false)
   const [fieldErr, setFieldErr] = useState<{ email?: string; password?: string; code?: string }>({})
   const [help, setHelp] = useState<Help>(null)
   const [sentMsg, setSentMsg] = useState('')
   const [countdown, setCountdown] = useState(0)
-  const [resetLink, setResetLink] = useState('')
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // 失败防护：图形验证码弹窗 + 锁定/邮箱解锁弹窗（验证码仅以图片 data URI 返回，不落明文）
@@ -73,11 +59,6 @@ export function LoginPage() {
   const [captchaErr, setCaptchaErr] = useState('')
   const [showLock, setShowLock] = useState(false)
   const [lockRemain, setLockRemain] = useState(0)
-  const [unlockStage, setUnlockStage] = useState<'idle' | 'sent'>('idle')
-  const [unlockCode, setUnlockCode] = useState('')
-  const [unlockMsg, setUnlockMsg] = useState('')
-  const [unlockErr, setUnlockErr] = useState('')
-  const [unlockBusy, setUnlockBusy] = useState(false)
 
   // 重置密码流程状态
   const [newPwd, setNewPwd] = useState('')
@@ -105,12 +86,12 @@ export function LoginPage() {
   }
 
   /** 按错误码分流：验证码弹窗 / 锁定与邮箱解锁 / 普通错误 */
-  const handlePwdError = (ex: any) => {
+  const handlePwdError = (ex: LoginError) => {
     switch (ex?.code) {
       case 'CAPTCHA_REQUIRED':
       case 'CAPTCHA_INVALID': {
         const d = ex?.details
-        setCaptchaMeta({ captchaId: d?.captchaId, captchaSvg: d?.captchaSvg ?? '' })
+        setCaptchaMeta({ captchaId: d?.captchaId, captchaSvg: d?.captchaSvg ?? '' } as { captchaId: string; captchaSvg: string })
         setCaptchaInput('')
         setCaptchaErr(ex?.code === 'CAPTCHA_INVALID' ? '验证码错误，已更换新验证码' : '')
         setErr(ex?.code === 'CAPTCHA_INVALID' ? '' : (ex?.message ?? ''))
@@ -127,12 +108,9 @@ export function LoginPage() {
         setErr('两步验证码错误或已过期，请重试')
         break
       case 'ACCOUNT_LOCKED':
+        // 解锁流程状态由 LockModal 自持，弹窗每次重开即复位
         setShowCaptcha(false)
         setLockRemain(Number(ex?.details?.remainSeconds ?? 0))
-        setUnlockStage('idle')
-        setUnlockCode('')
-        setUnlockMsg('')
-        setUnlockErr('')
         setErr('')
         setShowLock(true)
         break
@@ -167,8 +145,8 @@ export function LoginPage() {
       }
       setShowCaptcha(false)
       await goHome()
-    } catch (ex: any) {
-      handlePwdError(ex)
+    } catch (ex) {
+      handlePwdError(ex as LoginError)
     } finally { setBusy(false) }
   }
 
@@ -185,10 +163,11 @@ export function LoginPage() {
     setBusy(true)
     try {
       await login(email.trim(), password, remember, undefined)
-    } catch (ex: any) {
-      if (ex?.code === 'CAPTCHA_REQUIRED') {
-        const d = ex?.details
-        setCaptchaMeta({ captchaId: d?.captchaId, captchaSvg: d?.captchaSvg ?? '' })
+    } catch (ex) {
+      const e = ex as LoginError
+      if (e?.code === 'CAPTCHA_REQUIRED') {
+        const d = e?.details
+        setCaptchaMeta({ captchaId: d?.captchaId, captchaSvg: d?.captchaSvg ?? '' } as { captchaId: string; captchaSvg: string })
         setCaptchaInput('')
         setCaptchaErr('')
       } else {
@@ -197,47 +176,15 @@ export function LoginPage() {
     } finally { setBusy(false) }
   }
 
-  /** 锁定弹窗：发送邮箱解锁验证码 */
-  const startUnlock = async () => {
-    setUnlockBusy(true); setUnlockMsg(''); setUnlockErr('')
-    try {
-      const r = await api.post('/auth/send-unlock', { email: email.trim() })
-      if ((r as any)?.mode === 'demo' && (r as any)?.dev?.code) {
-        setUnlockMsg(`演示环境：解锁验证码已生成 → ${(r as any).dev.code}（邮件已落盘）`)
-      } else {
-        setUnlockMsg('解锁验证码已发送至邮箱，10 分钟内有效')
-      }
-      setUnlockStage('sent')
-    } catch (ex: any) {
-      setUnlockErr(ex?.message ?? '发送失败，请重试')
-    } finally { setUnlockBusy(false) }
-  }
-
-  /** 锁定弹窗：提交邮箱验证码解锁，成功后回到登录 */
-  const doUnlock = async () => {
-    if (unlockCode.trim().length !== 6) { setUnlockErr('请输入 6 位验证码'); return }
-    setUnlockBusy(true); setUnlockErr('')
-    try {
-      await api.post('/auth/unlock', { email: email.trim(), code: unlockCode.trim() })
-      setShowLock(false)
-      setUnlockStage('idle')
-      setUnlockCode('')
-      setUnlockMsg('')
-      setUnlockErr('')
-      setSentMsg('已解锁，请重新登录')
-    } catch (ex: any) {
-      setUnlockErr(ex?.message ?? '解锁失败，请重试')
-    } finally { setUnlockBusy(false) }
-  }
-
   const sendCode = async () => {
     setErr(''); setSentMsg('')
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) { setFieldErr({ email: '请输入有效的邮箱地址' }); return }
     const hasUser = await api.post('/auth/send-code', { email: email.trim() }).catch((e) => { setErr(e?.message || '发送失败'); return null })
     if (!hasUser) return
     startCountdown()
-    if ((hasUser as any)?.mode === 'demo' && (hasUser as any)?.dev?.code) {
-      setSentMsg(`演示环境：验证码已生成 → ${(hasUser as any).dev.code}（邮件已落盘）`)
+    const d = hasUser as { mode?: string; dev?: { code?: string } }
+    if (d?.mode === 'demo' && d?.dev?.code) {
+      setSentMsg(`演示环境：验证码已生成 → ${d.dev.code}（邮件已落盘）`)
     } else {
       setSentMsg('验证码已发送至邮箱，10 分钟内有效')
     }
@@ -251,40 +198,9 @@ export function LoginPage() {
     try {
       const r = await api.post<{ token: string }>('/auth/login-by-code', { email: email.trim(), code: code.trim() })
       setTokenThenHome(r.token)
-    } catch (ex: any) {
-      setErr(ex?.message || '验证码登录失败')
+    } catch (ex) {
+      setErr((ex as { message?: string })?.message || '验证码登录失败')
     } finally { setBusy(false) }
-  }
-
-  const sendReset = async () => {
-    setErr(''); setSentMsg('')
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) { setFieldErr({ email: '请输入有效的邮箱地址' }); return }
-    const r = await api.post('/auth/send-reset', { email: email.trim() }).catch((e) => { setErr(e?.message || '发送失败'); return null })
-    if (!r) return
-    if ((r as any)?.mode === 'demo' && (r as any)?.dev?.link) {
-      setResetLink(String((r as any).dev.link))
-      setSentMsg('演示环境：重置链接已生成（见下方，可复制）')
-      setHelp('forgot')
-    } else {
-      setResetLink('')
-      setSentMsg('重置链接已发送至邮箱，15 分钟内有效')
-      setHelp(null)
-    }
-  }
-
-  /** 从后端返回的重置链接中提取 token + 邮箱，跳转到前端登录页的新密码面板 */
-  const openResetPage = () => {
-    try {
-      const u = new URL(resetLink)
-      nav(`/login${u.search}`, { replace: false })
-    } catch { setErr('重置链接无效') }
-  }
-
-  const copyResetLink = async () => {
-    try {
-      await navigator.clipboard.writeText(resetLink)
-      setSentMsg('重置链接已复制')
-    } catch { setErr('复制失败，请手动选中链接') }
   }
 
   const doReset = async (e: React.FormEvent) => {
@@ -299,8 +215,8 @@ export function LoginPage() {
       // 重置成功：服务端已撤销全部会话，本地失效凭据一并清掉
       void import('../api').then(({ setToken }) => setToken(null))
       setResetDone(true)
-    } catch (ex: any) {
-      setErr(ex?.message || '重置失败，链接可能已失效')
+    } catch (ex) {
+      setErr((ex as { message?: string })?.message || '重置失败，链接可能已失效')
     } finally { setBusy(false) }
   }
 
@@ -318,8 +234,6 @@ export function LoginPage() {
     const def = localStorage.getItem('cl_default_page') || '/'
     nav(def, { replace: true })
   }
-
-  const demoLink = help === 'forgot' && sentMsg.includes('复制')
 
   return (
     <div className="login-page">
@@ -343,31 +257,17 @@ export function LoginPage() {
 
         {resetToken ? (
           /* ===== 重置密码面板（由邮件中的一次性链接进入） ===== */
-          !resetDone ? (
-            <form onSubmit={doReset}>
-              <div className="lfield">
-                <label>邮箱</label>
-                <div className="af-static" style={{ fontSize: 13.5 }}>{resetEmail} <span className="pill ok">待重置</span></div>
-              </div>
-              <div className="lfield">
-                <label>新密码（至少 8 位）</label>
-                <div className="lpwd">
-                  <input type={showPwd ? 'text' : 'password'} value={newPwd} onChange={(e) => setNewPwd(e.target.value)} autoComplete="new-password" maxLength={128} placeholder="••••••••" />
-                  <button type="button" className="lpwd-eye" onClick={() => setShowPwd((v) => !v)}
-                    aria-label={showPwd ? '隐藏密码' : '显示密码'} title={showPwd ? '隐藏密码' : '显示密码'}>
-                    <Icon name={showPwd ? 'eye-off' : 'eye'} size={17} />
-                  </button>
-                </div>
-                <p className="dim" style={{ fontSize: 12, marginTop: 6 }}>8-128 位，须同时包含数字与英文字母；链接仅一次性有效（15 分钟内），且不影响已发布内容与数据。</p>
-              </div>
-              <button className="btn lblk" type="submit" disabled={busy}>{busy ? '提交中…' : '确认重置'}</button>
-            </form>
-          ) : (
-            <div className="lsec" style={{ margin: 0 }}>
-              <div className="lmsg">✓ 密码已重置，请使用新密码登录</div>
-              <button className="btn lblk" type="button" onClick={() => { nav('/login', { replace: true }); setResetDone(false); setMode('pwd') }}>返回登录</button>
-            </div>
-          )
+          <ResetPanel
+            email={resetEmail}
+            newPwd={newPwd}
+            onNewPwdChange={setNewPwd}
+            showPwd={showPwd}
+            onToggleShowPwd={() => setShowPwd((v) => !v)}
+            busy={busy}
+            resetDone={resetDone}
+            onSubmit={doReset}
+            onBack={() => { nav('/login', { replace: true }); setResetDone(false); setMode('pwd') }}
+          />
         ) : (
           <>
             {/* ===== 密码 / 验证码 双 Tab ===== */}
@@ -378,36 +278,16 @@ export function LoginPage() {
 
             {mode === 'pwd' ? (
               <form onSubmit={submitPwd}>
-              {totpStep && (
-                <div className="lfield">
-                  <label htmlFor="login-totp">两步验证码</label>
-                  <input id="login-totp" inputMode="numeric" maxLength={6} value={totp} autoFocus
-                    onChange={(e) => setTotp(e.target.value.replace(/\D/g, ''))}
-                    placeholder="6 位动态码" style={{ letterSpacing: 6, fontFamily: 'var(--mono)' }} />
-                  <span className="lfield-help">
-                    {!tfaRecover.open
-                      ? <button type="button" className="l-forgot" onClick={() => setTfaRecover((v) => ({ ...v, open: true }))}>无法获取验证码？通过绑定邮箱恢复</button>
-                      : null}
-                  </span>
-                  {tfaRecover.open && (
-                    <div className="tfa-recover">
-                      {tfaRecover.step === 'send'
-                        ? <button type="button" className="btn slim" disabled={tfaRecover.busy} onClick={sendTfaRecovery}>
-                            {tfaRecover.busy ? '发送中…' : '发送恢复码到绑定邮箱（15 分钟有效）'}
-                          </button>
-                        : <div className="tfa-recover-confirm">
-                            <input value={tfaRecover.code} onChange={(e) => setTfaRecover((v) => ({ ...v, code: e.target.value.toUpperCase() }))}
-                              placeholder="8 位恢复码" maxLength={8} style={{ width: 160, fontFamily: 'var(--mono)' }} />
-                            <button type="button" className="btn slim" disabled={tfaRecover.busy || tfaRecover.code.length < 4} onClick={confirmTfaRecovery}>
-                              {tfaRecover.busy ? '验证中…' : '安全重置两步验证'}
-                            </button>
-                          </div>}
-                      {tfaRecover.msg && <span className="lferr ok">{tfaRecover.msg}</span>}
-                      {tfaRecover.err && <span className="lferr">{tfaRecover.err}</span>}
-                    </div>
-                  )}
-                </div>
-              )}
+                {totpStep && (
+                  <TotpField
+                    value={totp}
+                    onValueChange={setTotp}
+                    email={email}
+                    recover={tfaRecover}
+                    onRecoverChange={setTfaRecover}
+                    onRecovered={() => { setTotpStep(false); setTotp('') }}
+                  />
+                )}
                 <div className="lfield">
                   <label htmlFor="login-email">邮箱</label>
                   <input id="login-email" className="email-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
@@ -420,9 +300,9 @@ export function LoginPage() {
                     <input id="login-password" type={showPwd ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••" autoComplete="current-password" maxLength={128} aria-invalid={!!fieldErr.password} />
                     <button type="button" className="lpwd-eye" onClick={() => setShowPwd((v) => !v)}
-                    aria-label={showPwd ? '隐藏密码' : '显示密码'} title={showPwd ? '隐藏密码' : '显示密码'}>
-                    <Icon name={showPwd ? 'eye-off' : 'eye'} size={17} />
-                  </button>
+                      aria-label={showPwd ? '隐藏密码' : '显示密码'} title={showPwd ? '隐藏密码' : '显示密码'}>
+                      <Icon name={showPwd ? 'eye-off' : 'eye'} size={17} />
+                    </button>
                   </div>
                   {fieldErr.password && <span className="lferr">{fieldErr.password}</span>}
                 </div>
@@ -450,7 +330,7 @@ export function LoginPage() {
                     </button>
                   </div>
                   {fieldErr.code && <span className="lferr">{fieldErr.code}</span>}
-                  <p className="dim" style={{ fontSize: 12, marginTop: 6 }}>验证码发送到该邮箱，10 分钟内有效；仅用于登录本账户。</p>
+                  <p className="dim" style={{ fontSize: 'var(--fs-sm)', marginTop: 6 }}>验证码发送到该邮箱，10 分钟内有效；仅用于登录本账户。</p>
                 </div>
                 <button className="btn lblk" type="submit" disabled={busy}>{busy ? '登录中…' : '验证码登录'}</button>
               </form>
@@ -461,94 +341,41 @@ export function LoginPage() {
 
       {/* 忘记密码 / 首次使用 弹窗 */}
       {help === 'forgot' && (
-        <Modal title="重置密码（邮箱链接）" hideClose onClose={() => setHelp(null)} footer={
-          <button className="btn" onClick={() => setHelp(null)}>关闭</button>
-        }>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.8, marginBottom: 12 }}>
-            输入已注册的管理员邮箱，系统将发送一封<b>含一次性重置链接</b>的邮件。
-            只有通过邮件里链接的操作才能重置密码（链接带加密密文，15 分钟内有效，使用一次即失效）。
-          </p>
-          {/* 发送失败原因就地显示在弹窗内（卡片里的 lerr 会被弹窗遮住，表现为「无反应」） */}
-          {err && <div className="lerr" role="alert" style={{ marginBottom: 12 }}><Icon name="x" size={14} /> {err}</div>}
-          <div className="lfield">
-            <label>管理员邮箱</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
-          </div>
-          <button className="btn lblk" type="button" onClick={sendReset} disabled={busy}>发送重置链接</button>
-          {demoLink && (
-            <div className="reset-link-box" style={{ marginTop: 12 }}>
-              <div className="dim" style={{ fontSize: 12, marginBottom: 6 }}>演示环境链接（生产 SMTP 模式不展示）：</div>
-              <code>{resetLink}</code>
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                <button className="btn slim" type="button" onClick={copyResetLink}>复制链接</button>
-                <button className="btn slim ghost" type="button" onClick={openResetPage}>打开重置页</button>
-              </div>
-            </div>
-          )}
-        </Modal>
+        <ResetPasswordModal
+          email={email}
+          onEmailChange={setEmail}
+          err={err}
+          sentMsg={sentMsg}
+          busy={busy}
+          onSetErr={setErr}
+          onSetSentMsg={setSentMsg}
+          onSetFieldErr={setFieldErr}
+          onClose={() => setHelp(null)}
+        />
       )}
 
       {/* 图形验证码弹窗：连续失败 ≥3 次后弹出（后端签发，服务端校验） */}
       {showCaptcha && captchaMeta && (
-        <Modal title="安全验证" type="warning" size="sm" onClose={() => setShowCaptcha(false)} footer={
-          <>
-            <button className="btn ghost" onClick={() => setShowCaptcha(false)}>取消</button>
-            <button className="btn slim" data-modal-primary onClick={onCaptchaConfirm} disabled={busy}>验证</button>
-          </>
-        }>
-          <p className="cap-desc">检测到多次登录失败，请输入下方图形验证码以继续</p>
-          <div className="cap-stage">
-            <button type="button" className="cap-box" onClick={refreshCaptcha} title="点击刷新验证码" disabled={busy} aria-label="刷新验证码">
-              {captchaMeta.captchaSvg
-                ? <img src={captchaMeta.captchaSvg} alt="图形验证码" draggable={false} />
-                : <span className="cap-fallback">????</span>}
-              <span className="cap-refresh">↻ 看不清？点击换一张</span>
-            </button>
-            <input className="cap-input" value={captchaInput}
-              onChange={(e) => setCaptchaInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-              placeholder="输入 4 位验证码" maxLength={4} autoFocus
-              onKeyDown={(e) => { if (e.key === 'Enter') onCaptchaConfirm() }} />
-          </div>
-          {captchaErr && <p className="cap-err">{captchaErr}</p>}
-          <p className="cap-hint">图形验证码用于确认是本人操作 · 输入错误会自动更换新验证码</p>
-        </Modal>
+        <CaptchaModal
+          captchaSvg={captchaMeta.captchaSvg}
+          value={captchaInput}
+          onValueChange={setCaptchaInput}
+          err={captchaErr}
+          busy={busy}
+          onRefresh={refreshCaptcha}
+          onConfirm={onCaptchaConfirm}
+          onClose={() => setShowCaptcha(false)}
+        />
       )}
 
       {/* 锁定弹窗：连续失败 5 次后锁定，可通过邮箱验证码立即解锁 */}
       {showLock && (
-        <Modal title="账户已锁定" type="danger" size="sm" onClose={() => setShowLock(false)} footer={
-          unlockStage === 'sent' ? (
-            <>
-              <button className="btn ghost" onClick={() => setShowLock(false)}>稍后再试</button>
-              <button className="btn slim" data-modal-primary onClick={doUnlock} disabled={unlockBusy}>
-                {unlockBusy ? '解锁中…' : '解锁'}
-              </button>
-            </>
-          ) : (
-            <button className="btn ghost" onClick={() => setShowLock(false)}>关闭</button>
-          )
-        }>
-          <p className="lock-desc">连续登录失败次数过多，账户已冻结登录。</p>
-          <p className="lock-time">剩余锁定时间：约 {Math.max(1, Math.ceil(lockRemain / 60))} 分钟</p>
-          {unlockStage === 'idle' ? (
-            <>
-              <p className="lock-hint">输入管理员邮箱内收到的验证码即可立即解锁，无需等待倒计时。</p>
-              <button className="btn lblk" type="button" onClick={startUnlock} disabled={unlockBusy}>
-                {unlockBusy ? '发送中…' : '发送邮箱验证码解锁'}
-              </button>
-            </>
-          ) : (
-            <div className="lfield">
-              <label>解锁验证码</label>
-              <input type="text" inputMode="numeric" maxLength={6} value={unlockCode}
-                onChange={(e) => setUnlockCode(e.target.value.replace(/\D/g, ''))}
-                placeholder="6 位验证码" autoFocus
-                onKeyDown={(e) => { if (e.key === 'Enter') doUnlock() }} />
-            </div>
-          )}
-          {unlockMsg && <p className="cap-hint" style={{ color: 'var(--ok)' }}>{unlockMsg}</p>}
-          {unlockErr && <p className="cap-err">{unlockErr}</p>}
-        </Modal>
+        <LockModal
+          email={email}
+          remainSeconds={lockRemain}
+          onSentMsg={setSentMsg}
+          onClose={() => setShowLock(false)}
+        />
       )}
     </div>
   )

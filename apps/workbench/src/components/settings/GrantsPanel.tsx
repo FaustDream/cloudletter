@@ -88,11 +88,11 @@ export function GrantsPanel() {
       <div className="grant-create">
         <div className="grid g-2">
           <div>
-            <div className="dim" style={{ fontSize: 12, marginBottom: 4 }}>访客邮箱</div>
+            <div className="dim" style={{ fontSize: 'var(--fs-sm)', marginBottom: 4 }}>访客邮箱</div>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="guest@example.com" />
           </div>
           <div>
-            <div className="dim" style={{ fontSize: 12, marginBottom: 4 }}>有效期</div>
+            <div className="dim" style={{ fontSize: 'var(--fs-sm)', marginBottom: 4 }}>有效期</div>
             <Dropdown
               value={ttlKey}
               align="left"
@@ -107,7 +107,7 @@ export function GrantsPanel() {
           </div>
         </div>
         <div>
-          <div className="dim" style={{ fontSize: 12, margin: '8px 0 4px' }}>授权范围（只读，模块粒度）</div>
+          <div className="dim" style={{ fontSize: 'var(--fs-sm)', margin: '8px 0 4px' }}>授权范围（只读，模块粒度）</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {SCOPES.map((s) => (
               <button key={s} type="button" className={`seg-btn ${sel.has(s) ? 'on' : ''}`} onClick={() => toggleScope(s)}>{SCOPE_LABELS[s]}</button>

@@ -25,7 +25,8 @@
 * 禁止 `any`，使用 `unknown`。
 * 单个函数不超过 50 行，超过必须拆分。
 * 禁止硬编码敏感信息。
-* 样式遵循 `shared/theme.css`。
+* 设计令牌纪律（详见 `docs/DESIGN-SPEC.md` §9）：样式真相源为 `apps/workbench/src/styles/main.css` `:root` 令牌区（`shared/theme.css` 已删除，禁止复活）；紫色全线禁止；时间线六色唯一定义于 `components/timeline/timeline.ts`；正文字号取 `var(--fs-*)`、跨组件浮层 z-index≥30 取 `var(--z-*)`、玻璃模糊取 `var(--glass-blur-*)`；深色适配用成对令牌，禁止组件内 dark 补丁。
+* 前端 `build` 前置 `check-tokens` 设计门禁（`apps/workbench/scripts/check-tokens.mjs`）；特例豁免用行内 `design-ok: 原因` 注释。
 * 详细设计规范：`docs/DESIGN-SPEC.md`。
 
 ## 3. 技术栈

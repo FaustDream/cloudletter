@@ -94,7 +94,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <div style={{ fontSize: 17, fontWeight: 700 }}>
             {app ? '工作台遇到了意外错误' : '这个页面渲染出错了'}
           </div>
-          <div style={{ color: 'var(--text-secondary)', fontSize: 13, wordBreak: 'break-all' }}>
+          <div style={{ color: 'var(--text-secondary)', fontSize: 'var(--fs-body)', wordBreak: 'break-all' }}>
             {error.message || String(error)}
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>

@@ -153,7 +153,7 @@ export function PlanPage({ withHeader = true }: { withHeader?: boolean }) {
         <EmptyState>载入中…</EmptyState>
       ) : items.length === 0 ? (
         <EmptyState style={{ padding: '36px 20px' }}>
-          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>今天还没有安排</div>
+          <div style={{ fontSize: 'var(--fs-lg)', fontWeight: 700, marginBottom: 6 }}>今天还没有安排</div>
           <div style={{ marginBottom: 16, color: 'var(--text-tertiary)' }}>创建计划 → 设置优先级与截止时间 → 完成勾选</div>
           <button className="btn slim" onClick={openCreate}>
             <Icon name="plus" size={14} /> 创建第一条计划

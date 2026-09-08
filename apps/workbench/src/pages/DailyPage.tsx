@@ -411,7 +411,7 @@ export function DailyPage() {
             <div className="review-saved">
               <pre>{savedBody}</pre>
               <div className="review-saved-ops">
-                <span className="dim" style={{ fontSize: 12 }}>已写入时间线（日志）</span>
+                <span className="dim" style={{ fontSize: 'var(--fs-sm)' }}>已写入时间线（日志）</span>
                 <button className="btn slim ghost" onClick={() => { setReview(savedBody); setSaved(false) }}>改写</button>
               </div>
             </div>

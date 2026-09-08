@@ -201,7 +201,7 @@ export function LedgerPage() {
         <div className="bb-foot">
           {overBudget ? <span className="dim" style={{ color: 'var(--danger)' }}>本月已超预算</span> : <span className="dim">预算剩余 {100 - budgetPct}%</span>}
           <label className="bb-edit dim">预算
-            <input type="number" defaultValue={budget} min={0} onBlur={(e) => saveBudget(e.target.value)} style={{ width: 90, minHeight: 28, fontSize: 12 }} />
+            <input type="number" defaultValue={budget} min={0} onBlur={(e) => saveBudget(e.target.value)} style={{ width: 90, minHeight: 28, fontSize: 'var(--fs-sm)' }} />
           </label>
         </div>
       </div>
@@ -236,7 +236,7 @@ export function LedgerPage() {
           {items.length > 0 && (
             <div className="card" style={{ padding: '16px 18px', marginBottom: 14 }}>
               <div className="sec-title">近 6 个月收支趋势
-                {monthFilter && <span className="dim" style={{ fontSize: 12, marginLeft: 10 }}>
+                {monthFilter && <span className="dim" style={{ fontSize: 'var(--fs-sm)', marginLeft: 10 }}>
                   已筛选 {monthFilter}（点击柱状或筛选可切换）
                 </span>}
               </div>

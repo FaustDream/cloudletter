@@ -138,7 +138,7 @@ export function QuickNotesPage() {
         <EmptyState>载入中…</EmptyState>
       ) : filtered.length === 0 ? (
         <EmptyState style={{ padding: '36px 20px' }}>
-          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>没有符合条件的速记</div>
+          <div style={{ fontSize: 'var(--fs-lg)', fontWeight: 700, marginBottom: 6 }}>没有符合条件的速记</div>
           <div style={{ marginBottom: 16, color: 'var(--text-tertiary)' }}>任意页面按 Ctrl/⌘+N 或点左下角 ⚡ 都能随时速记</div>
           <button className="btn slim" onClick={openCreate}><Icon name="plus" size={14} /> 新增速记</button>
         </EmptyState>

@@ -5,58 +5,21 @@
  *  7 中心人物去掉 → 换成暖色太阳（辉光 + 光晕）
  *  保留：内容气泡浮现、时间游标、专注模式、重置视角、语义图例
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js'
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
-import { TL_COLOR, TL_DESC, TL_TYPES, dayLabel, daysAgo, filterNodes, type TimelineDay, type TimelineNode, type TimelineType } from './timeline'
+import { TL_COLOR, TL_TYPES, daysAgo, filterNodes, type TimelineDay, type TimelineNode, type TimelineType } from './timeline'
 import { EmptyState } from '../framework/EmptyState'
 import { ServerStatusPanel } from '../framework/ServerStatusPanel'
 import { logClient } from '../../api'
-
-const SKY = 0xdcebfa
-/** 中心太阳（暖色） */
-const SUN_COLOR = 0xffa02e
-const SUN_GLOW = 0xffb35c
-/** 语义关系连线配色 */
-const LINE_DATE = 0x6db8ff     // 同日期 · 中性蓝
-const LINE_TYPE = 0xffb066     // 同类型 · 琥珀
-const LINE_RADIAL = 0x8fb9e8   // 辐射
-/** 高亮（选中关系）：暖金加粗 + 两端脉冲，一眼定位 */
-const HL_LINE = 0xffd76a
-const HL_PULSE = 0xffe08a
-const DIM = new THREE.Color(0x35415c) // 降光基调（更深，突出高亮）
-const SIZE_MIN = 0.9
-const SIZE_MAX = 2.4
-const SPEED_STEPS = [0, 0.55, 1, 1.7]
-const SPEED_LABEL = ['静止', '慢', '中', '快']
-const MAX_FLOAT = 3
-/** 节点类型 → 表情（调皮一点） */
-const TYPE_EMOJI: Record<TimelineType, string> = {
-  journal: '✍️', note: '💡', plan: '✅', checkin: '🔥', ledger: '💰', goal: '🎯', focus: '🍅',
-}
-
-const ORBITS = [26, 42, 58]
-const LAYER_OF = (di: number) => (di === 0 ? 0 : di <= 6 ? 1 : 2)
-const SIZE_OF = [1.7, 1.15, 0.75]
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
-}
-
-interface FloatBubble {
-  id: number
-  node: THREE.Mesh
-  el: HTMLDivElement
-  line: HTMLDivElement
-  born: number
-  dur: number
-  paused: boolean
-}
-
-interface PairInfo { kind: 'date' | 'type'; a: THREE.Mesh; b: THREE.Mesh }
+import { DIM, HL_LINE, HL_PULSE, LAYER_OF, LINE_DATE, LINE_RADIAL, LINE_TYPE, MAX_FLOAT, ORBITS, SIZE_MAX, SIZE_MIN, SIZE_OF, SPEED_STEPS, SKY, SUN_COLOR, SUN_GLOW, TYPE_EMOJI, escapeHtml, type FloatBubble, type PairInfo } from './universe3d/consts'
+import { UniverseControls } from './universe3d/UniverseControls'
+import { UniverseDetailCard } from './universe3d/UniverseDetailCard'
+import { UniverseLegend } from './universe3d/UniverseLegend'
+import { UniverseTooltip } from './universe3d/UniverseTooltip'
 
 export function TimelineUniverse3d({ days, filter, avatar, battle = true, onOpenGame }: {
   days: TimelineDay[]
@@ -76,7 +39,6 @@ export function TimelineUniverse3d({ days, filter, avatar, battle = true, onOpen
   const [speedIdx, setSpeedIdx] = useState(2)
   const [floatOn, setFloatOn] = useState(true)
   const [focusMode, setFocusMode] = useState(false)
-  const [legendOpen, setLegendOpen] = useState(true)
   const [cursor, setCursor] = useState(0)
   const floatRef = useRef(floatOn)
   const cursorRef = useRef(0)
@@ -87,12 +49,6 @@ export function TimelineUniverse3d({ days, filter, avatar, battle = true, onOpen
   const cursorMax = Math.min(90, Math.max(30, days.length))
 
   const totalNodes = days.reduce((s, d) => s + filterNodes(d.items, filter).length, 0)
-  /** 各类型节点计数（图例徽标） */
-  const typeCounts = useMemo(() => {
-    const m = {} as Record<TimelineType, number>
-    for (const d of days) for (const it of filterNodes(d.items, filter)) m[it.t] = (m[it.t] ?? 0) + 1
-    return m
-  }, [days, filter])
 
   useEffect(() => { floatRef.current = floatOn }, [floatOn])
   useEffect(() => { cursorRef.current = cursor }, [cursor])
@@ -787,6 +743,11 @@ export function TimelineUniverse3d({ days, filter, avatar, battle = true, onOpen
     else { setSelNode(null); setSelPair(null) }
   }
 
+  // 转速切换（底栏回调）：同步档位 state 与场景闭包读取的 speedRef
+  const onSpeed = (i: number) => { setSpeedIdx(i); speedRef.current = SPEED_STEPS[i] }
+  // 重置视角（底栏回调）：回到挂载时的初始机位与目标点
+  const onResetView = () => { const c = camRef.current; if (c) { c.camera.position.copy(c.initPos); c.controls.target.copy(c.initTarget); c.camera.updateProjectionMatrix() } }
+
   /** 时间游标：每帧按 cursorRef 折算节点淡出系数（0=全显） */
   function nodeFadeOf(it: TimelineNode): number {
     const c = cursorRef.current
@@ -807,83 +768,21 @@ export function TimelineUniverse3d({ days, filter, avatar, battle = true, onOpen
         <span className="uni3d-title">{avatar}的节点宇宙 · {totalNodes} 颗节点</span>
       </div>
       {/* 右上：图例面板（避开头像区 · 可折叠 · 悬停看提示，需要时才占用画面） */}
-      <div className={`uni3d-lg${legendOpen ? ' open' : ''}`}>
-        <button className="uni3d-lg-toggle" onClick={() => setLegendOpen((o) => !o)} title={legendOpen ? '收起图例' : '展开图例'}>
-          <span className="uni3d-lg-pin" />图例<span className="uni3d-lg-caret">▾</span>
-        </button>
-        {legendOpen && (
-          <div className="uni3d-lg-body">
-            <div className="lg-group">
-              <div className="lg-cap">类型 · 悬浮节点看详情</div>
-              <div className="lg-types">
-                {TL_TYPES.map(([k, l]) => (
-                  <span className="uni3d-legend-item" key={k} title={`${l} · ${typeCounts[k] ?? 0} 颗 · 点击节点高亮同类型关系`}>
-                    <i style={{ background: TL_COLOR[k] }} />{l}
-                    <em>{typeCounts[k] ?? 0}</em>
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div className="lg-group">
-              <div className="lg-cap">关系连线 · 点击可选中</div>
-              <div className="lg-rels">
-                <span className="rl-item" title="同一天的节点自动相连"><i style={{ background: '#6db8ff' }} />同日期</span>
-                <span className="rl-item" title="同一类型的节点自动串联"><i style={{ background: '#ffb066' }} />同类型</span>
-                <span className="rl-item" title="节点到中心的辐射参考线"><i style={{ background: '#8fb9e8' }} />辐射</span>
-                <span className="rl-item hot" title="选中后：暖金加粗 + 相机自动聚焦"><i style={{ background: '#ffd76a' }} />选中</span>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+      <UniverseLegend days={days} filter={filter} />
       {/* 底部辅助栏（纯功能控件；进入专注模式后整体隐藏） */}
-      <div className="uni3d-bar">
-        <span className="ub-label">转速</span>
-        {SPEED_LABEL.map((l, i) => (
-          <button key={l} className={`ub-btn${speedIdx === i ? ' on' : ''}`} onClick={() => { setSpeedIdx(i); speedRef.current = SPEED_STEPS[i] }}>{l}</button>
-        ))}
-        <button className="ub-btn" onClick={() => setFocusMode((f) => !f)}>专注模式</button>
-        <button className="ub-btn" onClick={() => { const c = camRef.current; if (c) { c.camera.position.copy(c.initPos); c.controls.target.copy(c.initTarget); c.camera.updateProjectionMatrix() } }} disabled={!camRef.current} title="回到初始视角">重置视角</button>
-        <button className={`ub-btn${floatOn ? ' on' : ''}`} onClick={() => setFloatOn((v) => !v)}>内容浮现 {floatOn ? '开' : '关'}</button>
-        {battle && <button className="ub-btn game" onClick={() => onOpenGame?.()} title="游戏·讨伐：回到时光长河并展开讨伐卡">⚔️ 讨伐</button>}
-        {battle && <span className="ub-div" />}
-        <span className="ub-label">时间游标</span>
-        <span className="ub-cursor">
-          <input type="range" min={0} max={cursorMax} value={cursor}
-            onChange={(e) => setCursor(Number(e.target.value))} aria-label="时间游标" />
-          <em>{cursor === 0 ? '全部' : `近 ${cursor} 天`}</em>
-        </span>
-      </div>
+      <UniverseControls
+        speedIdx={speedIdx} onSpeed={onSpeed} onToggleFocus={() => setFocusMode((f) => !f)}
+        onResetView={onResetView} canReset={!!camRef.current} floatOn={floatOn} onToggleFloat={() => setFloatOn((v) => !v)}
+        battle={battle} onOpenGame={onOpenGame} cursor={cursor} cursorMax={cursorMax} onCursor={setCursor}
+      />
       {/* 服务器实时状态（左下角）：CPU / 内存 / 网络，感知节点宇宙对服务器的负载 */}
       <ServerStatusPanel />
       {/* 专注模式浮层提示（进入后其余控件全部隐藏，仅此一条 + Esc 退出） */}
       {focusMode && <div className="uni3d-focus-hint">专注中 · Esc 退出</div>}
       {/* 悬停信息卡 */}
-      {tip && (
-        <div ref={tipRef} className="uni3d-tip" style={{ left: tip.x + 14, top: tip.y + 14 }}>
-          <div className="t-type">{TL_TYPES.find(([k]) => k === tip.it.t)?.[1]} · 第 {tip.layer + 1} 层轨道 · {daysAgo(tip.it.date) === 0 ? '今天' : `${daysAgo(tip.it.date)} 天前`}</div>
-          <div className="t-title">{tip.it.title}</div>
-          <div className="t-meta">{dayLabel(tip.it.date).d}{tip.it.xp ? ` · +${tip.it.xp} XP` : ''}{tip.it.gold ? ` · +${tip.it.gold} 金币` : ''}</div>
-        </div>
-      )}
+      {tip && <UniverseTooltip tip={tip} tipRef={tipRef} />}
       {/* 详情卡：节点 或 连接 */}
-      {(selNode || selPair) && (
-        <div className="uni3d-card" onClick={clearSel}>
-          {selNode ? (
-            <>
-              <div className="uh"><span className="udot" style={{ background: TL_COLOR[selNode.t] }} />{TYPE_EMOJI[selNode.t]} {selNode.title}</div>
-              <div className="us">{selNode.sub || TL_DESC[selNode.t]}</div>
-              <div className="um">{dayLabel(selNode.date).d} · {TL_TYPES.find(([k]) => k === selNode.t)?.[1]}{selNode.xp ? ` · +${selNode.xp} XP` : ''}{selNode.gold ? ` · +${selNode.gold} 金币` : ''} · Esc 取消高亮</div>
-            </>
-          ) : selPair && (
-            <>
-              <div className="uh"><span className="udot" style={{ background: selPair.kind === 'date' ? '#6db8ff' : '#ffb066' }} />{selPair.kind === 'date' ? '同日期连接' : '同类型连接'}</div>
-              <div className="us">{selPair.a.title} ⇄ {selPair.b.title}</div>
-              <div className="um">{dayLabel(selPair.a.date).d} ↔ {dayLabel(selPair.b.date).d} · Esc 取消高亮</div>
-            </>
-          )}
-        </div>
-      )}
+      <UniverseDetailCard selNode={selNode} selPair={selPair} onClose={clearSel} />
     </div>
   )
 }

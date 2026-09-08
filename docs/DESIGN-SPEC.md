@@ -164,23 +164,51 @@ tests/e2e/
 
 ## 8. 质量门禁与验证规范（Quality Gate）
 
-- **合并门槛（DoD）**：CI 全绿（typecheck ✅ / test ✅ / lint ✅ / build ✅）+ PR 模板已填 + 无未解决 🔴 + 关键路径有测试 + 至少一审批。🔴
-- **CI（`ci.yml`）**：对 `master` 的 PR，各包并行 `install→db:generate(server)→typecheck→test→装 lint→lint→build(前端)`；E2E 仅 typecheck+lint（浏览器运行按需/定时，不阻塞普通 PR）。🔴
+- **合并门槛（DoD）**：typecheck ✅ / test ✅ / lint ✅ / build ✅（含设计令牌门禁）+ 无未解决 🔴 + 关键路径有测试。🔴
+- **门禁执行点（当前现实）**：本仓库为个人本地项目，**未搭建 CI**；门禁在本地执行——`server`：`pnpm typecheck / test / lint`；`apps/workbench`：`pnpm typecheck / test / build`（`build` 前置运行 `check-tokens` 设计令牌检查，见 §9.4）。部署前必须全绿（见 `docs/DEPLOY.md`）。🔴
 - **严重级别**：🔴 Blocker（安全/数据损坏/宕机/破契约/缺关键错误处理，必须改）｜🟡 Suggestion（校验/并发/性能/可维护性，应改或挂 issue）｜💭 Nit（命名/一致性，可选）。🔴
-- **测试要求**：涉及 API 契约、序列化、鉴权/权限、存储落盘的改动**必须带测试**。🔴
+- **测试要求**：涉及 API 契约、序列化、鉴权/权限、存储落盘的改动**必须带测试**；新增脚本类工具须有纯函数单测（如 `check-tokens`）。🔴
 
 ---
 
 ## 9. 视觉 / UX 设计规范（Visual & UX）
 
-> 既有的项目视觉基线（来自 `USER.md` 与 `fuwari-blog` 实现），作为前端与展示层设计约束。
+> 既有的项目视觉基线，作为前端与展示层设计约束。§9.2 色彩纪律与 §9.3 令牌阶梯由 `check-tokens` 自动化门禁强制执行（§9.4）。
+
+### 9.1 视觉基调与浮层
 
 - **整体调性**：温暖、低饱和的奶油色（cream）视觉风格；公开站点以 R3F/GLSL 星云背景营造科技感（仅 display 区，read 区安静）。💭 **轻度融合**：内容区（`.main` 内）卡片容器与页面玻璃背景融为一体——`--surface-card: transparent`、无卡片阴影、边框退化为极浅线，层级靠留白/字重/hover 浮现边界（2026-09 起生效，弹窗/抽屉/下拉菜单等实底浮层不受影响）；新增页面请沿用该容器基调，勿再引入实底白卡。
 - **玻璃拟态**：命令面板 / 悬停预览 / 模态采用 `backdrop-blur` 玻璃浮层（与现有 ⌘K 浮层一致）。💭 注意：玻璃模糊只作用于**浮层本体**，不得作用于浮层背后的页面（见下条）。
 - **浮层遮罩（硬性约束）**：功能弹窗 / 抽屉 / 悬浮面板**一律不使用视觉背景遮罩**——不做整页变暗、不给背后页面加 backdrop 模糊，避免"弹窗一出、全页失衡"。需要「点击外部关闭」时，用**透明捕获层**实现（`.overlay`、`.drawer-mask`、`.rev-mask` 等仅作为 fixed 透明命中层，配合 Esc 与关闭按钮兜底）。例外（允许全屏沉浸遮罩）：图片灯箱 `.md-lightbox`、升级庆祝 `.lvup-overlay`、3D 专注模式 `.uni3d.full`。新增浮层组件必须遵守本条，评审时按此检查。🟠
 - **动效门控**：所有重特效（星云、曲速过场、轨道导航、相机穿行）须 `effect-zone` 分区挂载 + `prefers-reduced-motion` 双门控，低性能设备降级（DPR≤1.5 / antialias off / low-power）。🟡
-- **主题系统**：前端主题 CSS 变量以 `shared/theme.css` 为**唯一真相源**，组件内禁止硬编码主题色；明/暗主题经设置下发，强调色经设置台可配。🔴
+- **键盘可达**：全局 `:focus-visible` 焦点环已就位（`main.css`），交互元素不得用 `outline: none` 裸奔；模态/命令面板支持 ↑↓/Enter/Esc。🟡
 - **代码块**：程序员风 IDE 外壳（窗口点 + 文件名 + 语言徽章、行高亮/折叠、diff 三色、终端 `$` 分色、连字字体）。💭
+
+### 9.2 色彩纪律
+
+- **时间线六色**：蓝（日志）/ 黄（灵感）/ 橙（计划）/ 绿（习惯）/ 红（记账）/ 青（目标），唯一定义于 `apps/workbench/src/components/timeline/timeline.ts` 的 `TL_COLOR`；其他模块用色须复用该表，禁止另立色表。🔴
+- **紫色全线禁止**：包括但不限于界面元素、渐变停点、粒子特效、主题强调色、CSS 命名色（purple/violet/fuchsia/magenta/rebeccapurple 等）。判定不靠枚举，按色相通用判定（红蓝双高、绿被压低）。🔴
+- **主题系统真相源**：`apps/workbench/src/styles/main.css` 的 `:root` 令牌区（暗色成对覆写于 `[data-theme='dark']`）；可切换主题注册表在 `apps/workbench/src/lib/theme.ts`，仅允许覆盖 `--accent` / `--accent-2`，禁止覆盖骨架文字/背景变量。`shared/theme.css` 已删除（2026-09-08），不得复活双轨。🔴
+
+### 9.3 令牌阶梯（写样式前先查表）
+
+| 类别 | 令牌 | 值 |
+|------|------|-----|
+| 字号 | `--fs-2xs`→`--fs-3xl` | 10 / 11 / 12 / 13 / 14 / 15 / 16 / 18 / 22 px |
+| 层叠 | `--z-pop / float / hud / modal / drawer / menu / toast / celebrate / max` | 30 / 40 / 42 / 50 / 60 / 70 / 99 / 120 / 200 |
+| 动效时长 | `--dur-fast / mid / slow` | 150 / 300 / 600 ms |
+| 玻璃模糊 | `--glass-blur-sm / md / lg / xl` | 8 / 12 / 18 / 24 px |
+
+- **字号**：正文字号（10–16px 整数）一律 `var(--fs-*)`；小数微调值（如 `12.5px`）与 ≥17px 展示字允许字面；<10px 整数禁止。🔴
+- **层叠**：`z-index < 30` 为组件局部层叠，可用字面量；跨组件浮层（≥30）必须 `var(--z-*)`。🔴
+- **玻璃模糊**：`backdrop-filter / filter` 的 `blur()` 一律 `var(--glass-blur-*)`。🔴
+- **深色适配**：用**成对令牌**——明色值定义在 `:root`，暗色值覆写在 `[data-theme='dark']`，消费方零 dark 补丁；禁止在组件样式里新增 `[data-theme='dark'] .xxx` 补丁选择器。🟠
+
+### 9.4 执行机制与豁免（check-tokens）
+
+- **门禁**：`apps/workbench/scripts/check-tokens.mjs` 扫描 `src/**/*.{css,ts,tsx}`，规则 R1 紫色 / R2 字号 / R3 层叠 / R4 模糊；接入 `pnpm build` 前置（`pnpm check:design` 可单独运行），违规即**阻断构建**。纯函数单测：`tests/workbench/scripts/check-tokens.test.ts`。🔴
+- **豁免**：确属特例（如导出独立 HTML 无应用令牌可用、第三方库文案）在行内加 `design-ok: 原因` 注释显式豁免；豁免必须写明原因，无原因的豁免按违规处理。🟠
+- **历史教训**：本节机制源于 2026-09-08 界面审查——此前规范只写"样式遵循 theme.css"一句，无可查阶梯表、无自动门禁，导致紫色残留、硬编码字号/层叠、dark 补丁、双轨样式文件四类问题长期积累（根因分析见 `docs/memory/2026-09-08.md`）。
 
 ---
 
@@ -190,17 +218,13 @@ tests/e2e/
 
 | 路径 | 类型 | 门禁 | Lint 规则集 | 构建/测试 | 设计权限 | Owner |
 |------|------|------|------------|-----------|----------|-------|
-| `server/` | 后端包 | ✅ | 共享+node | typecheck/test/lint/build | **L** | @Lynn |
-| `apps/write/` | 前端包 | ✅ | 共享+react | typecheck/test/lint/build | **L** | @Lynn |
-| `apps/console/` | 前端包 | ✅ | 共享+react | typecheck/test/lint/build | **L** | @Lynn |
-| `tests/e2e/` | 测试包 | ✅(typecheck+lint) | 共享 | E2E 按需/定时 | **L** | @Lynn |
+| `server/` | 后端包 | ✅ | 共享+node | typecheck/test/lint | **L** | @Lynn |
+| `apps/workbench/` | 前端包 | ✅ | 共享+react | typecheck/test/build（含 check-tokens 设计门禁） | **L** | @Lynn |
+| `tests/` | 测试包 | ✅ | 共享 | 随各包 vitest 运行 | **L** | @Lynn |
 | `docs/` | 文档 | ✅(doc) | — | — | **L** | @Lynn |
-| `.github/` | CI/部署 | ✅ | — | 触发门禁/发布 | **L** | @Lynn |
-| 根配置（eslint/.prettierrc/.editorconfig/CODEOWNERS） | 配置 | ✅ | — | 被各包引用 | **L** | @Lynn |
-| `fuwari-blog/` | 第三方模板 | ❌ | 不纳入 | Astro 自有构建 | **S**（仅定向改动边界） | @Lynn |
-| `node_modules/`、`dist/`、`.workbuddy/`、`*.db` | 产物/数据 | ❌ | — | 忽略 | **X** | — |
+| 根配置（eslint/.prettierrc/.editorconfig） | 配置 | ✅ | — | 被各包引用 | **L** | @Lynn |
+| `node_modules/`、`dist/`、`*.db`、`test-results/` | 产物/数据 | ❌ | — | 忽略 | **X** | — |
 
 **权限说明**：
-- **L（完全）**：可新增 / 修改 / 删除文件与目录，须遵守本规范第 1–9 节与 `CODE_REVIEW.md` 清单。
-- **S（限定）**：仅允许"不破坏 Astro 构建管线 / effect-zone 分区 / nginx 反代路径"的定向改动；不纳入本仓库 Lint/单测门禁，不评审其内部实现。
+- **L（完全）**：可新增 / 修改 / 删除文件与目录，须遵守本规范第 1–9 节清单。
 - **X（排除）**：运行时/缓存/项目数据，不受设计正文约束，仅受 `.gitignore` 与构建规则约束。

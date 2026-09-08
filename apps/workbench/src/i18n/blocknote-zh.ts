@@ -88,7 +88,7 @@ const zhOverrides = {
     background_title: '背景颜色',
     colors: {
       default: '默认', gray: '灰色', brown: '棕色', red: '红色', orange: '橙色',
-      yellow: '黄色', green: '绿色', blue: '蓝色', purple: '紫色', pink: '粉色',
+      yellow: '黄色', green: '绿色', blue: '蓝色', purple: '紫色', pink: '粉色', // design-ok: BlockNote 内置颜色名的翻译文案，非界面样式
     },
   },
   formatting_toolbar: {

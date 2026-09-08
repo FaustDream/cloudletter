@@ -77,10 +77,10 @@ ${katexCss}
   .paper { max-width: 800px; margin: 32px auto 48px; background: #fff; border-radius: 14px;
     box-shadow: 0 6px 24px rgba(40,60,100,.08); padding: 56px 64px; }
   h1.doc-title { font-size: 32px; line-height: 1.3; margin: 0 0 10px; }
-  .doc-meta { color: #6b7280; font-size: 13px; margin-bottom: 8px; }
+  .doc-meta { color: #6b7280; font-size: 13px; margin-bottom: 8px; } /* design-ok: 导出为独立 HTML，无应用令牌可用 */
   .doc-meta .sep { margin: 0 8px; opacity: .5; }
   .doc-tag { display: inline-block; background: #eef2ff; color: #4f6ef2; border-radius: 999px;
-    padding: 1px 10px; font-size: 12px; margin-right: 6px; }
+    padding: 1px 10px; font-size: 12px; margin-right: 6px; } /* design-ok: 导出为独立 HTML，无应用令牌可用 */
   .doc-cover { width: 100%; border-radius: 10px; margin: 18px 0 6px; }
   h1, h2, h3, h4 { line-height: 1.35; margin: 1.4em 0 .6em; }
   h1 { font-size: 26px; } h2 { font-size: 22px; } h3 { font-size: 18px; }

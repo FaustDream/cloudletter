@@ -4,7 +4,7 @@
  */
 import { useEffect, useMemo } from 'react'
 
-const COLORS = ['#ffd166', '#ef476f', '#06d6a0', '#118ab2', '#8b5cf6', '#f4a261']
+const COLORS = ['#ffd166', '#ef476f', '#06d6a0', '#118ab2', '#38bdf8', '#f4a261']
 
 export function LevelUpOverlay({ level }: { level: number }) {
   // 一次性生成粒子参数（组件生命周期内固定）

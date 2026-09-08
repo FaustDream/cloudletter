@@ -17,10 +17,10 @@ import { nextBulletStyle, nextOrderedStyle, BULLET_STYLES, ORDERED_STYLES, LIST_
 type Editor = BlockNoteEditor<any, any, any>
 
 /** 文字色/背景色：默认值显示为「正常颜色」（文字默认黑、背景默认白），其余为拖自调色板的常用色 */
-const TEXT_COLORS = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'default'] as const
+const TEXT_COLORS = ['red', 'orange', 'yellow', 'green', 'blue', 'cyan', 'default'] as const
 const COLOR_HEX: Record<string, string> = {
   red: '#e0483d', orange: '#e0791f', yellow: '#ddb42e', green: '#3aa052',
-  blue: '#3b82d6', purple: '#8b5cf6', default: 'transparent',
+  blue: '#3b82d6', cyan: '#06b6d4', default: 'transparent',
 }
 const COLOR_DEFAULT_HEX: Record<string, string> = {
   textColor: '#16181d',

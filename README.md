@@ -10,9 +10,8 @@ cloudletter/
 ├─ apps/workbench/   # 前端：React 18 + Vite + TS（端口 3015，/api 代理至 3011）
 ├─ tests/            # 测试统一目录
 │  ├─ server/        #   后端单测（vitest，本地不入库；routes/ middleware/ 镜像源码目录）
-│  ├─ workbench/     #   前端单测（vitest，本地不入库；components/ lib/ pages/ 镜像源码目录）
+│  ├─ workbench/     #   前端单测（vitest，本地不入库；components/ lib/ pages/ scripts/ 镜像源码目录）
 │  └─ e2e/           #   Playwright 端到端测试（独立工作区，入库）
-├─ shared/           # 共享样式 theme.css
 └─ docs/             # DESIGN-SPEC.md 设计规范 + DEPLOY.md 部署文档 + memory/ 上下文记忆
 ```
 
@@ -35,13 +34,15 @@ pnpm -C server test                # 后端单测（vitest run）
 pnpm -C apps/workbench test        # 前端单测（vitest run）
 pnpm -C server typecheck           # 后端类型检查
 pnpm -C apps/workbench typecheck   # 前端类型检查
-pnpm -C apps/workbench build       # 前端生产构建
+pnpm -C apps/workbench check:design # 设计令牌纪律检查（紫色/字号/层叠/模糊，DESIGN-SPEC §9）
+pnpm -C apps/workbench build       # 前端生产构建（前置 check-tokens 设计门禁）
 pnpm -C tests/e2e test             # 端到端测试（Playwright，独立端口 4011/4015）
 pnpm -C tests/e2e test:headed      # 端到端测试（有头浏览器）
 ```
 
 ## 变更记录
 
+- 2026-09-08（六）：全站界面风格审查整改并已上站。① 紫色全线清零（主题「星夜紫」改「星夜青」、渐变/粒子/强调色统一并入时间线六色体系，判定按色相通用规则不靠枚举）。② 设计令牌收敛：`main.css` `:root` 新增字号（--fs-\*）、层叠（--z-\*）、动效（--dur-\*）、玻璃模糊（--glass-blur-\*）四张阶梯表，全站硬编码值经 codemod 迁移至令牌；`.am-menu`/便签/头像渐变改为成对令牌（浅色在 :root、暗色在 [data-theme='dark'] 成对覆写），删除组件内 dark 补丁。③ 键盘可达性：全局 `:focus-visible` 焦点环补齐。④ `shared/theme.css` 双轨样式删除（零引用确认）。⑤ 巨型组件拆分：SettingsPage（76KB→7 组件）、LoginPage（27KB→5 组件）、TimelineUniverse3d（42KB→核心+4 UI 组件）。⑥ 新增设计门禁 `apps/workbench/scripts/check-tokens.mjs`（R1 紫色/R2 字号/R3 层叠/R4 模糊，行内 `design-ok: 原因` 豁免），接入 `pnpm build` 前置，单测 13 例。规范同步：DESIGN-SPEC §9 令牌清单与执行机制、AGENTS.md 令牌纪律条目。前端单测 144/144、typecheck 干净、浏览器冒烟 9 项全过。
 - 2026-09-08（四）：密码规则放宽为「数字+英文字母」（废止必须含中文的要求），`lib/passwordRule` 与重置/改密码两端校验、设置页文案同步；修复个人中心菜单半透明透字——根因为 `.sidebar .foot` 的祖先级 `opacity:.7` 传染整棵子树（子元素 opacity:1 无法逃逸），删除该 opacity 改用弱文字色表达弱化。单测 142/142（passwordRule 新增 4 例）；部署备份 `2026-09-08T03-14-19`，生产实测纯英文无数字 422 缺数字。
 - 2026-09-08（三）：密码重置流程安全完善并已上站。① 修复已登录状态点击重置邮件链接被跳转首页的问题——带 `?reset=` 参数时直达「设置新密码」面板（App.tsx LoginRoute 放行）。② 新密码强度校验补齐：重置与改密码两条路由统一接入 passwordRule 复杂度策略（必须同时包含中文与英文字母，长度 8-128），服务端此前仅有长度护栏、UI 宣示的规则未强制执行；校验先于令牌消费，弱密码 422 后同一链接仍可换合规密码重试。③ 重置成功后清理本地已撤销会话的失效凭据。既有机制保持：邮件链接含一次性令牌（仅存哈希、15 分钟有效、失败一次即作废、防邮箱枚举）、重置成功撤销全部会话。单测 138/138（新增 2 例）；部署备份 `2026-09-08T02-57-41`，生产实测弱密码 422 / 无效令牌 401。
 - 2026-09-08（五）：个人中心菜单实底再增强并已上站——锚定深浅两套高对比底色（浅 #ffffff / 深 #1b2742，比页面底色明显更亮一档）+ 亮描边 + 双层阴影，不再随 `--surface-solid` 半透明覆写；状态格改 accent-muted 底。双主题浏览器实测菜单均从侧栏/页面背景清晰浮出、文字可读。部署入口 index-CqdV_394.js 与本地一致、healthz ok。
