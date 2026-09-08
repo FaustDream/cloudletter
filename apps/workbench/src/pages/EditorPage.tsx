@@ -9,7 +9,7 @@
  * - baseVersion 乐观锁；图片粘贴/拖拽/上传统一走 /uploads（客户端先压缩略图，见 lib/image.ts）
  * - 右栏文档信息：分类下拉 / 标签下拉多选（可搜索·可新建）/ 摘要 / 封面 / Slug
  */
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError, uploadImage, type Category, type PostDetail } from '../api'
 import { useToast } from '../components/framework/Toast'

@@ -210,7 +210,6 @@ export function buildNodeWorld(scene: THREE.Scene, days: TimelineDay[], filter: 
   }
   paintPairs(null)
 
-  const tmp = new THREE.Vector3()
   const nearestPair = (p: THREE.Vector3): number => {
     const ab = new THREE.Vector3()
     let best = -1

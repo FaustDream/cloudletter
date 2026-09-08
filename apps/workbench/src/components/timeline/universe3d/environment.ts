@@ -3,7 +3,7 @@
  * 从 TimelineUniverse3d 的挂载闭包拆出，主组件只做组合与交互。
  */
 import * as THREE from 'three'
-import { SKY, SUN_COLOR, SUN_GLOW, ORBITS } from './consts'
+import { SUN_COLOR, SUN_GLOW, ORBITS } from './consts'
 
 export interface UniverseEnvironment {
   stars: THREE.Points

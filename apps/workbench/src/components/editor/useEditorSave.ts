@@ -50,8 +50,6 @@ export function useEditorSave({
   const conflictSeenRef = useRef(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const id = post?.id
-
   /* ===== 保存（冲突自动以本地覆盖重试，见 savePolicy） =====
    * kind：manual=手动保存（按钮/Ctrl+S/发布前落库，历史必留快照）；auto=自动保存（5s 静默 + 服务端 2 分钟频控） */
   const doSave = useCallback(
