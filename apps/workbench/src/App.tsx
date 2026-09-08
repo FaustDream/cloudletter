@@ -1,5 +1,5 @@
 /** 工作台路由：内容(总览/文章/灵感/分类标签/检索) + 日常 + 计划/目标/习惯 + 记账 + 账号，旧路径重定向 */
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useSearchParams } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth'
 import { Shell } from './components/framework/Shell'
 import { ToastProvider } from './components/framework/Toast'
@@ -32,8 +32,10 @@ function Guard({ children }: { children: React.ReactNode }) {
 
 function LoginRoute() {
   const { user, loading } = useAuth()
+  const [sp] = useSearchParams()
   if (loading) return <div className="boot" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>载入中…</div>
-  if (user) return <Navigate to="/" replace />
+  // 邮件重置链接直达：已登录也进入「设置新密码」面板（重置成功会撤销全部会话，需重新登录）
+  if (user && !sp.get('reset')) return <Navigate to="/" replace />
   return <LoginPage />
 }
 

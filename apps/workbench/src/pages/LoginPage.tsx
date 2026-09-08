@@ -291,9 +291,13 @@ export function LoginPage() {
     e.preventDefault()
     setErr('')
     if (newPwd.length < 8) { setErr('新密码至少 8 位'); return }
+    // 与服务端 passwordRule 同口径：必须同时包含中文与英文字母
+    if (!/[\u4e00-\u9fff]/.test(newPwd) || !/[a-zA-Z]/.test(newPwd)) { setErr('新密码必须同时包含中文与英文字母'); return }
     setBusy(true)
     try {
       await api.post('/auth/reset', { email: resetEmail, token: resetToken, newPassword: newPwd })
+      // 重置成功：服务端已撤销全部会话，本地失效凭据一并清掉
+      void import('../api').then(({ setToken }) => setToken(null))
       setResetDone(true)
     } catch (ex: any) {
       setErr(ex?.message || '重置失败，链接可能已失效')
@@ -354,7 +358,7 @@ export function LoginPage() {
                     <Icon name={showPwd ? 'eye-off' : 'eye'} size={17} />
                   </button>
                 </div>
-                <p className="dim" style={{ fontSize: 12, marginTop: 6 }}>该链接仅一次性有效，且不影响已发布内容与数据。</p>
+                <p className="dim" style={{ fontSize: 12, marginTop: 6 }}>8-128 位，须同时包含中文与英文字母；链接仅一次性有效（15 分钟内），且不影响已发布内容与数据。</p>
               </div>
               <button className="btn lblk" type="submit" disabled={busy}>{busy ? '提交中…' : '确认重置'}</button>
             </form>

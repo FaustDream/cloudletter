@@ -360,6 +360,9 @@ auth.post('/reset', ah(async (req, res) => {
   if (!email || !token || !newPassword) return err(res, 422, 'VALIDATION', 'email / token / newPassword 必填')
   if (String(newPassword).length < 8) return err(res, 422, 'VALIDATION', '新密码至少 8 位')
   if (passwordReject(newPassword)) return err(res, 422, 'VALIDATION', `新密码最长 ${PASSWORD_MAX} 位`)
+  // 强度校验与「设置 → 改密码」同口径：必须同时包含中文与英文字母（校验先于 token 消费，失败可换密码重试）
+  const policy = passwordPolicyError(String(newPassword))
+  if (policy) return err(res, 422, 'VALIDATION', policy)
   const user = await prisma.user.findUnique({ where: { email: String(email).trim().toLowerCase() } })
   if (!user) return err(res, 401, 'AUTH_REQUIRED', '重置链接无效')
   const ok = await consumeMailCode(user.email, 'reset', String(token))
@@ -469,6 +472,9 @@ auth.post('/password', requireAuth, ah(async (req, res) => {
   if (passwordReject(oldPassword) || passwordReject(newPassword)) {
     return err(res, 422, 'VALIDATION', `密码最长 ${PASSWORD_MAX} 位`)
   }
+  // 与重置密码同口径的强度校验（设置页 UI 已宣示该规则，服务端补齐执行）
+  const policy = passwordPolicyError(String(newPassword))
+  if (policy) return err(res, 422, 'VALIDATION', policy)
   const user = await prisma.user.findUnique({ where: { id: req.user!.id } })
   if (!user || !verifyPassword(oldPassword, user.passwordHash)) {
     return err(res, 401, 'AUTH_REQUIRED', '旧密码错误')
