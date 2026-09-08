@@ -10,6 +10,7 @@ import { hashToken, requireAuth } from '../auth'
 import { generateToken } from '../crypto'
 import { sendMail, smtpStatus } from '../mailer'
 import { ah, err } from './helpers'
+import { webOrigin } from '../lib/webOrigin'
 
 export const grants = Router()
 
@@ -74,7 +75,7 @@ grants.post('/', requireAuth, ah(async (req, res) => {
       expiresAt: new Date(Date.now() + Math.min(ttl, MAX_TTL_MS)),
     },
   })
-  const origin = `${req.protocol}://${req.get('host') || 'localhost:3015'}`
+  const origin = webOrigin(req)
   const link = `${origin}/grant?token=${token}`
   const st = smtpStatus()
   if (!st.ok && !st.demo) {

@@ -12,13 +12,14 @@ import { prisma } from '../prisma'
 import { requireAuth } from '../auth'
 import { ah, err } from './helpers'
 import { buildRssFeed, fetchAndParseFeed } from '../lib/rss'
+import { webOrigin } from '../lib/webOrigin'
 import { logActivity } from '../services/activity'
 
 export const rss = Router()
 
 /** 公开 Feed（无需登录）：完整 XML 输出，供其他博客/阅读器订阅 */
 rss.get('/rss.xml', ah(async (_req, res) => {
-  const origin = `${_req.protocol}://${_req.get('host') || 'localhost:3015'}`
+  const origin = webOrigin(_req)
   const xml = await buildRssFeed(origin)
   res.setHeader('content-type', 'application/rss+xml; charset=utf-8')
   res.setHeader('cache-control', 'no-cache')

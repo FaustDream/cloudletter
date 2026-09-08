@@ -10,6 +10,7 @@ import { sendMail, smtpStatus } from '../mailer'
 import { ah, err } from './helpers'
 import { requestInfo, logActivity } from '../services/activity'
 import { passwordPolicyError } from '../lib/passwordRule'
+import { webOrigin } from '../lib/webOrigin'
 import { recordLoginSession } from './security'
 
 export const auth = Router()
@@ -338,7 +339,9 @@ auth.post('/send-reset', ah(async (req, res) => {
   }
   const token = generateToken(32) // 密文仅出现在邮件链接中，库内只存哈希
   await storeMailCode(email, 'reset', token, RESET_TTL_MS)
-  const origin = `${req.protocol}://${req.get('host') || 'localhost:3015'}`
+  // 链接必须指向前端站点（/login 是 SPA 路由），不能沿用 API 的 Host——
+  // 本地经 vite 代理 Host=后端端口，点开会得到「接口不存在」404
+  const origin = webOrigin(req)
   const link = `${origin}/login?reset=${token}&email=${encodeURIComponent(user.email)}`
   const st = smtpStatus()
   if (!st.ok && !st.demo) return err(res, 503, 'SMTP_DISABLED', st.reason ?? '邮件服务不可用')
