@@ -17,8 +17,7 @@ import { filterNodes } from '../components/timeline/timeline'
 import { AvatarMenu } from '../components/framework/AvatarMenu'
 import { EmptyState } from '../components/framework/EmptyState'
 import { Loading } from '../components/framework/Loading'
-import { RangePicker, DEFAULT_RANGE, quickToRange, type RangeState } from '../components/timeline/RangePicker'
-import { addDays, todayYMD } from '../lib/date'
+import { RangePicker, DEFAULT_RANGE, quickStateOf, type RangeState } from '../components/timeline/RangePicker'
 import { readGamePrefs, type GamePrefs } from '../lib/gamePrefs'
 
 /** 四种独立世界观 */
@@ -31,21 +30,6 @@ const WORLDS: Array<{ id: View; icon: string; label: string; tip: string }> = [
   { id: 'core', icon: '△', label: '核心', tip: '观察「运行」：当前整体指标' },
 ]
 
-/** 时间缩放档位（需求 §5.4）：当天 / 近7天 / 近30天 / 本月 / 近一年 */
-const SCALES: Array<{ id: string; label: string; to: RangeState }> = [
-  { id: 'day', label: '当天', to: { mode: 'custom', quick: 7, from: todayYMD(), to: todayYMD() } },
-  { id: 'week', label: '近7天', to: { ...quickToRange(7), mode: 'quick', quick: 7 } },
-  { id: 'month', label: '近30天', to: { ...quickToRange(30), mode: 'quick', quick: 30 } },
-  { id: 'cur-month', label: '本月', to: { mode: 'custom', quick: 30, from: todayYMD().slice(0, 7) + '-01', to: todayYMD() } },
-  { id: 'year', label: '近一年', to: { ...quickToRange(365), mode: 'quick', quick: 365 } },
-]
-function scaleIdOf(r: RangeState): string {
-  for (const s of SCALES) {
-    if (s.to.mode === r.mode && s.to.from === r.from && s.to.to === r.to) return s.id
-  }
-  return ''
-}
-
 const RANGE_KEY = 'cl_tl_range'
 
 function loadRangePref(): RangeState {
@@ -55,8 +39,8 @@ function loadRangePref(): RangeState {
       const p = JSON.parse(raw) as RangeState
       if (p && (p.mode === 'quick' || p.mode === 'custom')) {
         if (p.mode === 'custom' && p.from && p.to) return { ...DEFAULT_RANGE, mode: 'custom', from: p.from, to: p.to }
-        const q = Number(p.quick) || 30
-        return { ...quickToRange(q), mode: 'quick', quick: q }
+        const q = Number(p.quick)
+        if (Number.isFinite(q) && q >= 0) return quickStateOf(q)
       }
     }
   } catch { /* 忽略损坏偏好 */ }
@@ -147,16 +131,6 @@ export function OverviewPage() {
   }, [hud.xp, filter, days.length])
 
   const avatar = (user?.nickname?.trim() || user?.email?.slice(0, 1) || '云').slice(0, 1).toUpperCase()
-  const scaleId = scaleIdOf(range)
-
-  // 时间缩放：滚轮在河流视图上循环档位
-  const onRiverWheel = (e: React.WheelEvent) => {
-    if (view !== 'fish') return
-    e.preventDefault()
-    const idx = SCALES.findIndex((s) => s.id === scaleId)
-    const next = idx < 0 ? 1 : (e.deltaY > 0 ? idx + 1 : idx - 1 + SCALES.length) % SCALES.length
-    setRange(SCALES[next].to)
-  }
 
   return (
     <>
@@ -195,14 +169,7 @@ export function OverviewPage() {
               <button className={`vtab${split === 'type' ? ' on' : ''}`} onClick={() => setSplit('type')}>按类型</button>
             )}
           </div>
-          {/* 时间缩放（河流） */}
-          {view === 'fish' && (
-            <div className="scale-seg" title="滚轮在画布上切换时间尺度">
-              {SCALES.map((s) => (
-                <button key={s.id} className={`scale-btn${scaleId === s.id ? ' on' : ''}`} onClick={() => setRange(s.to)}>{s.label}</button>
-              ))}
-            </div>
-          )}
+          {/* 时间范围（快捷档位 + 自定义起止日期，全部收进日期控件） */}
           <RangePicker value={range} onChange={setRange} />
         </div>
       )}
@@ -230,13 +197,13 @@ export function OverviewPage() {
               <div className="tl-head">
                 <div className="tl-greet hero">
                   <div className="hi">时光长河</div>
-                  <div className="sub">时间不是线，而是一条有你所有痕迹的河流 · 滚轮切换时间尺度</div>
+                  <div className="sub">时间不是线，而是一条有你所有痕迹的河流 · 用右上角日期控件切换时间尺度</div>
                 </div>
               </div>
-              {/* 滚轮容器必须常驻：空态也留在河面内，否则滑到「当天」无数据时滚轮档位失灵（卡死） */}
-              <div className="river-scroll" onWheel={onRiverWheel}>
+              {/* 滚轮容器常驻：空态也留在河面内；滚轮只负责上下翻页，不再切换时间档位 */}
+              <div className="river-scroll">
                 {days.length === 0
-                  ? <EmptyState variant="hero" icon="🌱">河床上还没有卵石 · 滚轮或上方档位切回更大的时间尺度，回到有痕迹的日子</EmptyState>
+                  ? <EmptyState variant="hero" icon="🌱">河床上还没有卵石 · 在右上角日期控件选一个更大的时间范围，回到有痕迹的日子</EmptyState>
                   : <TimelineBubbles days={days} filter={filter} split={split} onMoved={load} onOpenDetail={setDetailNode} />}
               </div>
             </>

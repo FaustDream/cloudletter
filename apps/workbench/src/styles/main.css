@@ -1756,10 +1756,12 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 
 /* 世界切换导航（第一层入口，悬浮置顶） */
 /* 顶栏（世界切换 / 筛选行）：浮于全屏视图（城市/核心 fixed 铺满）之上 */
+/* 注意：不用 --surface-card/--shadow-card——两者被 .main「去容器化」覆写为透明/无阴影，
+   导航条是悬浮控件，必须保留玻璃背景才能在 city/core 全屏视图上清晰可见 */
 .world-nav { display: inline-flex; align-items: center; gap: 2px; padding: 5px; margin: 0 0 12px;
-  position: relative; z-index: 3; }
-  background: color-mix(in srgb, var(--surface-card) 72%, transparent); border: 1px solid var(--border);
-  border-radius: 14px; box-shadow: var(--shadow-card); backdrop-filter: blur(12px); max-width: 100%; flex-wrap: wrap; }
+  position: relative; z-index: 3; background: color-mix(in srgb, var(--surface-nested) 82%, transparent);
+  border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 8px 24px rgba(15, 23, 42, .16);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); max-width: 100%; flex-wrap: wrap; }
 .world-nav-item { display: inline-flex; align-items: center; gap: 7px; padding: 7px 14px; border: none;
   background: transparent; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 700;
   color: var(--text-secondary); transition: all .18s; }
@@ -1771,14 +1773,11 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 .view-slot.fade-in { animation: worldIn .42s var(--ease-out) both; }
 @keyframes worldIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
-/* 时间缩放档位（河流滚轮切换） */
-.scale-seg { display: inline-flex; gap: 2px; background: var(--surface-nested); border-radius: 10px; padding: 3px; }
-.scale-btn { border: none; background: transparent; color: var(--text-secondary); font-size: 12px; font-weight: 600;
-  padding: 5px 10px; border-radius: 8px; cursor: pointer; transition: all .15s; }
-.scale-btn:hover { color: var(--text); }
-.scale-btn.on { background: var(--accent-muted); color: var(--accent); }
+/* 时间档位已并入日期控件（RangePicker），顶栏不再单列 */
 .river-scroll { cursor: grab; }
 .river-scroll:active { cursor: grabbing; }
+/* 日期控件日历图标（内联 SVG，垂直对齐按钮文字） */
+.rp-cal-ic { flex: 0 0 auto; vertical-align: -2px; }
 
 /* ═══════════════ 大屏三 · 数字城市 ═══════════════ */
 /* 数字城市：fixed 铺满整个视口（贴边无圆角），空间背景无限延伸；顶栏/HUD/FAB 浮在其上 */

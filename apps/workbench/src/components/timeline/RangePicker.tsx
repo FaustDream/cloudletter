@@ -1,6 +1,7 @@
 /**
- * 时间范围选择器（Overview 双视图共用）：快捷档位 + 自定义起止日期，替代原「仅快捷天数」下拉。
- * - 模式：quick（近 7/30/60/365 天）| custom（起止日期，搭配月历浮层选择）
+ * 时间范围选择器（Overview 共用）：快捷档位 + 自定义起止日期。
+ * - 快捷档位：当天 / 近 7 天 / 近 30 天 / 本月 / 近一年（原「时间缩放档位」并入此处，顶栏不再单列按钮组）
+ * - 自定义：起止日期，搭配月历浮层选择
  * - 浮层方位自动翻转（贴近视口边缘时向上展开），彻底规避原生日期弹层的位置怪癖
  */
 import { useEffect, useRef, useState } from 'react'
@@ -14,23 +15,35 @@ export interface RangeState {
   to: string
 }
 
-export const DEFAULT_RANGE: RangeState = { mode: 'quick', quick: 30, from: addDays(todayYMD(), -29), to: todayYMD() }
-
-const QUICKS = [
-  { v: 7, l: '近 7 天' },
-  { v: 30, l: '近 30 天' },
-  { v: 60, l: '近 60 天' },
-  { v: 365, l: '近一年' },
-]
-
-/** 默认把快捷天数同步进 from/to（切到自定义时呈现为对应区间，形成"近 30 天与范围选择融合"） */
-export function quickToRange(v: number): { from: string; to: string } {
+/** 近 N 天区间（含当天：from = 今天 - (N-1)） */
+function quickRange(v: number): { from: string; to: string } {
   return { from: addDays(todayYMD(), -(v - 1)), to: todayYMD() }
 }
 
+const quicks: Array<{ v: number; l: string; to: () => { from: string; to: string } }> = [
+  { v: 0, l: '当天', to: () => ({ from: todayYMD(), to: todayYMD() }) },
+  { v: 7, l: '近 7 天', to: () => quickRange(7) },
+  { v: 30, l: '近 30 天', to: () => quickRange(30) },
+  { v: 61, l: '本月', to: () => ({ from: `${todayYMD().slice(0, 7)}-01`, to: todayYMD() }) },
+  { v: 365, l: '近一年', to: () => quickRange(365) },
+]
+
+/** 由档位值构造完整区间状态（v 不在档位表中时回退默认近 30 天） */
+export function quickStateOf(v: number): RangeState {
+  const q = quicks.find((x) => x.v === v)
+  if (q) {
+    const r = q.to()
+    return { mode: 'quick', quick: v, from: r.from, to: r.to }
+  }
+  return DEFAULT_RANGE
+}
+
+/** 默认近 30 天 */
+export const DEFAULT_RANGE: RangeState = { mode: 'quick', quick: 30, from: addDays(todayYMD(), -29), to: todayYMD() }
+
 export function rangeLabel(r: RangeState): string {
   if (r.mode === 'custom' && r.from && r.to) return `${r.from.slice(5)} ~ ${r.to.slice(5)}`
-  const q = QUICKS.find((x) => x.v === r.quick)
+  const q = quicks.find((x) => x.v === r.quick)
   return q ? q.l : `近 ${r.quick} 天`
 }
 
@@ -53,8 +66,7 @@ export function RangePicker({ value, onChange }: {
   }, [open, dir])
 
   const pickQuick = (v: number) => {
-    const from = addDays(todayYMD(), -(v - 1))
-    onChange({ mode: 'quick', quick: v, from, to: todayYMD() })
+    onChange(quickStateOf(v))
     setOpen(false)
   }
   const editCustom = (field: 'from' | 'to', ymd: string) => {
@@ -76,12 +88,13 @@ export function RangePicker({ value, onChange }: {
         onClick={() => { setOpen((o) => { const n = !o; if (n) setDir(flipDir(wrapRef.current)); return n }) }}
         title="快捷档位 / 自定义起止日期"
       >
-        🗓 {rangeLabel(value)} <span className="rp-caret">▾</span>
+        <svg className="rp-cal-ic" viewBox="0 0 1024 1024" width="14" height="14" aria-hidden="true"><path d="M771.104 145.056l0-60.096c0-17.664-14.304-32-32-32s-32 14.336-32 32l0 60.096-384 0 0-60.096c0-17.664-14.336-32-32-32s-32 14.336-32 32l0 60.096-202.208 0 0 825.952 910.208 0 0-825.952L771.104 145.056zM259.104 209.952l0 67.04c0 17.664 14.336 32 32 32s32-14.336 32-32l0-67.04 384 0 0 67.04c0 17.664 14.304 32 32 32s32-14.336 32-32l0-67.04 131.136 0 0 99.04-163.136 0-448 0-169.344 0 0-99.04L259.104 209.952zM121.76 906.176l0-533.184 780.48 0 0 533.184L121.76 906.176z" fill="#03A9F4"/><path d="M214.208 473.728l123.904 0 0 123.712-123.904 0 0-123.712Z" fill="#03A9F4"/><path d="M442.912 473.728l123.904 0 0 123.712-123.904 0 0-123.712Z" fill="#03A9F4"/><path d="M671.648 473.728l123.904 0 0 123.712-123.904 0 0-123.712Z" fill="#03A9F4"/><path d="M214.208 692.32l123.904 0 0 123.712-123.904 0 0-123.712Z" fill="#03A9F4"/><path d="M442.912 692.32l123.904 0 0 123.712-123.904 0 0-123.712Z" fill="#03A9F4"/><path d="M671.648 692.32l123.904 0 0 123.712-123.904 0 0-123.712Z" fill="#03A9F4"/></svg>
+        {rangeLabel(value)} <span className="rp-caret">▾</span>
       </button>
       {open && (
         <div className={`rp-popup ${dir === 'up' ? 'up' : ''}`}>
           <div className="rp-seg">
-            {QUICKS.map((q) => (
+            {quicks.map((q) => (
               <button
                 key={q.v}
                 type="button"
