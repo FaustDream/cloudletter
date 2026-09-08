@@ -364,11 +364,14 @@ input, textarea, select { font-family: var(--font); font-size: 14px; color: var(
 .ag-chev { margin-left: auto; color: var(--drawer-text-mute); flex: 0 0 auto; transition: transform .2s; }
 .ag-chev.up { transform: rotate(90deg); }
 
+/* 个人中心菜单：锁定高对比实底（不随主题 --surface-solid 半透明覆写），确保从玻璃侧栏/深色底中清晰浮出 */
 .am-menu { position: absolute; top: calc(100% + 8px); z-index: 65; width: 304px; max-width: calc(100vw - 40px);
-  background: var(--surface-solid); border: 1px solid var(--border); border-radius: 16px;
-  box-shadow: 0 18px 44px -14px rgba(15, 30, 60, .3), 0 4px 14px rgba(15, 30, 60, .1);
+  background: #ffffff; color: #1f2a3f; border: 1px solid rgba(120, 160, 220, .4); border-radius: 16px;
+  box-shadow: 0 24px 56px -16px rgba(15, 30, 60, .38), 0 6px 16px rgba(15, 30, 60, .12);
   padding: 8px; animation: pop .18s ease;
   max-height: min(640px, calc(100vh - 30px)); overflow-y: auto; }
+[data-theme='dark'] .am-menu { background: #1b2742; color: #e4ebf7; border-color: rgba(130, 170, 235, .32);
+  box-shadow: 0 24px 56px -16px rgba(0, 0, 0, .62), 0 6px 16px rgba(0, 0, 0, .42); }
 .am-menu.left { left: 12px; }
 .am-menu.right { right: 12px; }
 .am-menu.up { top: auto; bottom: calc(100% + 8px); }
@@ -391,7 +394,7 @@ input, textarea, select { font-family: var(--font); font-size: 14px; color: var(
 .am-num { margin-left: auto; font-style: normal; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--text-secondary); }
 .am-status-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .am-st { display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  border: 1px solid var(--border); background: var(--surface-solid); color: var(--text-secondary);
+  border: 1px solid var(--border); background: var(--accent-muted); color: var(--text-secondary);
   font-size: 12px; padding: 7px 0; border-radius: 9px; cursor: pointer; transition: all .12s; }
 .am-st i { width: 8px; height: 8px; border-radius: 50%; background: var(--pcol); }
 .am-st:hover { border-color: var(--accent); color: var(--text); }
