@@ -4,10 +4,9 @@
  * - 格式入口三层：顶部常驻工具栏（EditorToolbar）+ 斜杠菜单(/) + 选中浮动工具栏；[[ 唤起双链补全
  * - 标题在画布内（Notion 式首行大字），纸面画布 + 阅读宽度；右栏自上而下：文档信息（可折叠）/ 大纲统计 / 双链
  * - 保存：防抖 1s 自动保存 + 顶栏手动「保存」按钮 + Ctrl/Cmd+S + 路由切换（卸载）时 flush
- * - 保存策略（本地为主）：乐观锁冲突自动以本地内容覆盖重试，仅首次给轻提示，不再弹冲突条；
- *   网络层失败落本机草稿，重连自动同步
+ * - 保存策略（本地为主）/ 离线草稿 / 本地快照兜底由 useEditorSave hook 收敛（见 useEditorSave.ts）
  * - 重开策略（服务器为主）：始终加载服务器版本；本机存在较新未同步草稿时给一次性轻提示，可恢复或放弃
- * - baseVersion 乐观锁；图片粘贴/拖拽/上传统一走 /uploads（客户端先压缩略图）
+ * - baseVersion 乐观锁；图片粘贴/拖拽/上传统一走 /uploads（客户端先压缩略图，见 lib/image.ts）
  * - 右栏文档信息：分类下拉 / 标签下拉多选（可搜索·可新建）/ 摘要 / 封面 / Slug
  */
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
@@ -17,50 +16,16 @@ import { useToast } from '../components/framework/Toast'
 import { EmptyState } from '../components/framework/EmptyState'
 import { confirmDialog } from '../components/framework/Modal'
 import { Icon } from '../components/framework/Icon'
-import { exportHtmlFile, exportMarkdownFile, printPost } from '../lib/exporters'
+import { clearDraft, isOnline, loadDraft } from '../lib/offline'
+import { pickStaleLocalDraft } from '../lib/savePolicy'
+import { compressImage } from '../lib/image'
+import { EdNotice, NOTICE_AUTO_CLOSE_MS } from '../components/editor/EdNotice'
+import { ExportMenu } from '../components/editor/ExportMenu'
+import { useEditorSave, snap, type EditorContent, type EditorNotice } from '../components/editor/useEditorSave'
 import { RevisionPanel } from '../components/editor/RevisionPanel'
 import { EdSideMeta, Outline, WikiLinks, type Frontmatter } from '../components/editor/Outline'
-import { clearDraft, isOnline, loadDraft, saveDraft, subscribeNetwork, type EditorDraft } from '../lib/offline'
-import { planSaveFailure, pickStaleLocalDraft } from '../lib/savePolicy'
 // BlockNote 体积大（ProseMirror 全家桶），独立 chunk 按需加载
 const BlockNoteEditor = lazy(() => import('../components/editor/BlockNoteEditor').then((m) => ({ default: m.BlockNoteEditor })))
-
-type SaveState = 'saved' | 'dirty' | 'saving'
-
-interface Content {
-  markdown: string
-  title: string
-  fm: Frontmatter
-}
-
-function snap(c: Content): string {
-  return JSON.stringify([c.markdown, c.title, c.fm])
-}
-
-/** 顶部轻提示条（非阻断）：conflict-saved 自动消失；stale-draft 到点未处理视为放弃本机草稿 */
-type EditorNotice =
-  | { kind: 'conflict-saved' }
-  | { kind: 'stale-draft'; draft: EditorDraft }
-  | { kind: 'offline' }
-
-const NOTICE_AUTO_CLOSE_MS: Partial<Record<EditorNotice['kind'], number>> = {
-  'conflict-saved': 6000,
-  'stale-draft': 12000,
-}
-
-/** 客户端缩略图压缩：长边 ≤2000px、JPEG q0.85（GIF 保留动图原样，小图不重压） */
-async function compressImage(file: File): Promise<Blob> {
-  if (file.type === 'image/gif' || file.size < 200 * 1024) return file
-  const bmp = await createImageBitmap(file)
-  const scale = Math.min(1, 2000 / Math.max(bmp.width, bmp.height))
-  if (scale === 1 && (file.type === 'image/jpeg' || file.type === 'image/webp')) return file
-  const canvas = document.createElement('canvas')
-  canvas.width = Math.max(1, Math.round(bmp.width * scale))
-  canvas.height = Math.max(1, Math.round(bmp.height * scale))
-  canvas.getContext('2d')!.drawImage(bmp, 0, 0, canvas.width, canvas.height)
-  const blob = await new Promise<Blob | null>((res) => canvas.toBlob((b) => res(b), 'image/jpeg', 0.85))
-  return blob ?? file
-}
 
 export function EditorPage() {
   const nav = useNavigate()
@@ -74,25 +39,23 @@ export function EditorPage() {
   const [categories, setCategories] = useState<Category[]>([])
   /** 全站标签名（右栏标签多选候选） */
   const [tagNames, setTagNames] = useState<string[]>([])
-  const [content, setContent] = useState<Content>({ markdown: '', title: '', fm: {} })
+  const [content, setContent] = useState<EditorContent>({ markdown: '', title: '', fm: {} })
   const [slug, setSlug] = useState('')
   const [baseVersion, setBaseVersion] = useState<number | null>(null)
-  const [saveState, setSaveState] = useState<SaveState>('saved')
-  const [showHistory, setShowHistory] = useState(false)
   /** 右栏（文档信息/大纲）显隐：写作时可收起获得沉浸画布，记忆在 localStorage */
   const [sideOpen, setSideOpen] = useState(() => localStorage.getItem('cl_ed_side') !== '0')
-  /** 在线状态（离线时本地草稿兜底，重连自动同步） */
-  const [online, setOnline] = useState(isOnline)
-  /** 顶部轻提示（非阻断，替代旧的冲突横幅与草稿恢复横幅） */
-  const [notice, setNotice] = useState<EditorNotice | null>(null)
+  const [showHistory, setShowHistory] = useState(false)
 
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  /** 最近一次落库/加载时的内容快照：与当前内容不同即视为脏 */
-  const savedSnap = useRef('')
-  /** 本会话是否已提示过冲突覆盖（只提示第一次） */
-  const conflictSeenRef = useRef(false)
+  /** 保存会话（保存策略/离线草稿/快捷键/notice 状态在此闭环，页面只做组合） */
+  const {
+    savedSnap, saveState, online, notice,
+    setSaveState, setNotice, setOnline,
+    doSave, doSaveRef, saveStateRef, postRef,
+  } = useEditorSave({
+    post, content, slug, baseVersion, categories, setSlug, setBaseVersion, toast,
+  })
 
-  const patchContent = (patch: Partial<Content>) => {
+  const patchContent = (patch: Partial<EditorContent>) => {
     setContent((prev) => {
       const next = { ...prev, ...patch }
       setSaveState(snap(next) === savedSnap.current ? 'saved' : 'dirty')
@@ -110,7 +73,7 @@ export function EditorPage() {
       fm = {}
     }
     // 元数据优先来自结构化字段，frontmatter 仅作补充
-    const c: Content = {
+    const c: EditorContent = {
       markdown: p.rawMarkdown,
       title: p.title,
       fm: { ...fm, category: fm.category ?? p.category?.name ?? '', tags: fm.tags ?? p.tags },
@@ -126,7 +89,7 @@ export function EditorPage() {
     const stale = pickStaleLocalDraft(new Date(p.updatedAt).getTime(), d)
     if (stale && snap(stale.content) !== snap(c)) setNotice({ kind: 'stale-draft', draft: stale })
     else if (d) clearDraft(postId)
-  }, [])
+  }, [savedSnap, setSaveState, setNotice])
 
   useEffect(() => {
     if (!id) return
@@ -166,144 +129,13 @@ export function EditorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  /* ===== 保存（冲突自动以本地覆盖重试，见 savePolicy） =====
-   * kind：manual=手动保存（按钮/Ctrl+S/发布前落库，历史必留快照）；auto=自动保存（5s 静默 + 服务端 2 分钟频控） */
-  const doSave = useCallback(
-    async (kind: 'manual' | 'auto' = 'auto', override = false): Promise<boolean> => {
-      if (!post || baseVersion === null) return false
-      // 内容与最近一次落库一致：无需请求（保存按钮始终可点，点了也只是确认状态）
-      if (!override && snap(content) === savedSnap.current) {
-        setSaveState('saved')
-        return true
-      }
-      setSaveState('saving')
-      // frontmatter.category（名称）→ categoryId；未知名称置空（后端会同步删除文件 frontmatter 中的分类）
-      const catName = (content.fm.category ?? '').trim()
-      const categoryId = catName ? categories.find((c) => c.name === catName)?.id ?? '' : ''
-      const body: Record<string, unknown> = {
-        title: content.title || '无标题',
-        slug,
-        summary: content.fm.summary ?? '',
-        rawMarkdown: content.markdown,
-        categoryId,
-        tags: content.fm.tags ?? [],
-        cover: content.fm.cover ?? '',
-        revisionKind: kind,
-      }
-      if (!override) body.baseVersion = baseVersion
-      try {
-        const r = await api.put<{ ok: boolean; status: string; slug: string; updatedAt: string }>(
-          `/posts/${post.id}`,
-          body,
-        )
-        setSlug(r.slug)
-        setBaseVersion(new Date(r.updatedAt).getTime())
-        savedSnap.current = snap(content)
-        setSaveState('saved')
-        clearDraft(post.id) // 落库成功：本地兜底快照使命完成
-        return true
-      } catch (e) {
-        const plan = planSaveFailure(e, { alreadyOverridden: override })
-        if (plan.kind === 'retry-override') {
-          if (!conflictSeenRef.current) {
-            conflictSeenRef.current = true
-            setNotice({ kind: 'conflict-saved' })
-          }
-          return doSave(kind, true) // 本地为主：覆盖重试（覆盖保存不带 baseVersion，不会再冲突）
-        }
-        if (plan.kind === 'offline') {
-          // 网络层失败（fetch 抛 TypeError）：内容留在本机草稿，重连后自动同步
-          setOnline(false)
-          setSaveState('dirty')
-          toast('网络不可用，改动已保存到本机，恢复网络后自动保存')
-          return false
-        }
-        setSaveState('dirty')
-        toast(e instanceof ApiError ? e.message : '保存失败', 'err')
-        return false
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [post, baseVersion, content, categories, slug],
-  )
-
-  // 自动保存：5s 静默防抖（每次输入都会重置计时，连续编辑不落库；停手 5s 后保存）
-  useEffect(() => {
-    if (!post || saveState !== 'dirty') return
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => { doSave('auto').catch(console.error) }, 5000)
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current)
-    }
-  }, [content, slug, post, saveState, doSave])
-
-  // 最新 doSave/saveState/post 的 ref：供快捷键、卸载 flush 与断网监听使用（避免闭包过期）
-  const doSaveRef = useRef(doSave)
-  doSaveRef.current = doSave
-  const saveStateRef = useRef(saveState)
-  saveStateRef.current = saveState
-  const postRef = useRef(post)
-  postRef.current = post
-
-  // 离线监听：断网瞬间落本地草稿并提示；恢复网络后清掉离线提示并自动同步
-  useEffect(() => {
-    const off = subscribeNetwork((onlineNow) => {
-      setOnline(onlineNow)
-      if (onlineNow) {
-        setNotice((n) => (n?.kind === 'offline' ? null : n))
-        if (saveStateRef.current === 'dirty') void doSaveRef.current('auto')
-      } else if (postRef.current) {
-        saveDraft(postRef.current.id, { content, slug, baseVersion, savedAt: Date.now() })
-        setNotice((n) => (n && n.kind !== 'offline' ? n : { kind: 'offline' }))
-      }
-    })
-    return off
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [content, slug, baseVersion])
-
-  // 本地草稿兜底：内容变化 600ms 后持续刷新快照（断网/崩溃/强关标签页都不丢字）
-  useEffect(() => {
-    if (!post || !id) return
-    const t = setTimeout(() => {
-      saveDraft(id, { content, slug, baseVersion, savedAt: Date.now() })
-    }, 600)
-    return () => clearTimeout(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [content, slug, baseVersion, post, id])
-
-  // Ctrl/Cmd + S 手动保存（历史必留快照）
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's') {
-        e.preventDefault()
-        void doSaveRef.current('manual')
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
-
-  // 路由切换（SPA 内部跳转）触发卸载：脏内容立即 flush 一次保存（冲突策略保证本地覆盖成功）
-  useEffect(() => () => {
-    if (saveStateRef.current === 'dirty' || saveStateRef.current === 'saving') void doSaveRef.current('auto')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // 脏内容关闭标签页前提醒（beforeunload 兜底）
-  useEffect(() => {
-    if (saveState !== 'dirty' && saveState !== 'saving') return
-    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault() }
-    window.addEventListener('beforeunload', onBeforeUnload)
-    return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [saveState])
-
   /* ===== 提示条动作 ===== */
   const closeNotice = useCallback(() => {
     setNotice((n) => {
       if (n?.kind === 'stale-draft' && id) clearDraft(id) // 到点未处理/手动放弃 → 服务器为主，清掉本机快照
       return null
     })
-  }, [id])
+  }, [id, setNotice])
 
   /** 恢复本机较新草稿：覆盖当前编辑内容并立即落库 */
   const restoreLocalDraft = () => {
@@ -319,7 +151,7 @@ export function EditorPage() {
     if (isOnline()) void doSaveRef.current('manual')
   }
 
-  /* ===== 图片上传（粘贴 / 工具栏上传按钮） ===== */
+  /* ===== 图片上传（粘贴 / 工具栏上传按钮，封面共用同一压缩链路） ===== */
   const handlePasteImage = useCallback(async (file: File): Promise<string | null> => {
     try {
       const blob = await compressImage(file)
@@ -556,60 +388,6 @@ export function EditorPage() {
           }}
           onClose={() => setShowHistory(false)}
         />
-      )}
-    </div>
-  )
-}
-
-/** 编辑页顶部轻提示条：非阻断、可关闭、可选自动消失（替代旧的冲突/草稿横幅） */
-function EdNotice({ children, actions, onClose, autoCloseMs }: {
-  children: React.ReactNode
-  actions?: React.ReactNode
-  onClose?: () => void
-  autoCloseMs?: number
-}) {
-  useEffect(() => {
-    if (!onClose || !autoCloseMs) return
-    const t = setTimeout(onClose, autoCloseMs)
-    return () => clearTimeout(t)
-  }, [onClose, autoCloseMs])
-  return (
-    <div className="ed-note">
-      <span className="ed-note-text">{children}</span>
-      {actions && <span className="ed-note-ops">{actions}</span>}
-      {onClose && <button className="ed-note-x" onClick={onClose} title="关闭">✕</button>}
-    </div>
-  )
-}
-
-/** 顶栏导出菜单：Markdown / 自包含 HTML / 打印·PDF */
-function ExportMenu({ meta, markdown, disabled }: {
-  meta: Parameters<typeof exportMarkdownFile>[0]
-  markdown: string
-  disabled?: boolean
-}) {
-  const [open, setOpen] = useState(false)
-  const run = (fn: () => void) => { setOpen(false); try { fn() } catch (e) { console.error(e) } }
-  return (
-    <div className="ed-export">
-      <button className="btn slim ghost" disabled={disabled} onClick={() => setOpen((v) => !v)}>
-        <Icon name="download" size={15} /> 导出 <span className="ed-export-caret">▾</span>
-      </button>
-      {open && (
-        <>
-          <div className="ed-export-mask" onClick={() => setOpen(false)} />
-          <div className="ed-export-menu">
-            <button onClick={() => run(() => exportMarkdownFile(meta, markdown))}>
-              <b>Markdown</b><em>.md 原文，零转换</em>
-            </button>
-            <button onClick={() => run(() => exportHtmlFile(meta, markdown))}>
-              <b>HTML 文件</b><em>自包含网页，可分享/存档</em>
-            </button>
-            <button onClick={() => run(() => printPost(meta, markdown))}>
-              <b>打印 · PDF</b><em>经系统打印另存为 PDF</em>
-            </button>
-          </div>
-        </>
       )}
     </div>
   )

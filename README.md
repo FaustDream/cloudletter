@@ -42,6 +42,8 @@ pnpm -C tests/e2e test:headed      # 端到端测试（有头浏览器）
 
 ## 变更记录
 
+- 2026-09-08（架构）：代码架构改进（纯内部重构，行为不变）。后端：workbench.ts 巨型路由分层 —— 时间轴聚合抽 `services/timeline.ts`（guest 路由改从 service 导入，消除路由互相 import）、聚合统计抽 `services/dashboard.ts`、系统采样抽 `services/system-status.ts`、文章/笔记标签同步三合一为 `services/tags.ts`；全部 `(prisma as any)` 动态模型访问与 `catch (e: any)` 清理为类型安全收窄；`index.ts` 内联中间件（安全头/日志/限流/CORS/错误包络）模块化为 `middleware/*`。前端：`api.ts` 类型拆分为 `api-types.ts`（45 个引用文件经 `export type *` 无感），timeline 双份 Timeline 类型定义收敛为单一来源；TimelineUniverse3d（788 行）拆出 `universe3d/environment.ts` 与 `universe3d/nodes.ts`；EditorPage（634 行）拆出 `lib/image.ts`、`components/editor/EdNotice.tsx`、`ExportMenu.tsx`、`useEditorSave.ts`（保存会话 hook）。验证：后端 142/142、前端 144/144、双端 typecheck、`pnpm build`（含 check-tokens 门禁）通过。详见 docs/memory/2026-09-08.md。
+
 - 2026-09-08（六）：速记交互按反馈修正——⚡速记把手常驻右缘，**点击**打开**居中弹窗**（废止悬停触发与边缘滑出停靠）；Esc 改捕获阶段监听修复编辑器聚焦时无法关闭。Playwright 验证居中（中心=视口中心）/Esc/点外关闭/保存流程。
 
 - 2026-09-08（五）：速记改自动隐藏停靠面板（右/底可切、悬停展开、移出自动收起、保存自动收起草稿重置）；根治编辑器「双击内容消失」——Chromium 对 CJK 文本的三连击选段 + 挂载 replaceFromMarkdown 迟到落地覆盖用户输入，双管修复（lastUserEditAt 守卫 + Field as=div 防 label 劫持编辑器焦点）；Playwright 本地与生产产物实测。详见 docs/memory/2026-09-08.md。

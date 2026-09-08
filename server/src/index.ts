@@ -1,6 +1,7 @@
 /**
  * Cloudletter V2 · Node 服务（Express + Prisma，:3010）
  * 收敛后端：极简 API（文章/分类/标签/版本/搜索/设置 + 单管理员认证），无构建队列/备份/审计。
+ * 中间件与错误包络均在 middleware/ 目录，本文件只做装配。
  */
 import 'dotenv/config'
 import express from 'express'
@@ -10,6 +11,11 @@ import { uploadsDir, avatarsDir } from './config.js'
 import { smtpStatus } from './mailer.js'
 import { initSearchIndex, reindexAllSearch } from './search-index.js'
 import { logInfo, logWarn, logError } from './logger.js'
+import { securityHeaders } from './middleware/security.js'
+import { requestLog } from './middleware/request-log.js'
+import { rateLimit } from './middleware/rate-limit.js'
+import { cors } from './middleware/cors.js'
+import { payloadTooLarge, notFound, errorHandler } from './middleware/errors.js'
 
 // 安全提示：ADMIN_PASSWORD 仅 pnpm seed 首次初始化使用，运行期 API 一律不读取明文口令。
 // 若该配置仍留在 .env，说明初始管理员已创建后可将其移除，避免明文口令长期驻留。
@@ -25,102 +31,12 @@ app.disable('x-powered-by')
 // 生产部署位于 nginx（同一台或信任的一跳代理）之后：信任首个代理，使 req.ip/限流拿到真实客户端 IP
 app.set('trust proxy', 1)
 
-// 安全头（V2 手写核心项；生产环境额外下发 CSP，开发/HMR 跳过以避免 inline 样式被拦）
-app.use((_req, res, next) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff')
-  res.setHeader('X-Frame-Options', 'DENY')
-  res.setHeader('Referrer-Policy', 'no-referrer')
-  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin')
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
-  if (process.env.NODE_ENV === 'production') {
-    res.setHeader(
-      'Content-Security-Policy',
-      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
-        "img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; " +
-        "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
-    )
-  }
-  if (_req.secure) {
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
-  }
-  next()
-})
-
-// 极简访问日志（method/path/status/耗时/字节），console 结构化单行 + 落盘日志系统，供 journald/日志目录双端采集
-app.use((req, res, next) => {
-  const t0 = Date.now()
-  res.on('finish', () => {
-    const ms = Date.now() - t0
-    const ip = req.ip ?? req.socket.remoteAddress ?? '-'
-    logInfo('http', `${req.method} ${req.originalUrl} -> ${res.statusCode}`, { m: req.method, p: req.originalUrl, s: res.statusCode, ms, ip })
-  })
-  next()
-})
-
+app.use(securityHeaders)
+app.use(requestLog)
 app.use(express.json({ limit: '2mb' }))
-
-// 请求体超限（>2MB，如超大正文）→ 413 结构化响应，而不是 500
-app.use((err: Error, _req: express.Request, res: express.Response, next: express.NextFunction) => {
-  if ((err as unknown as { type?: string }).type === 'entity.too.large') {
-    res.status(413).json({ error: { code: 'PAYLOAD_TOO_LARGE', message: '请求体积超出限制（2MB），大文档请分段保存', details: null } })
-    return
-  }
-  next(err)
-})
-
-// 全局限流（每 IP 滑动窗口）：防止暴力扫描/接口滥用拖垮服务；
-// 登录/发码等敏感接口另有更严格的专用限流，此为粗粒度兜底。
-const RATE_MAX = parseInt(process.env.RATE_LIMIT_MAX || '240', 10) // 默认 240 次/分钟
-const RATE_WINDOW_MS = 60_000
-const rateBuckets = new Map<string, number[]>()
-app.use('/api', (req, res, next) => {
-  const ip = String(req.ip || req.socket.remoteAddress || 'unknown')
-  const now = Date.now()
-  const list = (rateBuckets.get(ip) ?? []).filter((t) => now - t < RATE_WINDOW_MS)
-  if (list.length >= RATE_MAX) {
-    res.status(429).json({ error: { code: 'RATE_LIMITED', message: '请求过于频繁，请稍后再试', details: null } })
-    return
-  }
-  list.push(now)
-  rateBuckets.set(ip, list)
-  next()
-})
-// 周期性清场：过期窗口的桶整体删除，防止 Map 随来源增长
-setInterval(() => {
-  const now = Date.now()
-  for (const [k, list] of rateBuckets) {
-    const live = list.filter((t) => now - t < RATE_WINDOW_MS)
-    if (live.length === 0) rateBuckets.delete(k)
-    else rateBuckets.set(k, live)
-  }
-}, 5 * 60 * 1000).unref?.()
-
-// 极简 CORS：只有显式白名单来源才回 CORS 头（不反射任意 Origin）。
-// 白名单 = 生产环境 CORS_ORIGINS 逗号分隔列表；非生产默认放行 localhost:3000-3079 供开发多端口使用。
-function buildCorsAllowlist(): Set<string> {
-  const set = new Set<string>()
-  if (process.env.NODE_ENV !== 'production') {
-    for (let p = 3000; p < 3080; p++) set.add(`http://localhost:${p}`)
-  }
-  for (const o of String(process.env.CORS_ORIGINS ?? '').split(',')) {
-    const v = o.trim()
-    if (v) set.add(v)
-  }
-  return set
-}
-const corsAllowlist = buildCorsAllowlist()
-
-app.use((req, res, next) => {
-  const origin = req.headers.origin
-  if (origin && corsAllowlist.has(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin)
-    res.setHeader('Vary', 'Origin')
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
-    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type')
-  }
-  if (req.method === 'OPTIONS') return res.sendStatus(204)
-  next()
-})
+app.use(payloadTooLarge)
+app.use('/api', rateLimit)
+app.use(cors)
 
 // 健康检查：服务宕机时公开站点静态产物仍可访问，此端点供探活（不暴露运行细节）
 app.get('/healthz', (_req, res) => {
@@ -135,31 +51,8 @@ app.use('/api/v2/uploads', express.static(uploadsDir, { maxAge: '30d', immutable
 // 头像静态托管（/api/v2/avatars/*）
 app.use('/api/v2/avatars', express.static(avatarsDir, { maxAge: '1d' }))
 
-// 404 兜底
-app.use((_req, res) => {
-  res.status(404).json({ error: { code: 'NOT_FOUND', message: '接口不存在', details: null } })
-})
-
-// 统一错误包络（ah() 已把异步 reject 汇聚到此）
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  const code = (err as { code?: unknown }).code
-  // Prisma 已知错误码 → 结构化语义响应，绝不把原始消息透出
-  if (code === 'P2025') {
-    res.status(404).json({ error: { code: 'NOT_FOUND', message: '资源不存在', details: null } })
-    return
-  }
-  if (code === 'P2002') {
-    res.status(409).json({ error: { code: 'CONFLICT', message: '资源冲突或已存在', details: null } })
-    return
-  }
-  if (code === 'P2003' || code === 'P2014') {
-    res.status(422).json({ error: { code: 'VALIDATION', message: '关联资源不存在或约束冲突', details: null } })
-    return
-  }
-  logError('http', err, { p: `${_req.method} ${_req.originalUrl}`, code })
-  if (res.headersSent) return
-  res.status(500).json({ error: { code: 'INTERNAL', message: '服务器内部错误', details: null } })
-})
+app.use(notFound)
+app.use(errorHandler)
 
 const server = app.listen(PORT, () => {
   logInfo('boot', `listening on :${PORT}（healthz /api/v2 已就绪）`, { port: PORT })

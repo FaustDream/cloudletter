@@ -1,24 +1,8 @@
-/** 双视图时间轴共享类型与视觉规范（鱼骨 + 节点宇宙，同一份数据两种渲染） */
+/** 双视图时间轴共享类型与视觉规范（鱼骨 + 节点宇宙，同一份数据两种渲染）。
+ *  类型（TimelineType/Node/Day）单一来源为 api-types（=/workbench/timeline 契约）。 */
+import type { TimelineDay, TimelineNode, TimelineType } from '../../api-types'
 
-export type TimelineType = 'journal' | 'note' | 'plan' | 'checkin' | 'ledger' | 'goal' | 'focus'
-
-export interface TimelineNode {
-  id: string
-  t: TimelineType
-  title: string
-  sub: string
-  date: string
-  xp?: number
-  gold?: number
-  tags?: string[]
-}
-
-export interface TimelineDay {
-  date: string
-  xp: number
-  gold: number
-  items: TimelineNode[]
-}
+export type { TimelineDay, TimelineNode, TimelineType }
 
 /** 7 类型：标签 + 色值（统一规范：无紫，青替目标色） */
 export const TL_TYPES: Array<[TimelineType, string]> = [

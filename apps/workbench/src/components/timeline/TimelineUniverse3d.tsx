@@ -4,18 +4,19 @@
  *  6 节点球：内容长度/类型/时间决定大小（限位 0.9–2.4）；类型专属表情贴球；材质辉光动态脉动
  *  7 中心人物去掉 → 换成暖色太阳（辉光 + 光晕）
  *  保留：内容气泡浮现、时间游标、专注模式、重置视角、语义图例
+ *  构建块（场景/节点连线）与渲染循环/交互分离：environment.ts 与 nodes.ts 为纯构建，
+ *  本组件保留生命周期、拾取交互与渲染循环驱动。
  */
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js'
-import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js'
-import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { TL_COLOR, TL_TYPES, daysAgo, filterNodes, type TimelineDay, type TimelineNode, type TimelineType } from './timeline'
 import { EmptyState } from '../framework/EmptyState'
 import { ServerStatusPanel } from '../framework/ServerStatusPanel'
 import { logClient } from '../../api'
-import { DIM, HL_LINE, HL_PULSE, LAYER_OF, LINE_DATE, LINE_RADIAL, LINE_TYPE, MAX_FLOAT, ORBITS, SIZE_MAX, SIZE_MIN, SIZE_OF, SPEED_STEPS, SKY, SUN_COLOR, SUN_GLOW, TYPE_EMOJI, escapeHtml, type FloatBubble, type PairInfo } from './universe3d/consts'
+import { DIM, MAX_FLOAT, SKY, SPEED_STEPS, escapeHtml, type FloatBubble, type PairInfo } from './universe3d/consts'
+import { createEnvironment, type UniverseEnvironment } from './universe3d/environment'
+import { buildNodeWorld, type NodeWorld } from './universe3d/nodes'
 import { UniverseControls } from './universe3d/UniverseControls'
 import { UniverseDetailCard } from './universe3d/UniverseDetailCard'
 import { UniverseLegend } from './universe3d/UniverseLegend'
@@ -96,198 +97,12 @@ export function TimelineUniverse3d({ days, filter, avatar, battle = true, onOpen
     const sunLight = new THREE.PointLight(0xffe0b0, 3.2, 500)
     scene.add(sunLight)
 
-    // 星空
-    const sg = new THREE.BufferGeometry()
-    const sn = 1400, spos = new Float32Array(sn * 3)
-    for (let i = 0; i < sn; i++) {
-      const r = 170 + Math.random() * 420
-      const th = Math.random() * Math.PI * 2, ph = Math.acos(2 * Math.random() - 1)
-      spos[i * 3] = r * Math.sin(ph) * Math.cos(th)
-      spos[i * 3 + 1] = r * Math.cos(ph)
-      spos[i * 3 + 2] = r * Math.sin(ph) * Math.sin(th)
-    }
-    sg.setAttribute('position', new THREE.BufferAttribute(spos, 3))
-    const stars = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 1.1, sizeAttenuation: true, transparent: true, opacity: 0.4 }))
-    scene.add(stars)
-
-    // ── 流星粒子：随机陨石拖尾划过（转动时的生命感）；加色混合下颜色越黑越隐形 ──
-    const METEOR_N = 7
-    const meteorGeo = new THREE.BufferGeometry()
-    const mPos = new Float32Array(METEOR_N * 6)   // 每颗：头 + 尾两个顶点
-    const mCol = new Float32Array(METEOR_N * 6)
-    meteorGeo.setAttribute('position', new THREE.BufferAttribute(mPos, 3))
-    meteorGeo.setAttribute('color', new THREE.BufferAttribute(mCol, 3))
-    const meteorMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false })
-    const meteors = new THREE.LineSegments(meteorGeo, meteorMat)
-    meteors.frustumCulled = false
-    meteors.renderOrder = 2
-    const meteorSeeds: { p: THREE.Vector3; v: THREE.Vector3; life: number; max: number; hue: THREE.Color }[] = []
-    const METEOR_HUES = [new THREE.Color(0xbfd9ff), new THREE.Color(0xffe2b0), new THREE.Color(0xcdefff)]
-    const respawnMeteor = (m: ReturnType<typeof makeMeteor>, initial: boolean) => {
-      const r = 90 + Math.random() * 190
-      const th = Math.random() * Math.PI * 2, ph = Math.acos(2 * Math.random() - 1)
-      m.p.set(r * Math.sin(ph) * Math.cos(th), r * Math.cos(ph), r * Math.sin(ph) * Math.sin(th))
-      m.v.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(34 + Math.random() * 46)
-      m.max = 1.6 + Math.random() * 2.2
-      m.life = initial ? Math.random() * m.max : m.max
-      m.hue = METEOR_HUES[Math.floor(Math.random() * METEOR_HUES.length)]
-    }
-    function makeMeteor() {
-      return { p: new THREE.Vector3(), v: new THREE.Vector3(), life: 0, max: 1, hue: METEOR_HUES[0] }
-    }
-    for (let i = 0; i < METEOR_N; i++) {
-      const m = makeMeteor()
-      respawnMeteor(m, true)
-      meteorSeeds.push(m)
-    }
-    if (!reduced) scene.add(meteors)
-
-    // ── 7 中心太阳（去掉人物 + 发光暖晕） ──
-    const sun = new THREE.Mesh(
-      new THREE.SphereGeometry(4.8, 48, 48),
-      new THREE.MeshStandardMaterial({ color: SUN_COLOR, emissive: 0xffc23f, emissiveIntensity: 1.4, roughness: 0.4 }),
-    )
-    scene.add(sun)
-    const glow = new THREE.Mesh(
-      new THREE.SphereGeometry(8.4, 32, 32),
-      new THREE.MeshBasicMaterial({ color: SUN_GLOW, transparent: true, opacity: 0.16 }),
-    )
-    scene.add(glow)
-    const halo = new THREE.Mesh(
-      new THREE.RingGeometry(13, 13.4, 96),
-      new THREE.MeshBasicMaterial({ color: 0xffd9a0, side: THREE.DoubleSide, transparent: true, opacity: 0.5 }),
-    )
-    halo.rotation.x = Math.PI / 2
-    scene.add(halo)
-
-    // 轨道环
-    const ringMat = new THREE.LineDashedMaterial({ color: 0x9cc3ec, dashSize: 1.1, gapSize: 0.8, transparent: true, opacity: 0.5 })
-    ORBITS.forEach((r, i) => {
-      const g = new THREE.BufferGeometry()
-      const pts: number[] = []
-      for (let k = 0; k <= 128; k++) {
-        const a = (k / 128) * Math.PI * 2
-        pts.push(Math.cos(a) * r, 0, Math.sin(a) * r)
-      }
-      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pts), 3))
-      const ln = new THREE.LineLoop(g, ringMat)
-      ln.rotation.x = [0, 0.42, -0.42][i]
-      ln.computeLineDistances()
-      scene.add(ln)
-    })
-
-    // ── 6 节点：大小由内容/类型/时间决定（限位 0.9–2.4）+ 类型表情贴球 ──
-    const meshByNode = new Map<TimelineNode, THREE.Mesh>()
-    const sphereGeo = new THREE.SphereGeometry(1, 22, 22)
-    const disposals: { dispose: () => void }[] = []
-    // 类型表情纹理（共享，每种一张）
-    const emojiTex = new Map<TimelineType, THREE.Texture>()
-    const sprites: THREE.Sprite[] = []
-    for (const [k, e] of Object.entries(TYPE_EMOJI)) {
-      const cv = document.createElement('canvas')
-      cv.width = 128; cv.height = 128
-      const cx = cv.getContext('2d')!
-      cx.font = '74px system-ui, "Segoe UI Emoji", "PingFang SC", sans-serif'
-      cx.textAlign = 'center'; cx.textBaseline = 'middle'
-      cx.fillText(e, 64, 66)
-      emojiTex.set(k as TimelineType, new THREE.CanvasTexture(cv))
-    }
-    let di = 0
-    for (const d of days) {
-      const list = filterNodes(d.items, filter)
-      list.forEach((it) => {
-        const layer = LAYER_OF(di)
-        const orbitR = ORBITS[layer] + (Math.random() - 0.5) * 2.6
-        const phi0 = (Math.random() - 0.5) * 2.4
-        const theta0 = Math.random() * Math.PI * 2
-        const speed = (0.16 + Math.random() * 0.1) * (layer === 2 ? 0.66 : layer === 1 ? 0.85 : 1)
-        const precess = (Math.random() - 0.5) * 0.004
-        // 大小：内容权重（标题/摘要长度）叠层半径系数，并限位
-        const len = it.title.length + (it.sub?.length ?? 0)
-        const content = Math.min(1.4, Math.max(0.8, 0.8 + len * 0.014))
-        const size = Math.min(SIZE_MAX, Math.max(SIZE_MIN, SIZE_OF[layer] * content))
-        const baseOp = 0.95 // 远层淡化改为浅层微降，整体更亮更炫
-        const mat = new THREE.MeshStandardMaterial({
-          color: TL_COLOR[it.t], emissive: TL_COLOR[it.t], emissiveIntensity: 0.6,
-          roughness: 0.42, metalness: 0.05, transparent: true, opacity: baseOp,
-        })
-        const mesh = new THREE.Mesh(sphereGeo, mat)
-        mesh.scale.setScalar(size)
-        // 表情贴球
-        const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: emojiTex.get(it.t), transparent: true, depthWrite: false }))
-        spr.scale.setScalar(size * 2.7)
-        spr.renderOrder = 3
-        scene.add(spr)
-        sprites.push(spr)
-        mesh.userData = { it, layer, orbitR, theta0, phi0, speed, precess, size, baseOp, dim: 0, boost: 0, phase0: Math.random() * 7, spr }
-        scene.add(mesh)
-        meshByNode.set(it, mesh)
-        disposals.push(mat)
-      })
-      di++
-    }
-    const allNodes = [...meshByNode.values()]
-
-    // ── 连线：合并成单对象（逐顶点着色，供高亮重绘）+ 辐射线 ──
-    const datePairs: [THREE.Mesh, THREE.Mesh][] = []
-    const typePairs: [THREE.Mesh, THREE.Mesh][] = []
-    const lastByType = new Map<TimelineType, THREE.Mesh>()
-    for (const d of days) {
-      const list = filterNodes(d.items, filter).map((it) => meshByNode.get(it)!).filter(Boolean)
-      for (let j = 1; j < list.length; j++) datePairs.push([list[j - 1], list[j]])
-      list.forEach((m) => {
-        const t = (m.userData.it as TimelineNode).t
-        const prev = lastByType.get(t)
-        if (prev) typePairs.push([prev, m])
-        lastByType.set(t, m)
-      })
-    }
-    let pairInfos: PairInfo[] = [
-      ...datePairs.map(([a, b]) => ({ kind: 'date' as const, a, b })),
-      ...typePairs.map(([a, b]) => ({ kind: 'type' as const, a, b })),
-    ]
-    // ── 限边：连线总量封顶，超出时优先裁掉“同类型”长链尾部（保留同日期与较早关系） ──
-    const MAX_CONN = 240
-    if (pairInfos.length > MAX_CONN) pairInfos = pairInfos.slice(0, MAX_CONN)
-    const mergedGeo = new THREE.BufferGeometry()
-    mergedGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pairInfos.length * 6), 3))
-    mergedGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(pairInfos.length * 6), 3))
-    // 柔和玻璃风：连线半透明，不再以接近不透明的纯黑压满画面
-    const merged = new THREE.LineSegments(mergedGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.5 }))
-    merged.renderOrder = 1
-    scene.add(merged)
-    // 辐射线：按节点规模采样绘制，避免“蜘蛛网”式视觉过载
-    const radialNodes = allNodes.length > 60 ? allNodes.filter((_, i) => i % 2 === 0) : allNodes
-    const radialGeo = new THREE.BufferGeometry()
-    radialGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(radialNodes.length * 6), 3))
-    const radialMat = new THREE.LineBasicMaterial({ color: LINE_RADIAL, transparent: true, opacity: 0.22 })
-    const radial = new THREE.LineSegments(radialGeo, radialMat)
-    radial.renderOrder = 1
-    scene.add(radial)
-    // ── 高亮加粗连线（LineSegments2 宽线）：选中关系时以暖金粗线 + 叠加发光描边 ──
-    const hlGeo = new LineSegmentsGeometry()
-    const hlMat = new LineMaterial({
-      color: HL_LINE,
-      linewidth: 4.5,
-      resolution: new THREE.Vector2(box.clientWidth, box.clientHeight),
-      transparent: true,
-      opacity: 0,
-      depthTest: false,
-      blending: THREE.AdditiveBlending,
-    })
-    const hl = new LineSegments2(hlGeo, hlMat)
-    hl.renderOrder = 8
-    hl.visible = false
-    scene.add(hl)
-    // 选中关系两端/中心的脉冲标记
-    const pulseMat = new THREE.MeshBasicMaterial({ color: HL_PULSE, transparent: true, opacity: 0, depthWrite: false })
-    const pulse = new THREE.Mesh(new THREE.SphereGeometry(0.5, 20, 20), pulseMat)
-    pulse.renderOrder = 9
-    pulse.visible = false
-    scene.add(pulse)
-    const PAIR_COLOR: Record<'date' | 'type', THREE.Color> = { date: new THREE.Color(LINE_DATE), type: new THREE.Color(LINE_TYPE) }
+    // ══ 环境（星空 / 太阳 / 轨道 / 流星）与节点连线（构建块，纯构建） ══
+    const env: UniverseEnvironment = createEnvironment(scene, reduced)
+    const world: NodeWorld = buildNodeWorld(scene, days, filter, { width: box.clientWidth, height: box.clientHeight })
+    const { allNodes, pairInfos, radialMat, merged, hlMat, pulse, pulseMat } = world
     // 初始即写入语义色（同日期=蓝、同类型=琥珀，与图例一致）；此前颜色缓冲全 0 → 连线渲染成纯黑
-    paintPairs(null)
+    world.paintPairs(null)
 
     /** 连线隔离态：设置后每帧只绘制集合内的线段（其余收敛原点不可见） */
     let isolatedPairs: Set<number> | null = null
@@ -307,52 +122,7 @@ export function TimelineUniverse3d({ days, filter, avatar, battle = true, onOpen
       return tmp.set(r * cp * Math.cos(a), r * Math.sin(p), r * cp * Math.sin(a))
     }
     function writeGeo() {
-      const pt = mergedGeo.attributes.position.array as Float32Array
-      let k = 0
-      pairInfos.forEach((pi, i) => {
-        if (isolatedPairs && !isolatedPairs.has(i)) {
-          // 隔离态：无关线段收敛原点（零长度=不可见），只保留关联连接
-          pt[k++] = 0; pt[k++] = 0; pt[k++] = 0
-          pt[k++] = 0; pt[k++] = 0; pt[k++] = 0
-          return
-        }
-        pt[k++] = pi.a.position.x; pt[k++] = pi.a.position.y; pt[k++] = pi.a.position.z
-        pt[k++] = pi.b.position.x; pt[k++] = pi.b.position.y; pt[k++] = pi.b.position.z
-      })
-      mergedGeo.attributes.position.needsUpdate = true
-      const rt = radialGeo.attributes.position.array as Float32Array
-      let r2 = 0
-      radialNodes.forEach((m) => {
-        rt[r2++] = 0; rt[r2++] = 0; rt[r2++] = 0
-        rt[r2++] = m.position.x; rt[r2++] = m.position.y; rt[r2++] = m.position.z
-      })
-      radialGeo.attributes.position.needsUpdate = true
-      // 高亮宽线：只在隔离态时重建（非隔离态直接隐藏，不再每帧分配空数组）
-      if (isolatedPairs) {
-        const hlArr: number[] = []
-        isolatedPairs.forEach((i) => {
-          const pi = pairInfos[i]
-          if (!pi) return
-          hlArr.push(pi.a.position.x, pi.a.position.y, pi.a.position.z)
-          hlArr.push(pi.b.position.x, pi.b.position.y, pi.b.position.z)
-        })
-        hlGeo.setPositions(hlArr)
-        hl.visible = hlArr.length > 0
-      } else if (hl.visible) {
-        hl.visible = false
-      }
-    }
-
-    /** 重绘连线颜色：相关 pair 用语义亮色，其余统一降光 */
-    function paintPairs(related: Set<number> | null) {
-      const col = mergedGeo.attributes.color.array as Float32Array
-      const hasRel = related !== null
-      pairInfos.forEach((pi, i) => {
-        const c = !hasRel ? PAIR_COLOR[pi.kind] : related!.has(i) ? PAIR_COLOR[pi.kind] : DIM
-        const o = i * 6
-        for (let v = 0; v < 6; v += 3) { col[o + v] = c.r; col[o + v + 1] = c.g; col[o + v + 2] = c.b }
-      })
-      mergedGeo.attributes.color.needsUpdate = true
+      world.writeGeo(isolatedPairs)
     }
 
     /**
@@ -373,7 +143,7 @@ export function TimelineUniverse3d({ days, filter, avatar, battle = true, onOpen
       })
       radialMat.opacity = heavy ? 0.04 : 0.08
       isolatedPairs = pairs
-      paintPairs(pairs)
+      world.paintPairs(pairs)
       // 选中关系：自动聚焦（拉近视角到关系中心）+ 高亮宽线 + 脉冲标记
       if (heavy) {
         focusNodes = nodes
@@ -404,7 +174,7 @@ export function TimelineUniverse3d({ days, filter, avatar, battle = true, onOpen
       controls.autoRotate = true // 恢复自转
       hlMat.opacity = 0
       pulse.visible = false
-      paintPairs(null)
+      world.paintPairs(null)
     }
     function nodeNeighbors(m: THREE.Mesh): { nodes: Set<THREE.Mesh>; pairs: Set<number> } {
       const nodes = new Set<THREE.Mesh>([m])
@@ -483,7 +253,7 @@ export function TimelineUniverse3d({ days, filter, avatar, battle = true, onOpen
       }
       const hitLine = ray.intersectObject(merged)[0]
       if (hitLine && hitLine.point) {
-        const i = nearestPair(hitLine.point, pairInfos)
+        const i = world.nearestPair(hitLine.point)
         if (i >= 0) {
           setSelPair({ kind: pairInfos[i].kind, a: pairInfos[i].a.userData.it, b: pairInfos[i].b.userData.it })
           setSelNode(null)
@@ -497,22 +267,6 @@ export function TimelineUniverse3d({ days, filter, avatar, battle = true, onOpen
       setSelPair(null)
     }
     renderer.domElement.addEventListener('click', onClick)
-
-    function nearestPair(p: THREE.Vector3, infos: PairInfo[]): number {
-      const ab = new THREE.Vector3()
-      let best = -1, bd = 2.6 * 2.6 // 命中半径阈值（世界单位²）
-      infos.forEach((pi, i) => {
-        ab.subVectors(pi.b.position, pi.a.position)
-        const len2 = ab.lengthSq()
-        if (len2 === 0) return
-        let t = p.clone().sub(pi.a.position).dot(ab) / len2
-        t = Math.max(0, Math.min(1, t))
-        const q = pi.a.position.clone().addScaledVector(ab, t)
-        const d = p.distanceToSquared(q)
-        if (d < bd) { bd = d; best = i }
-      })
-      return best
-    }
 
     function clearSel() {
       clearFocus()
@@ -582,25 +336,6 @@ export function TimelineUniverse3d({ days, filter, avatar, battle = true, onOpen
     const clock = new THREE.Clock()
     let raf = 0
     let bubbleTimer = 1500
-    const mTail = new THREE.Vector3()
-    /** 流星推进：头尾顶点 + 加色亮度包络（尾端全黑隐形） */
-    function updateMeteors(dt: number) {
-      meteorSeeds.forEach((m, i) => {
-        m.life -= dt
-        if (m.life <= 0) respawnMeteor(m, false)
-        m.p.addScaledVector(m.v, dt)
-        const k = Math.min(1, Math.max(0, 1 - m.life / m.max))
-        const b = Math.sin(k * Math.PI) * 0.9
-        mTail.copy(m.p).addScaledVector(m.v, -0.09)
-        const o = i * 6
-        mPos[o] = m.p.x; mPos[o + 1] = m.p.y; mPos[o + 2] = m.p.z
-        mPos[o + 3] = mTail.x; mPos[o + 4] = mTail.y; mPos[o + 5] = mTail.z
-        mCol[o] = m.hue.r * b; mCol[o + 1] = m.hue.g * b; mCol[o + 2] = m.hue.b * b
-        mCol[o + 3] = 0; mCol[o + 4] = 0; mCol[o + 5] = 0
-      })
-      meteorGeo.attributes.position.needsUpdate = true
-      meteorGeo.attributes.color.needsUpdate = true
-    }
     // 性能自适应：EMA 帧耗时评估，超阈值降质（先降像素比，再隔帧重绘）
     const frameStat = { ema: 0, count: 0, degrade: 0, lastPick: 0, frame: 0, errCount: 0 }
     const DPR_FULL = Math.min(devicePixelRatio, 1.5)
@@ -634,13 +369,10 @@ export function TimelineUniverse3d({ days, filter, avatar, battle = true, onOpen
           mat.emissiveIntensity = u.boost ? 1.7 : 0.55 + 0.4 * Math.sin(t * 1.7 + u.phase0)
           if (u.spr) u.spr.position.copy(m.position)
         })
-        sun.rotation.y += 0.01
-        sun.scale.setScalar(1 + Math.sin(t * 1.5) * 0.045)
-        glow.scale.setScalar(1 + Math.sin(t * 1.1) * 0.06)
+        env.update(t, dt)
         controls.autoRotateSpeed = 0.35 * speedRef.current
         if (heavy) {
           writeGeo()
-          updateMeteors(dt)
           // 选中关系：相机平滑拉近到关系中心（跟随节点移动），快速定位
           if (focusNodes && focusNodes.size) {
             const c = new THREE.Vector3()
@@ -708,24 +440,9 @@ export function TimelineUniverse3d({ days, filter, avatar, battle = true, onOpen
       box.removeEventListener('pointerleave', onLeave)
       renderer.domElement.removeEventListener('click', onClick)
       box.removeChild(renderer.domElement)
-      meshByNode.forEach((m) => { scene.remove(m); m.geometry.dispose() })
-      sprites.forEach((sp) => {
-        scene.remove(sp)
-        sp.material.dispose()
-        sp.material.map?.dispose()
-      })
-      emojiTex.forEach((tx) => tx.dispose())
-      disposals.forEach((d) => d.dispose())
-      sg.dispose(); (stars.material as THREE.Material).dispose()
-      meteorGeo.dispose(); meteorMat.dispose(); scene.remove(meteors)
-      mergedGeo.dispose(); merged.material.dispose(); scene.remove(merged)
-      radialGeo.dispose(); radialMat.dispose(); scene.remove(radial)
-      hlGeo.dispose(); hlMat.dispose(); scene.remove(hl)
-      pulse.geometry.dispose(); pulseMat.dispose(); scene.remove(pulse)
-      scene.remove(sun, glow, halo, stars)
-      sun.geometry.dispose(); (sun.material as THREE.Material).dispose()
-      glow.geometry.dispose(); (glow.material as THREE.Material).dispose()
-      halo.geometry.dispose(); (halo.material as THREE.Material).dispose()
+      world.dispose()
+      env.dispose()
+      scene.remove(sunLight)
       controls.dispose()
       renderer.dispose()
       camRef.current = null

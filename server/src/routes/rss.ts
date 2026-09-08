@@ -76,8 +76,8 @@ rssApi.post('/subscribe', ah(async (_req, res) => {
     }
     logActivity(_req, { action: 'rss_subscribe', object: 'RSS 订阅', target: sub.id, detail: { url, added } })
     res.json({ ok: true, id: sub.id, title: parsed.title, added })
-  } catch (e: any) {
-    return err(res, 422, 'VALIDATION', `订阅源解析失败：${String(e?.message ?? '无法解析').slice(0, 120)}`)
+  } catch (e: unknown) {
+    return err(res, 422, 'VALIDATION', `订阅源解析失败：${String((e as { message?: unknown } | null)?.message ?? '无法解析').slice(0, 120)}`)
   }
 }))
 
@@ -103,8 +103,8 @@ rssApi.post('/:id/refresh', ah(async (_req, res) => {
     }
     await prisma.rssSubscription.update({ where: { id: sub.id }, data: { title: parsed.title, lastFetchedAt: new Date() } })
     res.json({ ok: true, added, total: await prisma.rssItem.count({ where: { subId: sub.id } }) })
-  } catch (e: any) {
-    return err(res, 422, 'VALIDATION', `刷新失败:${String(e?.message ?? '网络错误').slice(0, 120)}`)
+  } catch (e: unknown) {
+    return err(res, 422, 'VALIDATION', `刷新失败:${String((e as { message?: unknown } | null)?.message ?? '网络错误').slice(0, 120)}`)
   }
 }))
 

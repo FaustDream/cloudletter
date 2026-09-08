@@ -9,17 +9,18 @@
  * - worktask 工作计划：date/text/note/done/doneAt
  */
 import { Router } from 'express'
-import os from 'node:os'
-import fs from 'node:fs'
 import { prisma } from '../prisma'
 import { requireAuth } from '../auth'
 import { ah, err } from './helpers'
 import { ymdLocal } from '../util-date'
-import { planDrop, postDrop } from '../game'
 import { validateBody, v, type FieldSpec } from '../middleware/validate'
 import { slugify } from '../content'
 import { log, CLIENT_LOG_LEVELS, type LogLevel } from '../logger'
 import { logActivity } from '../services/activity'
+import { syncTags } from '../services/tags'
+import { timelineData, NOTE_INCLUDE } from '../services/timeline'
+import { weekStats, dashboardStats } from '../services/dashboard'
+import { serverStatus } from '../services/system-status'
 
 export const workbench = Router()
 workbench.use(requireAuth)
@@ -33,6 +34,12 @@ const IMPORT_MODULES = ['plan', 'checkin', 'ledger', 'goals', 'notes', 'worktask
 const IMPORT_MODEL: Record<string, string> = {
   plan: 'planItem', checkin: 'checkinItem', ledger: 'ledgerEntry',
   goals: 'goalItem', notes: 'noteItem', worktask: 'workTask',
+}
+
+/** 数据导入用到的窄化 delegate 接口（事务客户端动态模型访问，禁 any） */
+interface ImportDelegate {
+  findFirst: (args: { where: Record<string, string> }) => Promise<{ id: string } | null>
+  create: (args: { data: Record<string, unknown> }) => Promise<{ id: string }>
 }
 
 workbench.post('/data/import', ah(async (req, res) => {
@@ -82,12 +89,14 @@ workbench.post('/data/import', ah(async (req, res) => {
         if (conflict === 'skip') {
           const uniq = uniqKey(model, safe)
           if (uniq) {
-            const hit = await (tx as any)[model].findFirst({ where: uniq })
+            const target = tx[model as keyof typeof tx] as unknown as ImportDelegate
+            const hit = await target.findFirst({ where: uniq })
             if (hit) { counts[modelNameFor(model)]!.skipped++; continue }
           }
         }
         try {
-          const created = await (tx as any)[model].create({ data: safe })
+          const target = tx[model as keyof typeof tx] as unknown as ImportDelegate
+          const created = await target.create({ data: safe })
           if (model === 'noteItem' && legacyMood) {
             try {
               const tag = await tx.tag.upsert({ where: { name: legacyMood }, update: {}, create: { name: legacyMood, slug: slugify(legacyMood) } })
@@ -119,136 +128,16 @@ function uniqKey(_model: string, row: Record<string, unknown>): Record<string, s
   return null
 }
 
-// GET /week-stats —— 本周进度聚合（总览右栏卡片）：周一~周日，按服务器本地时区
+// GET /week-stats —— 本周进度聚合（总览右栏卡片）：聚合实现在 services/dashboard.ts
 // 注意：必须声明在 /:scope 通配路由之前，否则会被当成非法模块
-workbench.get('/week-stats', ah(async (req, res) => {
-  const now = new Date()
-  const diff = (now.getDay() + 6) % 7 // 周一=0
-  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diff)
-  const days = Array.from({ length: 7 }, (_, i) => ymdLocal(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i)))
-  const w0 = days[0]
-  const w1 = days[6]
-  const inWeek = (d?: string | null) => !!d && d >= w0 && d <= w1
-
-  // 拉取范围收敛到本周窗口：避免"全表拉取仅算 7 天"的无效读取
-  const [plans, checkins, ledgers, posts] = await Promise.all([
-    prisma.planItem.findMany({
-      where: { OR: [{ dueDate: { gte: w0, lte: w1 } }, { createdAt: { gte: monday } }] },
-      orderBy: { createdAt: 'asc' },
-    }),
-    prisma.checkinItem.findMany(),
-    prisma.ledgerEntry.findMany({ where: { date: { gte: w0, lte: w1 } } }),
-    prisma.post.findMany({ where: { createdAt: { gte: monday } }, select: { id: true, createdAt: true } }),
-  ])
-
-  // 习惯打卡：本周打卡天数（≤7）+ 跨周累计最长连续（成就徽章）
-  const checkDays = new Set<string>()
-  for (const c of checkins) {
-    try {
-      const log = JSON.parse(c.log || '{}') as Record<string, boolean>
-      for (const d of days) if (log[d] === true) checkDays.add(d)
-    } catch { /* 忽略损坏的 log */ }
-  }
-  const maxStreak = checkins.reduce((m, c) => Math.max(m, c.streak || 0), 0)
-
-  // 文章：本周有创建动作的覆盖天数（≤7）——本地时区取日期，与全站口径一致
-  const postDays = new Set(
-    posts.filter((p) => inWeek(ymdLocal(p.createdAt))).map((p) => ymdLocal(p.createdAt)),
-  )
-
-  // 记账：本周有记录的天数（≤7）
-  const ledgerDays = new Set(
-    ledgers.filter((l) => inWeek(String(l.date || ''))).map((l) => String(l.date).slice(0, 10)),
-  )
-
-  // 计划：dueDate 落在本周（无 dueDate 且本周创建也算）→ 完成度
-  const wPlans = plans.filter((p) => {
-    if (p.dueDate) return inWeek(p.dueDate)
-    return p.createdAt && inWeek(ymdLocal(p.createdAt))
-  })
-  const plansTotal = wPlans.length
-  const plansDone = wPlans.filter((p) => p.done).length
-
-  // 平均完成率：四行各自完成度的均值（无数据行跳过）
-  const ratios = [
-    checkDays.size / 7,
-    Math.min(postDays.size, 7) / 7,
-    ledgerDays.size / 7,
-    plansTotal ? plansDone / plansTotal : 0,
-  ].filter((r) => r > 0)
-  const avg = Math.round((ratios.length ? ratios.reduce((a, b) => a + b, 0) / ratios.length : 0) * 100)
-
-  res.json({
-    week: { start: w0, end: w1, daysElapsed: diff + 1, daysRemain: 7 - (diff + 1) },
-    checks: { days: checkDays.size, total: 7, maxStreak },
-    posts: { days: Math.min(postDays.size, 7), total: 7 },
-    ledger: { days: ledgerDays.size, total: 7 },
-    plans: { done: plansDone, total: plansTotal },
-    avg,
-  })
+workbench.get('/week-stats', ah(async (_req, res) => {
+  res.json(await weekStats())
 }))
 
-/** ============ 数据核心 / 数字城市 聚合统计（GET /dashboard）：真实数据，不虚构 ============ */
+/** ============ 数据核心 / 数字城市 聚合统计（GET /dashboard）：真实数据，不虚构（实现在 services/dashboard.ts） ============ */
 
 workbench.get('/dashboard', ah(async (_req, res) => {
-  const today = ymdLocal(new Date())
-  const month = today.slice(0, 7)
-  const [posts, plans, checkins, ledgers, goals, notes, worktasks, focusLogs] = await Promise.all([
-    prisma.post.findMany({ select: { id: true, status: true, charCount: true } }),
-    prisma.planItem.findMany(),
-    prisma.checkinItem.findMany(),
-    prisma.ledgerEntry.findMany(),
-    prisma.goalItem.findMany(),
-    prisma.noteItem.findMany(),
-    prisma.workTask.findMany(),
-    prisma.focusLog.findMany(),
-  ])
-  // X X 习惯：逐日打卡总量 + 今日打卡 + 最大连续
-  let checkedDays = 0
-  let todayCheckins = 0
-  let maxStreak = 0
-  for (const c of checkins) {
-    maxStreak = Math.max(maxStreak, c.streak || 0)
-    try {
-      const log = JSON.parse(c.log || '{}') as Record<string, boolean>
-      for (const [d, v] of Object.entries(log)) if (v === true) checkedDays++
-      if (log[today] === true) todayCheckins++
-    } catch { /* 忽略损坏 log */ }
-  }
-  // 记账：收入 / 支出（本月 + 累计）
-  const sum = (rows: typeof ledgers, k: 'income' | 'expense', filter?: (d: string) => boolean) =>
-    rows.filter((r) => r.kind === k && (!filter || filter(r.date))).reduce((a, r) => a + (r.amount || 0), 0)
-  const inMonth = (d: string) => String(d).slice(0, 7) === month
-  const goalsPct = goals.length
-    ? Math.round(goals.reduce((a, g) => a + g.current / (g.target || 1), 0) / goals.length * 100)
-    : 0
-  res.json({
-    totals: {
-      journal: posts.filter((p) => p.status === 'published').length,
-      posts: posts.length,
-      note: notes.length,
-      plan: plans.length,
-      checkin: checkins.length,
-      ledger: ledgers.length,
-      goal: goals.length,
-      worktask: worktasks.length,
-      focus: focusLogs.length,
-    },
-    chars: posts.reduce((a, p) => a + (p.charCount || 0), 0),
-    plan: { total: plans.length, done: plans.filter((p) => p.done).length },
-    worktask: { total: worktasks.length, done: worktasks.filter((w) => w.done).length },
-    checkin: { total: checkins.length, today: todayCheckins, checkedDays, maxStreak },
-    goal: { total: goals.length, pct: goalsPct },
-    ledger: {
-      total: ledgers.length,
-      income: sum(ledgers, 'income'),
-      expense: sum(ledgers, 'expense'),
-      monthIncome: sum(ledgers, 'income', inMonth),
-      monthExpense: sum(ledgers, 'expense', inMonth),
-    },
-    posts: { total: posts.length, published: posts.filter((p) => p.status === 'published').length },
-    asOf: new Date().toISOString(),
-  })
+  res.json(await dashboardStats())
 }))
 
 /** ============ 前端客户端日志上报（时间长河/节点宇宙异常与错误统一落盘排查） ============ */
@@ -264,298 +153,14 @@ workbench.post('/client-log', ah(async (req, res) => {
   res.json({ ok: true })
 }))
 
-/** ============ 服务器实时状态（节点宇宙左下角 CPU/内存/网络监控） ============ */
-
-interface NetSample { rx: number; tx: number }
-interface StatusSnapshot {
-  cpu: number
-  mem: { used: number; total: number; percent: number }
-  net: { up: number; down: number } | null
-}
-
-/** CPU 采样：tick 计数差值 / 总差值（两次采样间隔 sleep 保证分辨率） */
-function sysCpuSample(): { idle: number; total: number } {
-  let idle = 0, total = 0
-  for (const c of os.cpus()) {
-    idle += c.times.idle
-    for (const t of Object.values(c.times)) total += t
-  }
-  return { idle, total }
-}
-
-/** 网络字节计数（Linux /proc/net/dev；非 Linux 返回 null） */
-function sysNetBytes(): NetSample | null {
-  try {
-    const raw = fs.readFileSync('/proc/net/dev', 'utf-8')
-    let rx = 0, tx = 0
-    for (const line of raw.split('\n').slice(2)) {
-      // 每行格式: iface: rx_bytes rx_packets×7 tx_bytes ...（rx 第1个数字，tx 第9个数字，中间恰好 7 列）
-      const m = line.match(/:\s*(\d+)\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+(\d+)/)
-      if (!m) continue
-      rx += Number(m[1]); tx += Number(m[2])
-    }
-    return { rx, tx }
-  } catch {
-    return null
-  }
-}
-
-/** CPU 占用率：两采样点 tick 差值折算（%），总差值为 0 时按 0 处理 */
-function cpuPctOf(prev: { idle: number; total: number }, cur: { idle: number; total: number }): number {
-  const dTotal = cur.total - prev.total
-  const dIdle = cur.idle - prev.idle
-  return dTotal > 0 ? Math.min(100, Math.max(0, ((dTotal - dIdle) / dTotal) * 100)) : 0
-}
-
-/** 状态采样缓存：TTL 1.1s，避免多前端轮询时重复做耗时采样 */
-let statusCache: { data: StatusSnapshot; t: number } | null = null
-/** 上次采样基线：跨请求差值窗口（≈前端轮询间隔）比进程内 120ms 窗口读数更稳 */
-let lastSample: { cpu: { idle: number; total: number }; net: NetSample | null; t: number } | null = null
-
-/** 组装快照（内存口径全程一致） */
-function mkSnapshot(cpu: number, net: { up: number; down: number } | null): StatusSnapshot {
-  const total = os.totalmem()
-  const used = total - os.freemem()
-  return { cpu, mem: { used, total, percent: Math.round((used / total) * 100) }, net }
-}
-
-async function sampleSnapshot(): Promise<StatusSnapshot> {
-  const now = Date.now()
-  if (statusCache && now - statusCache.t < 1100) return statusCache.data
-
-  const cpu = sysCpuSample()
-  const net = sysNetBytes()
-  // 距上次请求 1~30s：直接用跨请求累计差值（长窗口），CPU 与网络都无需二次采样
-  const ls = lastSample
-  if (ls && net && ls.net && now - ls.t >= 1000 && now - ls.t <= 30_000 && net.rx >= ls.net.rx && net.tx >= ls.net.tx) {
-    const dt = (now - ls.t) / 1000
-    const data = mkSnapshot(cpuPctOf(ls.cpu, cpu), { up: (net.tx - ls.net.tx) / dt / 1024, down: (net.rx - ls.net.rx) / dt / 1024 }) // KB/s
-    statusCache = { data, t: now }
-    lastSample = { cpu, net, t: now }
-    return data
-  }
-  // 兜底：首采或计数器回绕时，进程内 120ms 双采样
-  await new Promise((r) => setTimeout(r, 120))
-  const cpu2 = sysCpuSample()
-  const net2 = sysNetBytes()
-  let netRate: { up: number; down: number } | null = null
-  if (net && net2 && net2.rx >= net.rx && net2.tx >= net.tx) {
-    netRate = { up: (net2.tx - net.tx) / 0.12 / 1024, down: (net2.rx - net.rx) / 0.12 / 1024 } // KB/s
-  }
-  const data = mkSnapshot(cpuPctOf(cpu, cpu2), netRate)
-  statusCache = { data, t: Date.now() }
-  lastSample = { cpu: cpu2, net: net2, t: Date.now() }
-  return data
-}
-
-// 定时清理状态缓存（避免常驻，但上限就一个条目，仅防极端场景）
-setInterval(() => { statusCache = null }, 60_000).unref?.()
+/** ============ 服务器实时状态（节点宇宙左下角 CPU/内存/网络监控，采样在 services/system-status.ts） ============ */
 
 // GET /server-status —— 服务器实时状态（须在 /:scope 通配之前声明）
 workbench.get('/server-status', ah(async (_req, res) => {
-  const snap = await sampleSnapshot()
-  res.json({
-    cpu: Math.round(snap.cpu * 10) / 10,
-    mem: { used: snap.mem.used, total: snap.mem.total, percent: snap.mem.percent },
-    net: snap.net ? { up: Math.round(snap.net.up), down: Math.round(snap.net.down) } : null,
-    ts: Date.now(),
-  })
+  res.json(await serverStatus())
 }))
 
-/** ============ 双视图时间轴聚合（按天混排：文章/笔记/计划/习惯/记账/目标） ============ */
-
-type TNodeType = 'journal' | 'note' | 'plan' | 'checkin' | 'ledger' | 'goal' | 'focus'
-interface TNode { id: string; t: TNodeType; title: string; sub: string; date: string; xp?: number; gold?: number; tags?: string[]; ts?: string }
-interface TDay { date: string; xp: number; gold: number; items: TNode[] }
-
-const ymd = (d?: string | Date | null): string => {
-  if (!d) return ''
-  // 本地时区取日期（个人工具单机部署）：避免 UTC 导致东八区 0-8 点的数据记到昨天
-  return d instanceof Date ? ymdLocal(d) : String(d).slice(0, 10)
-}
-function safeJson(s: string): string[] {
-  try { const v = JSON.parse(s || '[]'); return Array.isArray(v) ? v : [] } catch { return [] }
-}
-
-/** 时间轴聚合数据构建（workbench /timeline 与访客 /guest/timeline 共用）。
- *  from/to 仅在都传入时生效（自定义范围），否则按 limit 截取最近 N 天。 */
-export async function timelineData(opts: { limit?: number; from?: string; to?: string }): Promise<{ days: TDay[]; range?: { from: string; to: string } }> {
-  const limit = Math.min(90, Math.max(5, Number(opts.limit) || 30))
-  const fromRaw = String(opts.from ?? '').trim()
-  const toRaw = String(opts.to ?? '').trim()
-  const hasRange = !!(fromRaw && toRaw)
-  // 文章是唯一含大字段（rawMarkdown 镜像）的表：按窗口过滤 + 投影列，
-  // 正文改用 charCount，不再把整篇镜像拉进内存
-  const since = hasRange ? new Date(fromRaw + 'T00:00:00') : new Date(Date.now() - 90 * 864e5)
-  const [posts, plans, checkins, ledgers, goals, notes, worktasks, focusLogs] = await Promise.all([
-    prisma.post.findMany({
-      where: { OR: [{ publishedAt: { gte: since } }, { updatedAt: { gte: since } }] },
-      select: {
-        id: true, slug: true, title: true, status: true, summary: true, charCount: true,
-        publishedAt: true, updatedAt: true, createdAt: true,
-        tags: { include: { tag: true } },
-      },
-    }),
-    prisma.planItem.findMany(),
-    prisma.checkinItem.findMany(),
-    prisma.ledgerEntry.findMany(),
-    prisma.goalItem.findMany(),
-    prisma.noteItem.findMany({ include: NOTE_INCLUDE }),
-    prisma.workTask.findMany(),
-    prisma.focusLog.findMany(),
-  ])
-
-  const dayMap = new Map<string, TDay>()
-  const push = (date: string, node: TNode) => {
-    const k = ymd(date)
-    if (!k) return
-    let day = dayMap.get(k)
-    if (!day) { day = { date: k, xp: 0, gold: 0, items: [] }; dayMap.set(k, day) }
-    day.xp += node.xp || 0
-    day.gold += node.gold || 0
-    day.items.push(node)
-  }
-
-  // 文章 → 日志（发布会徽章，草稿弱化）
-  for (const p of posts) {
-    const published = p.status === 'published'
-    const date = published ? p.publishedAt || p.updatedAt : p.updatedAt || p.createdAt
-    const chars = p.charCount || 0
-    push(ymd(date), {
-      id: 'post:' + p.id, t: 'journal',
-      title: published ? p.title : `${p.title}（草稿）`,
-      sub: `${published ? '发布' : '草稿'} · ${chars} 字${p.summary ? ' · ' + p.summary.slice(0, 60) : ''}`,
-      date: ymd(date), xp: postDrop(published),
-      tags: p.tags.map(x => x.tag.name).slice(0, 3),
-      ts: date instanceof Date ? date.toISOString() : undefined,
-    })
-  }
-
-// 灵感笔记 → 与文章共用标签体系（tags 为正式标签名）；计划类速记已并入今日计划
-// 状态标识：非「待使用」的笔记在预览前加前缀（如 已使用 · …）
-const NOTE_STATUS_LABEL: Record<string, string> = { used: '已使用', expired: '已过期' }
-for (const n of notes) {
-  const mark = NOTE_STATUS_LABEL[n.status]
-  const sub = mark ? `${mark} · ${n.body ? n.body.slice(0, 120) : n.title || '灵感'}` : n.body ? n.body.slice(0, 120) : '灵感'
-  push(n.date || ymd(n.createdAt), {
-    id: 'note:' + n.id,
-    t: 'note',
-    title: n.title || '（无标题）',
-    sub,
-    date: ymd(n.date), xp: 10,
-    tags: n.tags.map((x) => x.tag.name),
-    ts: n.createdAt ? n.createdAt.toISOString() : undefined,
-  })
-}
-
-// 番茄专注执行记录（日常 × 计划联动）→ 时间轴「专注」节点（不发 XP/金币，非游戏化范畴）
-for (const f of focusLogs) {
-  push(f.date || ymd(f.createdAt), {
-    id: 'focus:' + f.id,
-    t: 'focus',
-    title: `🍅 专注 ${f.minutes} 分钟`,
-    sub: f.planTitle ? `计划 · ${f.planTitle}` : '自由专注',
-    date: ymd(f.date), xp: 0,
-    tags: ['专注'],
-    ts: f.createdAt ? f.createdAt.toISOString() : undefined,
-  })
-}
-
-  // 今日计划 → 仅完成的条目进入时间轴（挂到完成日；XP/金币与讨伐掉落同口径）
-  for (const p of plans) {
-    if (!p.done) continue
-    const date = ymd(p.doneAt) || ymd(p.updatedAt) || ymd(p.createdAt)
-    const drop = planDrop(p.id, p.level)
-    push(date, {
-      id: 'plan:' + p.id, t: 'plan',
-      title: `完成计划 ${p.level} · ${p.text}`,
-      sub: p.note || `优先级 ${p.level}`,
-      date, xp: drop.xp, gold: drop.gold,
-      ts: p.updatedAt ? p.updatedAt.toISOString() : undefined,
-    })
-  }
-
-  // 习惯打卡 → 展开逐日 log（{"YYYY-MM-DD": true}）
-  for (const c of checkins) {
-    let log: Record<string, boolean> = {}
-    try { log = JSON.parse(c.log || '{}') } catch { /* 忽略损坏 log */ }
-    for (const [d, v] of Object.entries(log)) {
-      if (v !== true) continue
-      push(d, {
-        id: 'checkin:' + c.id + ':' + d, t: 'checkin',
-        title: `${c.emoji || '✨'} ${c.name}`, sub: `习惯打卡 · 当前连续 ${c.streak || 0} 天`,
-        date: d, xp: 15,
-      })
-    }
-  }
-
-  // 记账本 → 支出折算金币（演示游戏化收益，不落库）
-  for (const l of ledgers) {
-    const isInc = l.kind === 'income'
-    const sign = isInc ? '+' : '-'
-    const gold = l.kind === 'expense' ? Math.max(1, Math.min(4, Math.round(Math.abs(l.amount) / 30))) : 0
-    push(l.date, {
-      id: 'ledger:' + l.id, t: 'ledger',
-      title: l.note || `${l.cat} · 一笔${isInc ? '收入' : '支出'}`,
-      sub: `${sign}¥${Math.abs(l.amount).toFixed(2)} · ${l.cat}`,
-      date: ymd(l.date), gold,
-      tags: [l.cat],
-      ts: l.createdAt ? l.createdAt.toISOString() : undefined,
-    })
-  }
-
-  // 工作计划 → 仅完成任务进入时间轴（挂完成日，tag「工作」与个人计划区分）
-  for (const w of worktasks) {
-    if (!w.done) continue
-    const date = ymd(w.doneAt) || ymd(w.updatedAt) || ymd(w.date) || ymd(w.createdAt)
-    push(date, {
-      id: 'worktask:' + w.id, t: 'plan',
-      title: `完成工作计划 · ${w.text}`,
-      sub: w.note ? w.note.slice(0, 120) : '工作计划',
-      date, xp: 10,
-      tags: ['工作'],
-      ts: w.updatedAt ? w.updatedAt.toISOString() : undefined,
-    })
-  }
-
-  // 长期目标 → 仅在关联计划完成 / 关联习惯打卡当天出现（"进度 +1"）
-  const planById = new Map(plans.map(p => [p.id, p]))
-  const checkinById = new Map(checkins.map(c => [c.id, c]))
-  for (const g of goals) {
-    const seen = new Set<string>()
-    const pushGoal = (d: string) => {
-      if (seen.has(d)) return
-      seen.add(d)
-      const pct = Math.round((g.current / (g.target || 1)) * 100)
-      push(d, {
-        id: 'goal:' + g.id + ':' + d, t: 'goal',
-        title: `${g.emoji || '🎯'} 目标「${g.name}」进度 +1`,
-        sub: `${g.current} / ${g.target}${g.unit ? ' ' + g.unit : ''} · ${pct}%`,
-        date: d, xp: 20,
-      })
-    }
-    for (const pid of safeJson(g.relatedPlanIds)) {
-      const pl = planById.get(pid)
-      if (pl && pl.done) pushGoal(ymd(pl.doneAt) || ymd(pl.updatedAt))
-    }
-    for (const cid of safeJson(g.relatedCheckinIds)) {
-      const ck = checkinById.get(cid)
-      if (!ck) continue
-      try {
-        const log = JSON.parse(ck.log || '{}') as Record<string, boolean>
-        for (const [d, v] of Object.entries(log)) if (v === true) pushGoal(d)
-      } catch { /* 忽略 */ }
-    }
-  }
-
-  const allDays = [...dayMap.values()]
-    .map(d => ({ ...d, items: d.items.sort((a, b) => (b.ts || b.date).localeCompare(a.ts || a.date)) }))
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .filter((d) => (hasRange ? d.date >= fromRaw && d.date <= toRaw : true))
-  const days = hasRange ? allDays : allDays.slice(0, limit)
-
-  return { days, range: hasRange ? { from: fromRaw, to: toRaw } : undefined }
-}
+/** ============ 双视图时间轴聚合（聚合实现在 services/timeline.ts，访客与行政共用） ============ */
 
 // GET /timeline —— 首屏双视图数据源
 // 两种用法：
@@ -580,7 +185,7 @@ workbench.get('/timeline', ah(async (req, res) => {
       return err(res, 422, 'VALIDATION', '时间范围最多 366 天')
     }
   }
-  const data = await timelineData({ limit: Number((req.query as any).limit) || 30, from: fromRaw, to: hasRange ? toRaw : undefined })
+  const data = await timelineData({ limit: Number(q.limit) || 30, from: fromRaw, to: hasRange ? toRaw : undefined })
   res.json(data)
 }))
 
@@ -603,6 +208,30 @@ const MODEL: Record<string, string> = {
   notes: 'noteItem',
   worktask: 'workTask',
   focus: 'focusLog',
+}
+
+/** 通用 CRUD 用到的窄化 delegate 接口：避免 (prisma as any)[模型名] 动态访问（禁 any）。
+ *  各模型 delegate 的真实类型不同，统一收窄到本接口，方法签名只暴露路由实际使用的部分。 */
+interface WbModelDelegate {
+  findMany: (args?: { orderBy?: Record<string, string> }) => Promise<Array<Record<string, unknown>>>
+  create: (args: { data: Record<string, unknown> }) => Promise<Record<string, unknown>>
+  update: (args: { where: { id: string }; data: Record<string, unknown> }) => Promise<Record<string, unknown>>
+  delete: (args: { where: { id: string } }) => Promise<Record<string, unknown>>
+  count: () => Promise<number>
+}
+
+const WB_MODELS: Record<string, WbModelDelegate> = {
+  planItem: prisma.planItem as unknown as WbModelDelegate,
+  checkinItem: prisma.checkinItem as unknown as WbModelDelegate,
+  ledgerEntry: prisma.ledgerEntry as unknown as WbModelDelegate,
+  goalItem: prisma.goalItem as unknown as WbModelDelegate,
+  noteItem: prisma.noteItem as unknown as WbModelDelegate,
+  workTask: prisma.workTask as unknown as WbModelDelegate,
+  focusLog: prisma.focusLog as unknown as WbModelDelegate,
+}
+
+function wbModel(scope: string): WbModelDelegate | null {
+  return WB_MODELS[MODEL[scope]] ?? null
 }
 
 
@@ -675,10 +304,6 @@ function sanitizeObj(scope: string, body: Record<string, unknown>): Record<strin
    分类未传默认「灵感」，标签未传默认「灵感」；'' = 明确无分类。
    ============================================================ */
 const DEFAULT_NOTE_TAX = '灵感'
-const NOTE_INCLUDE = {
-  category: { select: { id: true, name: true, slug: true } },
-  tags: { select: { tag: { select: { id: true, name: true, slug: true } } } },
-} as const
 
 interface NoteWithTax {
   id: string
@@ -697,21 +322,6 @@ interface NoteWithTax {
 function shapeNote(n: NoteWithTax) {
   const { tags, ...rest } = n
   return { ...rest, tags: tags.map((t) => t.tag.name) }
-}
-
-/** 笔记标签同步：按 name upsert Tag → 重建 NoteTag（与 posts.syncTags 同构；最多 20 个） */
-async function syncNoteTags(noteId: string, names: unknown): Promise<void> {
-  if (!Array.isArray(names)) return
-  const list = [...new Set(
-    names.filter((x): x is string => typeof x === 'string' && x.trim() !== '').map((x) => x.trim()),
-  )].slice(0, 20)
-  const ids: string[] = []
-  for (const name of list) {
-    const tag = await prisma.tag.upsert({ where: { name }, update: {}, create: { name, slug: slugify(name) } })
-    ids.push(tag.id)
-  }
-  await prisma.noteTag.deleteMany({ where: { noteId } })
-  for (const tagId of ids) await prisma.noteTag.create({ data: { noteId, tagId } })
 }
 
 /** 默认分类「灵感」的 id（不存在则返回 null，不强造） */
@@ -740,7 +350,7 @@ async function createNote(clean: Record<string, unknown>, body: Record<string, u
     },
   })
   const names = body.tags === undefined ? [DEFAULT_NOTE_TAX] : body.tags
-  await syncNoteTags(created.id, names)
+  await syncTags({ link: 'noteTag', ownerId: created.id, names })
   const full = await prisma.noteItem.findUnique({ where: { id: created.id }, include: NOTE_INCLUDE })
   return full ? shapeNote(full) : created
 }
@@ -754,7 +364,7 @@ async function updateNote(id: string, clean: Record<string, unknown>, body: Reco
   if (typeof clean.status === 'string') data.status = clean.status
   if (clean.categoryId !== undefined) data.categoryId = await resolveCategoryId(clean.categoryId, false)
   const updated = await prisma.noteItem.update({ where: { id }, data })
-  if (body.tags !== undefined) await syncNoteTags(id, body.tags)
+  if (body.tags !== undefined) await syncTags({ link: 'noteTag', ownerId: id, names: body.tags })
   const full = await prisma.noteItem.findUnique({ where: { id }, include: NOTE_INCLUDE })
   return full ? shapeNote(full) : updated
 }
@@ -762,7 +372,8 @@ async function updateNote(id: string, clean: Record<string, unknown>, body: Reco
 // GET /:scope —— 列表（leader 自然序；plan 按完成态排后）
 workbench.get('/:scope', ah(async (req, res) => {
   const scope = req.params.scope
-  if (!MODEL[scope]) return err(res, 422, 'VALIDATION', '不支持的模块: ' + scope)
+  const model = wbModel(scope)
+  if (!model) return err(res, 422, 'VALIDATION', '不支持的模块: ' + scope)
   const orderBy: Record<string, string> =
     scope === 'plan' ? { done: 'asc' }
       : scope === 'worktask' ? { date: 'asc' }
@@ -772,43 +383,44 @@ workbench.get('/:scope', ah(async (req, res) => {
     const rows = await prisma.noteItem.findMany({ orderBy, include: NOTE_INCLUDE })
     return res.json({ items: rows.map(shapeNote) })
   }
-  const items = await (prisma as any)[MODEL[scope]].findMany({ orderBy })
+  const items = await model.findMany({ orderBy })
   res.json({ items })
 }))
 
 // GET /:scope/summary —— 总览统计（首页用）
 workbench.get('/:scope/summary', ah(async (req, res) => {
   const scope = req.params.scope
-  const model = (prisma as any)[MODEL[scope]]
-  if (!model) return err(res, 422, 'VALIDATION', '不支持的模块: ' + scope)
+  if (!wbModel(scope) && scope !== 'plan' && scope !== 'checkin' && scope !== 'ledger' && scope !== 'goals' && scope !== 'notes') {
+    return err(res, 422, 'VALIDATION', '不支持的模块: ' + scope)
+  }
   const wb: Record<string, unknown> = {}
   if (scope === 'plan') {
-    const all = await model.findMany()
+    const all = await prisma.planItem.findMany()
     wb.total = all.length
-    wb.done = all.filter((x: { done: boolean }) => x.done).length
+    wb.done = all.filter((x) => x.done).length
   } else if (scope === 'checkin') {
-    const all = await model.findMany()
+    const all = await prisma.checkinItem.findMany()
     const t = ymdLocal(new Date())
     wb.total = all.length
-    wb.todayDone = all.filter((x: { log: string }) => {
+    wb.todayDone = all.filter((x) => {
       try { return JSON.parse(x.log || '{}')[t] === true } catch { return false }
     }).length
-    wb.maxStreak = Math.max(0, ...all.map((x: { streak: number }) => x.streak || 0))
+    wb.maxStreak = Math.max(0, ...all.map((x) => x.streak || 0))
   } else if (scope === 'ledger') {
-    const all = await model.findMany()
+    const all = await prisma.ledgerEntry.findMany()
     const month = ymdLocal(new Date()).slice(0, 7)
-    const mRows = all.filter((x: { date: string }) => String(x.date).slice(0, 7) === month)
-    wb.income = mRows.filter((x: { kind: string }) => x.kind === 'income').reduce((a: number, b: { amount: number }) => a + b.amount, 0)
-    wb.expense = mRows.filter((x: { kind: string }) => x.kind === 'expense').reduce((a: number, b: { amount: number }) => a + b.amount, 0)
+    const mRows = all.filter((x) => String(x.date).slice(0, 7) === month)
+    wb.income = mRows.filter((x) => x.kind === 'income').reduce((a, b) => a + b.amount, 0)
+    wb.expense = mRows.filter((x) => x.kind === 'expense').reduce((a, b) => a + b.amount, 0)
     wb.total = all.length
   } else if (scope === 'goals') {
-    const all = await model.findMany()
+    const all = await prisma.goalItem.findMany()
     wb.total = all.length
     wb.pct = all.length
-      ? Math.round(all.reduce((a: number, b: { current: number; target: number }) => a + b.current / (b.target || 1), 0) / all.length * 100)
+      ? Math.round(all.reduce((a, b) => a + b.current / (b.target || 1), 0) / all.length * 100)
       : 0
   } else if (scope === 'notes') {
-    wb.total = await model.count()
+    wb.total = await prisma.noteItem.count()
   }
   res.json(wb)
 }))
@@ -816,7 +428,8 @@ workbench.get('/:scope/summary', ah(async (req, res) => {
 // POST /:scope —— 新建（白名单字段 + 类型校验；ledger/notes 缺省日期兜底为今天，避免必填列 500）
 workbench.post('/:scope', ah(async (req, res) => {
   const scope = req.params.scope
-  if (!MODEL[scope]) return err(res, 422, 'VALIDATION', '不支持的模块: ' + scope)
+  const model = wbModel(scope)
+  if (!model) return err(res, 422, 'VALIDATION', '不支持的模块: ' + scope)
   const body = validateBody<Record<string, unknown>>(req, res, WB_SCHEMA[scope])
   if (!body) return
   // 创建时必填校验（缺关键列 → 422，而非 DB 约束 500）
@@ -842,14 +455,15 @@ workbench.post('/:scope', ah(async (req, res) => {
     }
     return res.json({ ok: true, item: await createNote(clean, body) })
   }
-  const created = await (prisma as any)[MODEL[scope]].create({ data: clean })
+  const created = await model.create({ data: clean })
   res.json({ ok: true, item: created })
 }))
 
 // PUT /:scope/:id —— 更新（白名单字段 + 类型校验；缺省字段视为不更新）
 workbench.put('/:scope/:id', ah(async (req, res) => {
   const scope = req.params.scope
-  if (!MODEL[scope]) return err(res, 422, 'VALIDATION', '不支持的模块: ' + scope)
+  const model = wbModel(scope)
+  if (!model) return err(res, 422, 'VALIDATION', '不支持的模块: ' + scope)
   const body = validateBody<Record<string, unknown>>(req, res, WB_SCHEMA[scope])
   if (!body) return
   const clean = sanitizeObj(scope, body)
@@ -861,7 +475,7 @@ workbench.put('/:scope/:id', ah(async (req, res) => {
     }
   }
   try {
-    const updated = await (prisma as any)[MODEL[scope]].update({
+    const updated = await model.update({
       where: { id: req.params.id },
       data: clean,
     })
@@ -874,9 +488,10 @@ workbench.put('/:scope/:id', ah(async (req, res) => {
 // DELETE /:scope/:id —— 删除
 workbench.delete('/:scope/:id', ah(async (req, res) => {
   const scope = req.params.scope
-  if (!MODEL[scope]) return err(res, 422, 'VALIDATION', '不支持的模块: ' + scope)
+  const model = wbModel(scope)
+  if (!model) return err(res, 422, 'VALIDATION', '不支持的模块: ' + scope)
   try {
-    await (prisma as any)[MODEL[scope]].delete({ where: { id: req.params.id } })
+    await model.delete({ where: { id: req.params.id } })
     res.json({ ok: true })
   } catch {
     return err(res, 404, 'NOT_FOUND', '记录不存在')

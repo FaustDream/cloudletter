@@ -179,8 +179,9 @@ export async function dispatchWebhookSafe(
       clearTimeout(timer)
       const text = await res.text().catch(() => '')
       return { status: res.status, error: res.status >= 200 && res.status < 300 ? '' : text.slice(0, 200) }
-    } catch (e: any) {
-      return { status: 0, error: String(e?.message ?? e ?? '网络错误').slice(0, 200) }
+    } catch (e: unknown) {
+      const msg = (e as { message?: unknown } | null)?.message ?? e ?? '网络错误'
+      return { status: 0, error: String(msg).slice(0, 200) }
     }
   }
   let attempt = 1

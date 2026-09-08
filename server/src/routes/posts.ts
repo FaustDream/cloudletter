@@ -19,6 +19,7 @@ import {
   writeRevisionFile,
 } from '../content'
 import { logActivity } from '../services/activity'
+import { syncTags } from '../services/tags'
 import { emitWebhookEvent } from './integrations'
 
 export const posts = Router()
@@ -44,20 +45,6 @@ function toFile(post: Post) {
     frontmatter: post.frontmatter,
     status: post.status,
     publishedAt: post.publishedAt,
-  }
-}
-
-/** 按 name upsert 标签并重建关联（SQLite 不支持 createMany，逐条 create；重名去重防撞复合主键） */
-async function syncTags(postId: string, names: string[]): Promise<void> {
-  const ids: string[] = []
-  for (const name of [...new Set(names)]) {
-    if (!name || typeof name !== 'string') continue
-    const tag = await prisma.tag.upsert({ where: { name }, update: {}, create: { name, slug: slugify(name) } })
-    ids.push(tag.id)
-  }
-  await prisma.postTag.deleteMany({ where: { postId } })
-  for (const tagId of ids) {
-    await prisma.postTag.create({ data: { postId, tagId } })
   }
 }
 
@@ -194,7 +181,7 @@ posts.post('/', ah(async (req, res) => {
   let slug = baseSlug
   if (await prisma.post.findUnique({ where: { slug } })) slug = `${slug}-${Date.now().toString(36)}`
   const post = await createPostAt(slug)
-  if (body.tags?.length) await syncTags(post.id, body.tags)
+  if (body.tags?.length) await syncTags({ link: 'postTag', ownerId: post.id, names: body.tags })
   writeRevisionFile(post.slug, 1, markdown)
   await indexSearchPost(post.id) // 同步全文索引（不阻断业务）
   logActivity(req, { action: 'post_create', object: b.title, target: post.id, detail: { slug: post.slug, status: post.status } })
@@ -295,7 +282,7 @@ posts.post('/batch', ah(async (req, res) => {
   try {
     for (const it of pendings) {
       if (action === 'tag') {
-        await syncTagsWorker(it.p.id, (payload.tags as string[]) ?? [])
+        await syncTags({ link: 'postTag', ownerId: it.p.id, names: (payload.tags as string[]) ?? [] })
       }
       await prisma.post.update({
         where: { id: it.p.id },
@@ -342,18 +329,6 @@ posts.post('/batch', ah(async (req, res) => {
   }
   res.json({ ok: true, affected: targets.length })
 }))
-
-/** 批量打标签辅助（避免与单篇 syncTags 重复实现） */
-async function syncTagsWorker(postId: string, names: string[]): Promise<void> {
-  const clean = [...new Set(names.filter((n): n is string => typeof n === 'string' && !!n.trim()))]
-  const ids: string[] = []
-  for (const name of clean) {
-    const tag = await prisma.tag.upsert({ where: { name: name.trim() }, update: {}, create: { name: name.trim(), slug: slugify(name.trim()) } })
-    ids.push(tag.id)
-  }
-  await prisma.postTag.deleteMany({ where: { postId } })
-  for (const tagId of ids) await prisma.postTag.create({ data: { postId, tagId } })
-}
 
 posts.put('/:id', ah(async (req, res) => {
   const post = await prisma.post.findUnique({ where: { id: req.params.id } })
@@ -509,7 +484,7 @@ posts.put('/:id', ah(async (req, res) => {
     throw e
   }
 
-  if (body.tags !== undefined) await syncTags(post.id, body.tags)
+  if (body.tags !== undefined) await syncTags({ link: 'postTag', ownerId: post.id, names: body.tags })
   if (nextRev) {
     try {
       writeRevisionFile(newSlug ?? post.slug, nextRev, String(data.rawMarkdown))

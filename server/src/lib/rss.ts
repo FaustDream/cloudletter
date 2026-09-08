@@ -130,8 +130,10 @@ export async function buildRssFeed(origin: string): Promise<string> {
   const site = await prisma.siteSetting.findUnique({ where: { key: 'global' } })
   let siteCfg: Record<string, unknown> = {}
   try { siteCfg = site ? JSON.parse(site.value) : {} } catch { /* 忽略 */ }
-  const name = String((siteCfg as any)?.site?.name ?? (siteCfg as any)?.appearance?.siteName ?? '云笺集')
-  const desc = String((siteCfg as any)?.site?.description ?? '个人创作工作台：文章、灵感与日常')
+  const siteSection = typeof siteCfg.site === 'object' && siteCfg.site !== null ? siteCfg.site as Record<string, unknown> : {}
+  const appearance = typeof siteCfg.appearance === 'object' && siteCfg.appearance !== null ? siteCfg.appearance as Record<string, unknown> : {}
+  const name = String(siteSection.name ?? appearance.siteName ?? '云笺集')
+  const desc = String(siteSection.description ?? '个人创作工作台：文章、灵感与日常')
   const posts = await prisma.post.findMany({
     where: { status: 'published' },
     orderBy: { publishedAt: 'desc' },

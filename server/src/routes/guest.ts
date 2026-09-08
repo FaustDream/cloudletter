@@ -6,7 +6,7 @@ import { Router } from 'express'
 import { prisma } from '../prisma'
 import { requireGuest, requireScope } from '../guestAuth'
 import { ah, err } from './helpers'
-import { timelineData } from './workbench'
+import { timelineData } from '../services/timeline'
 
 export const guest = Router()
 
@@ -23,7 +23,7 @@ guest.get('/meta', requireGuest, ah(async (req, res) => {
 
 // GET /guest/timeline —— 时间流（复用管理员聚合，仅限 timeline 范围）
 guest.get('/timeline', requireGuest, requireScope('timeline'), ah(async (req, res) => {
-  const limit = Math.min(90, Math.max(5, Number((req.query as any).limit) || 30))
+  const limit = Math.min(90, Math.max(5, Number(req.query.limit) || 30))
   const data = await timelineData({ limit })
   res.json(data)
 }))
