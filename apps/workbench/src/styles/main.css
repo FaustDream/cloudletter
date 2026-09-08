@@ -241,8 +241,9 @@ input, textarea, select { font-family: var(--font); font-size: 14px; color: var(
 .navi.active::before { opacity: 1; transform: scaleY(1); }
 .navi .badge { margin-left: auto; font-size: 11px; background: rgba(47, 109, 246, .14);
   border-radius: 999px; padding: 1px 8px; color: var(--drawer-text); font-weight: 600; }
-.sidebar .foot { padding: 16px 20px; font-size: 11px; opacity: .7; border-top: 1px solid rgba(150, 195, 240, .4);
-  color: var(--drawer-text); }
+/* foot 淡化只用弱文字色表达，禁止 opacity——否则个人中心下拉菜单（子树）整体半透明，页面文字透出 */
+.sidebar .foot { padding: 16px 20px; font-size: 11px; border-top: 1px solid rgba(150, 195, 240, .4);
+  color: var(--drawer-text-mute); }
 .main { margin-left: var(--sidebar-w); padding: 24px var(--gutter) 56px; position: relative; min-height: 100vh; }
 /* 去容器化 · 轻度融合（DESIGN-SPEC §9 调性）：内容区卡片与页面玻璃背景融为一体——
    卡片透明无边框阴影，层级靠留白/字重/hover 浮现；实底浮层（弹窗/抽屉/下拉菜单）不受影响 */

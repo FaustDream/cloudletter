@@ -221,8 +221,8 @@ export function SettingsPage() {
   }
 
   const changePwd = async () => {
-    if (!/[\u4e00-\u9fff]/.test(newPwd) || !/[a-zA-Z]/.test(newPwd)) {
-      toast('新密码必须同时包含中文与英文字母', 'err')
+    if (!/[0-9]/.test(newPwd) || !/[a-zA-Z]/.test(newPwd)) {
+      toast('新密码必须同时包含数字与英文字母', 'err')
       return
     }
     try {
@@ -571,7 +571,7 @@ export function SettingsPage() {
                   <span>{user.email}</span>
                   <button className="btn slim ghost" onClick={() => { setNewEmail(''); setEmailPwd(''); setEmailOpen(true) }}>修改邮箱</button>
                 </Row>
-                <Row k="登录密码" tip="至少 8 位，必须同时包含中文与英文字母；修改后撤销其他会话">
+                <Row k="登录密码" tip="至少 8 位，必须同时包含数字与英文字母；修改后撤销其他会话">
                   <button className="btn slim ghost" onClick={() => setPwdOpen(true)}>修改密码</button>
                 </Row>
               </Sec>
@@ -1053,7 +1053,7 @@ export function SettingsPage() {
             <button className="btn" onClick={changePwd}>确认修改</button></>
         }>
           <Field label="当前密码"><input type="password" value={oldPwd} onChange={(e) => setOldPwd(e.target.value)} autoComplete="current-password" /></Field>
-          <Field label="新密码（≥8 位，必须同时包含中文与英文字母）"><input type="password" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} autoComplete="new-password" maxLength={128} /></Field>
+          <Field label="新密码（≥8 位，必须同时包含数字与英文字母）"><input type="password" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} autoComplete="new-password" maxLength={128} /></Field>
         </Modal>
       )}
 
