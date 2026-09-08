@@ -42,6 +42,8 @@ pnpm -C tests/e2e test:headed      # 端到端测试（有头浏览器）
 
 ## 变更记录
 
+- 2026-09-08（六）：速记交互按反馈修正——⚡速记把手常驻右缘，**点击**打开**居中弹窗**（废止悬停触发与边缘滑出停靠）；Esc 改捕获阶段监听修复编辑器聚焦时无法关闭。Playwright 验证居中（中心=视口中心）/Esc/点外关闭/保存流程。
+
 - 2026-09-08（五）：速记改自动隐藏停靠面板（右/底可切、悬停展开、移出自动收起、保存自动收起草稿重置）；根治编辑器「双击内容消失」——Chromium 对 CJK 文本的三连击选段 + 挂载 replaceFromMarkdown 迟到落地覆盖用户输入，双管修复（lastUserEditAt 守卫 + Field as=div 防 label 劫持编辑器焦点）；Playwright 本地与生产产物实测。详见 docs/memory/2026-09-08.md。
 
 - 2026-09-08（六）：全站界面风格审查整改并已上站。① 紫色全线清零（主题「星夜紫」改「星夜青」、渐变/粒子/强调色统一并入时间线六色体系，判定按色相通用规则不靠枚举）。② 设计令牌收敛：`main.css` `:root` 新增字号（--fs-\*）、层叠（--z-\*）、动效（--dur-\*）、玻璃模糊（--glass-blur-\*）四张阶梯表，全站硬编码值经 codemod 迁移至令牌；`.am-menu`/便签/头像渐变改为成对令牌（浅色在 :root、暗色在 [data-theme='dark'] 成对覆写），删除组件内 dark 补丁。③ 键盘可达性：全局 `:focus-visible` 焦点环补齐。④ `shared/theme.css` 双轨样式删除（零引用确认）。⑤ 巨型组件拆分：SettingsPage（76KB→7 组件）、LoginPage（27KB→5 组件）、TimelineUniverse3d（42KB→核心+4 UI 组件）。⑥ 新增设计门禁 `apps/workbench/scripts/check-tokens.mjs`（R1 紫色/R2 字号/R3 层叠/R4 模糊，行内 `design-ok: 原因` 豁免），接入 `pnpm build` 前置，单测 13 例。规范同步：DESIGN-SPEC §9 令牌清单与执行机制、AGENTS.md 令牌纪律条目。前端单测 144/144、typecheck 干净、浏览器冒烟 9 项全过。
