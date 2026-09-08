@@ -457,13 +457,15 @@ export function LoginPage() {
 
       {/* 忘记密码 / 首次使用 弹窗 */}
       {help === 'forgot' && (
-        <Modal title="重置密码（邮箱链接）" onClose={() => setHelp(null)} footer={
+        <Modal title="重置密码（邮箱链接）" hideClose onClose={() => setHelp(null)} footer={
           <button className="btn" onClick={() => setHelp(null)}>关闭</button>
         }>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.8, marginBottom: 12 }}>
             输入已注册的管理员邮箱，系统将发送一封<b>含一次性重置链接</b>的邮件。
             只有通过邮件里链接的操作才能重置密码（链接带加密密文，15 分钟内有效，使用一次即失效）。
           </p>
+          {/* 发送失败原因就地显示在弹窗内（卡片里的 lerr 会被弹窗遮住，表现为「无反应」） */}
+          {err && <div className="lerr" role="alert" style={{ marginBottom: 12 }}><Icon name="x" size={14} /> {err}</div>}
           <div className="lfield">
             <label>管理员邮箱</label>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />

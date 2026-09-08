@@ -25,7 +25,7 @@ const SIZE_W: Record<ModalSize, number> = { sm: 400, md: 560, lg: 720, xl: 960 }
 
 const FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])'
 
-export function Modal({ title, onClose, children, footer, type = 'info', size = 'md', maskClosable = true }: {
+export function Modal({ title, onClose, children, footer, type = 'info', size = 'md', maskClosable = true, hideClose = false }: {
   title: ReactNode
   onClose: () => void
   children: ReactNode
@@ -33,6 +33,8 @@ export function Modal({ title, onClose, children, footer, type = 'info', size = 
   type?: ModalType
   size?: ModalSize
   maskClosable?: boolean
+  /** 隐藏右上角 × 关闭按钮（关闭途径保留：页脚按钮 / Esc / 点遮罩） */
+  hideClose?: boolean
 }) {
   const [closing, setClosing] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -108,9 +110,11 @@ export function Modal({ title, onClose, children, footer, type = 'info', size = 
             </span>
             {title}
           </span>
-          <button className="x" onClick={requestClose} aria-label="关闭">
-            <Icon name="x" size={18} />
-          </button>
+          {!hideClose && (
+            <button className="x" onClick={requestClose} aria-label="关闭">
+              <Icon name="x" size={18} />
+            </button>
+          )}
         </div>
         {children}
         {footer && <div className="mfoot">{footer}</div>}

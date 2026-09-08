@@ -124,7 +124,9 @@ export async function sendMail(msg: MailMsg, opts?: { allowAnyRecipient?: boolea
     await transporter.sendMail({ from: mailConfig.from, to: msg.to, subject: msg.subject, text: msg.text })
     return { sent: true }
   } catch (err) {
-    // 网络/TLS/认证错误路径：脱敏后抛出（auth 路由经 ah() 包络为 500）
-    throw redactCredentials(err)
+    // 网络/TLS/认证错误（如 QQ 邮箱 535 授权码失效/账号异常）：脱敏后作为发送失败返回，
+    // 路由层统一 503 + reason（此前抛出会被 ah() 包络成笼统的 500「服务器内部错误」）
+    const e = redactCredentials(err)
+    return { sent: false, reason: `${e.name}: ${e.message}`.slice(0, 300) }
   }
 }
