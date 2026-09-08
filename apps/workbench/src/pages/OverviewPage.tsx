@@ -149,7 +149,6 @@ export function OverviewPage() {
             <span className="world-label">{w.label}</span>
           </button>
         ))}
-        <span className="world-nav-tip">同一份数据 · 四种解释方式</span>
       </div>
 
       {/* 筛选条（城市/核心/河流可见；宇宙沉浸式隐藏） */}
