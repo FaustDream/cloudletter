@@ -2302,30 +2302,19 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 .uni3d-card .us { font-size: var(--fs-sm); color: var(--text-secondary); line-height: 1.7; }
 .uni3d-card .um { margin-top: 6px; font-size: var(--fs-xs); color: var(--text-tertiary); font-family: var(--mono); }
 
-/* ---- 速记停靠面板（Auto-hide Docking）：把手常驻屏幕边缘，悬停/点击展开，移出自动收起 ---- */
-.qdock { position: fixed; inset: 0; z-index: var(--z-drawer); pointer-events: none; }
-.qdock-handle { pointer-events: auto; position: absolute; border: none; cursor: pointer;
+/* ---- 速记面板：边缘把手（常驻）+ 点击打开的居中弹窗（点击把手触发，不随悬停展开） ---- */
+.qdock-handle { pointer-events: auto; position: fixed; right: 0; top: 50%; transform: translateY(-50%); z-index: var(--z-drawer);
+  writing-mode: vertical-rl; letter-spacing: .08em; padding: 14px 8px; border: none; cursor: pointer;
   background: linear-gradient(135deg, var(--accent), var(--accent-deep)); color: var(--on-accent);
-  box-shadow: 0 10px 26px -8px rgba(27, 79, 160, .55); user-select: none; font-weight: 700; font-size: var(--fs-sm);
-  display: flex; align-items: center; justify-content: center; }
-.qdock.side-right .qdock-handle { right: 0; top: 50%; transform: translateY(-50%);
-  writing-mode: vertical-rl; letter-spacing: .08em; padding: 14px 8px; border-radius: 12px 0 0 12px; }
-.qdock.side-bottom .qdock-handle { bottom: 0; left: 50%; transform: translateX(-50%);
-  padding: 8px 18px; border-radius: 12px 12px 0 0; }
+  border-radius: 12px 0 0 12px; font-weight: 700; font-size: var(--fs-sm); user-select: none;
+  box-shadow: -6px 10px 26px -10px rgba(27, 79, 160, .55); }
 .qdock-handle:hover { filter: brightness(1.07); }
-.qdock-panel { pointer-events: auto; position: absolute; width: min(420px, calc(100vw - 32px));
-  max-height: min(78dvh, 720px); overflow-y: auto; display: flex; flex-direction: column; gap: 10px;
-  background: var(--surface-solid); border: 1px solid var(--border); border-radius: var(--radius-sheet);
-  box-shadow: var(--shadow-overlay); padding: 16px 18px;
-  transition: transform .28s cubic-bezier(.3, .72, .16, 1), opacity .22s ease, visibility 0s linear .3s;
-  visibility: hidden; opacity: 0; }
-.qdock.open .qdock-panel { visibility: visible; opacity: 1;
-  transition: transform .28s cubic-bezier(.3, .72, .16, 1), opacity .2s ease, visibility 0s; }
-.qdock.side-right .qdock-panel { right: 34px; top: 50%; transform: translateX(calc(100% + 24px)) translateY(-50%); }
-.qdock.side-right.open .qdock-panel { transform: translateX(0) translateY(-50%); }
-.qdock.side-bottom .qdock-panel { bottom: 34px; left: 50%; width: min(680px, calc(100vw - 32px));
-  transform: translateX(-50%) translateY(calc(100% + 24px)); }
-.qdock.side-bottom.open .qdock-panel { transform: translateX(-50%) translateY(0); }
+/* 透明捕获层（DESIGN-SPEC §9）：点击弹窗外关闭；弹窗 grid 居中 */
+.qdock-capture { position: fixed; inset: 0; z-index: var(--z-drawer); display: grid; place-items: center; padding: 16px; }
+.qdock-panel { position: relative; width: min(540px, 92vw); max-height: calc(100dvh - 48px); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 10px; background: var(--surface-solid);
+  border: 1px solid var(--border); border-radius: var(--radius-sheet); box-shadow: var(--shadow-overlay);
+  padding: 18px 20px; animation: pop .22s ease; }
 .qdock-panel h3 { font-size: var(--fs-xl); font-weight: 800; display: flex; align-items: center; gap: 8px; }
 .qdock-panel h3 .kick { font-size: var(--fs-xs); color: var(--text-tertiary); font-weight: 500; margin-left: auto; }
 .type-pills { display: flex; gap: 6px; flex-wrap: wrap; }
