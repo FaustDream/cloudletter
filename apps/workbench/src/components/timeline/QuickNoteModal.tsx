@@ -64,7 +64,7 @@ export function QuickNoteModal({ onSaved }: { onSaved?: () => void }) {
   const fabPosRef = useRef<{ x: number; y: number } | null>(fabPos)
 
   useEffect(() => {
-    const clampX = (x: number) => Math.min(Math.max(8, x), window.innerWidth - 140)
+    const clampX = (x: number) => Math.min(Math.max(8, x), window.innerWidth - 64)
     const clampY = (y: number) => Math.min(Math.max(8, y), window.innerHeight - 64)
     const onMove = (e: PointerEvent) => {
       const d = fabDrag.current
@@ -259,8 +259,8 @@ export function QuickNoteModal({ onSaved }: { onSaved?: () => void }) {
           onPointerDown={onFabDown}
           onClick={onFabClick}
           onDoubleClick={onFabReset}
-          title="⚡ 速记 · 按住可拖拽移动位置 · 双击复位左下角"
-        >⚡ 速记</button>,
+          title="⚡ 速记 · 按住可拖拽移动 · 双击复位左下角"
+        >⚡</button>,
         document.body,
       )}
       {open && createPortal(

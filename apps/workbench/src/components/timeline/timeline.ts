@@ -49,10 +49,10 @@ export const TL_DESC: Record<TimelineType, string> = {
   focus: '番茄专注',
 }
 
-/** 按类型过滤节点 */
-export function filterNodes(items: TimelineNode[], t: TimelineType | 'all'): TimelineNode[] {
-  if (t === 'all') return items
-  return items.filter((i) => i.t === t)
+/** 按类型过滤节点：空数组 = 全部，数组内为「或」关系（多选） */
+export function filterNodes(items: TimelineNode[], t: TimelineType[]): TimelineNode[] {
+  if (t.length === 0) return items
+  return items.filter((i) => t.includes(i.t))
 }
 
 /** YYYY-MM-DD → 距今天数（今天=0） */

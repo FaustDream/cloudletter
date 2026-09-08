@@ -5,7 +5,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api, logClient, type DashboardStats, type TimelineDay, type TimelineNode, type TimelineType } from '../api'
 import { useAuth } from '../auth'
-import { TL_TYPES } from '../components/timeline/timeline'
+import { filterNodes } from '../components/timeline/timeline'
+import { TypeFilter } from '../components/timeline/TypeFilter'
 import { TimelineBubbles, type SplitMode } from '../components/timeline/TimelineBubbles'
 import { TimelineUniverse3d } from '../components/timeline/TimelineUniverse3d'
 import { TimelineCity } from '../components/timeline/TimelineCity'
@@ -13,7 +14,6 @@ import { DataCore } from '../components/timeline/DataCore'
 import { TimelineDetailDrawer } from '../components/timeline/TimelineDetailDrawer'
 import { BattleCard } from '../components/battle/BattleCard'
 import { LevelUpOverlay } from '../components/battle/LevelUpOverlay'
-import { filterNodes } from '../components/timeline/timeline'
 import { AvatarMenu } from '../components/framework/AvatarMenu'
 import { EmptyState } from '../components/framework/EmptyState'
 import { Loading } from '../components/framework/Loading'
@@ -58,7 +58,7 @@ export function OverviewPage() {
     if (v === 'core') return 'core'
     return 'fish'
   })
-  const [filter, setFilter] = useState<TimelineType | 'all'>('all')
+  const [filter, setFilter] = useState<TimelineType[]>([])
   const [split, setSplit] = useState<SplitMode>('time')
   const [range, setRange] = useState<RangeState>(loadRangePref)
   const [loading, setLoading] = useState(true)
@@ -116,7 +116,7 @@ export function OverviewPage() {
   const maxXpRef = useRef<number | null>(null)
   const [levelUp, setLevelUp] = useState(false)
   useEffect(() => {
-    if (filter !== 'all' || days.length === 0) return
+    if (filter.length > 0 || days.length === 0) return
     const base = maxXpRef.current
     if (base === null) { maxXpRef.current = hud.xp; return }
     if (hud.xp > base) {
@@ -154,12 +154,7 @@ export function OverviewPage() {
       {/* 筛选条（城市/核心/河流可见；宇宙沉浸式隐藏） */}
       {view !== 'uni' && (
         <div className="tl-bar sub">
-          <div className="fchips">
-            <button className={`fchip${filter === 'all' ? ' on' : ''}`} onClick={() => setFilter('all')}>全部</button>
-            {TL_TYPES.map(([k, l]) => (
-              <button key={k} className={`fchip${filter === k ? ' on' : ''}`} onClick={() => setFilter(k)}>{l}</button>
-            ))}
-          </div>
+          <TypeFilter selected={filter} onChange={setFilter} />
           <div className="vtabs mini">
             {view === 'fish' && (
               <button className={`vtab${split === 'time' ? ' on' : ''}`} onClick={() => setSplit('time')}>按时间</button>

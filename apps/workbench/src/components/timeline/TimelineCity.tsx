@@ -14,7 +14,7 @@ import { TL_COLOR, TL_TYPES, filterNodes } from './timeline'
 interface Props {
   days: TimelineDay[]
   dash: DashboardStats | null
-  filter: TimelineType | 'all'
+  filter: TimelineType[]
   active: boolean
   onOpenDetail: (node: TimelineNode) => void
 }
@@ -79,7 +79,7 @@ export function TimelineCity({ days, dash, filter, active, onOpenDetail }: Props
   }, [dash])
 
   const zoneItems = (k: TimelineType): TimelineNode[] =>
-    days.flatMap((d) => filterNodes(d.items, filter === 'all' ? k : filter)).slice(0, 9)
+    days.flatMap((d) => filterNodes(d.items, filter.length === 0 ? [k] : filter)).slice(0, 9)
 
   const total = Object.values(city).reduce((a, z) => a + (z.n || 0), 0)
 
@@ -161,7 +161,7 @@ export function TimelineCity({ days, dash, filter, active, onOpenDetail }: Props
           return (
             <button
               key={z.key}
-              className={`city-zone t-${z.key}${hot ? ' hot' : ''}${filter !== 'all' && filter !== z.key ? ' muted' : ''}`}
+              className={`city-zone t-${z.key}${hot ? ' hot' : ''}${filter.length > 0 && !filter.includes(z.key) ? ' muted' : ''}`}
               style={{ left: `${z.pos.x}%`, top: `${z.pos.y}%`, ['--c' as string]: z.accent }}
               onClick={() => setZone(zone === z.key ? null : z.key)}
               title={`${z.label}：${d.n} 条真实记录（近 7 天活跃 ${recent} 条）`}

@@ -14,7 +14,7 @@ import { TL_COLOR, TL_TYPES } from './timeline'
 interface Props {
   days: TimelineDay[]
   dash: DashboardStats | null
-  filter: TimelineType | 'all'
+  filter: TimelineType[]
   onOpenDetail: (node: TimelineNode) => void
 }
 
@@ -76,7 +76,7 @@ export function DataCore({ days, dash, filter, onOpenDetail }: Props) {
   /** 实时数据流：把最近事件按时间倒序逐条浮现（真实事件） */
   const [shown, setShown] = useState<number>(0)
   const events = useMemo(() => {
-    const all = days.flatMap((d) => d.items).filter((i) => filter === 'all' || i.t === filter)
+    const all = days.flatMap((d) => d.items).filter((i) => filter.length === 0 || filter.includes(i.t))
     const list = [...all].sort((a, b) => (b.ts || b.date).localeCompare(a.ts || a.date) || b.date.localeCompare(a.date))
     return list.slice(0, 24)
   }, [days, filter])
@@ -134,7 +134,7 @@ export function DataCore({ days, dash, filter, onOpenDetail }: Props) {
                 const head = events.find((e) => e.t === k)
                 if (head) onOpenDetail(head)
               }}
-              title={filter === 'all' || filter === k ? `查看最近「${label}」记录` : '当前筛选未包含该类型'}>
+              title={filter.length === 0 || filter.includes(k) ? `查看最近「${label}」记录` : '当前筛选未包含该类型'}>
               <span className="core-stat-ring" style={{ ['--p' as string]: `${s.pct ?? 0}%` }}>
                 <b>{s.value.toLocaleString()}</b>
               </span>

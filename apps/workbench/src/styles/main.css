@@ -366,7 +366,8 @@ input, textarea, select { font-family: var(--font); font-size: 14px; color: var(
 
 .am-menu { position: absolute; top: calc(100% + 8px); z-index: 65; width: 304px; max-width: calc(100vw - 40px);
   background: var(--surface-solid); border: 1px solid var(--border); border-radius: 16px;
-  box-shadow: var(--shadow-overlay); padding: 8px; animation: pop .18s ease;
+  box-shadow: 0 18px 44px -14px rgba(15, 30, 60, .3), 0 4px 14px rgba(15, 30, 60, .1);
+  padding: 8px; animation: pop .18s ease;
   max-height: min(640px, calc(100vh - 30px)); overflow-y: auto; }
 .am-menu.left { left: 12px; }
 .am-menu.right { right: 12px; }
@@ -1589,6 +1590,23 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
 .fchip.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600;
   box-shadow: 0 6px 16px rgba(47, 109, 246, .35); }
 
+/* ---- 类型多选下拉（时光/总览分类筛选） ---- */
+.tfilter { position: relative; display: inline-flex; }
+.tfilter-trigger { gap: 6px; }
+.tfilter-caret { font-size: 9px; opacity: .75; }
+.tfilter-pop { position: absolute; top: calc(100% + 8px); left: 0; z-index: 70; min-width: 168px;
+  background: var(--surface-solid); border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: 0 18px 44px -14px rgba(15, 30, 60, .3), 0 4px 14px rgba(15, 30, 60, .1);
+  padding: 6px; display: flex; flex-direction: column; gap: 2px; animation: pop .16s ease; }
+.tfilter-opt { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border: none;
+  background: transparent; border-radius: 9px; cursor: pointer; font-size: 13px; color: var(--text-secondary);
+  text-align: left; transition: background .14s; }
+.tfilter-opt:hover { background: var(--surface-nested); color: var(--text); }
+.tfilter-opt.on { color: var(--text); font-weight: 600; background: var(--accent-muted); }
+.tf-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; opacity: .9; }
+.tf-dot.all { background: var(--text-tertiary); }
+.tfilter-opt.on .tf-dot { opacity: 1; box-shadow: 0 0 0 3px var(--accent-muted); }
+
 /* ---- 视图 A：时间线（气泡化 · 原鱼骨） ---- */
 .tb { position: relative; padding: 10px 0 6px; }
 /* 贯穿上下 2px 呼吸虚线主轴，所有气泡围绕它左右分区 */
@@ -2266,13 +2284,13 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
    （全局 .ed-blocknote .bn-container 有 min-height:300px 强撑，一次性编辑表单内压平） */
 .drawer .mded .bn-container, .modal .mded .bn-container { min-height: 120px; }
 .drawer .mded .bn-editor, .modal .mded .bn-editor { padding-bottom: 12px; }
-.fab { position: fixed; left: 26px; bottom: 26px; z-index: 40; display: flex; align-items: center; gap: 8px;
+.fab { position: fixed; left: 18px; bottom: 18px; z-index: 40; display: grid; place-items: center;
+  width: 46px; height: 46px; padding: 0; border-radius: 50%; font-size: 17px;
   background: linear-gradient(135deg, var(--accent), var(--accent-deep)); color: var(--on-accent);
   border: none; cursor: grab; touch-action: none; user-select: none;
-  padding: 13px 20px; border-radius: 999px; font-size: 14px; font-weight: 700;
-  box-shadow: 0 16px 40px -12px rgba(27, 79, 160, .6); transition: transform .15s; }
+  box-shadow: 0 10px 26px -8px rgba(27, 79, 160, .55); transition: transform .15s; }
 .fab:active { cursor: grabbing; }
-.fab:hover { transform: translateY(-2px); }
+.fab:hover { transform: translateY(-2px) scale(1.05); }
 
 /* 滚动入场 */
 .reveal { opacity: 0; transform: translateY(16px);

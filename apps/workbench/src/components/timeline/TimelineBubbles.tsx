@@ -82,7 +82,7 @@ function parseMove(id: string, date: string) {
 
 export function TimelineBubbles({ days, filter, split, onMoved, onOpenDetail }: {
   days: TimelineDay[]
-  filter: TimelineType | 'all'
+  filter: TimelineType[]
   split: SplitMode
   onMoved?: () => void
   /** 打开节点完整详情侧栏（统一的详情查看入口） */

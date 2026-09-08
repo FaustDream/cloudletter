@@ -60,7 +60,7 @@ interface PairInfo { kind: 'date' | 'type'; a: THREE.Mesh; b: THREE.Mesh }
 
 export function TimelineUniverse3d({ days, filter, avatar, battle = true, onOpenGame }: {
   days: TimelineDay[]
-  filter: TimelineType | 'all'
+  filter: TimelineType[]
   avatar: string
   /** 讨伐开关（设置 → 游戏）：关闭时隐藏 ⚔️ 入口 */
   battle?: boolean
