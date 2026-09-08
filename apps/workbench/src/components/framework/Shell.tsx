@@ -6,14 +6,13 @@
  * 需求 6：导航入口统一为「设置」，账户并入设置中心。
  */
 import { NavLink, useLocation } from 'react-router-dom'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useAuth } from '../../auth'
 import { Icon } from './Icon'
 import { FxEngine } from './FxEngine'
 import { AvatarMenu } from './AvatarMenu'
 import { BackToTop } from './BackToTop'
 import { QuickNoteModal } from '../timeline/QuickNoteModal'
-import type { ReactNode } from 'react'
 
 interface NavItem {
   to: string

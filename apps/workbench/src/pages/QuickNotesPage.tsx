@@ -1,3 +1,4 @@
+﻿import { errMsg } from '../lib/errors'
 /**
  * 速记汇总：集中查看全部速记灵感（计划类速记已并入今日计划，在「目标 → 今日计划」管理）。
  * 列表展示标题、内容预览、创建时间与共用分类/标签；
@@ -104,8 +105,8 @@ export function QuickNotesPage() {
       setCreating(false)
       setDetail(null)
       load()
-    } catch (e: any) {
-      toast(e?.message || '保存失败', 'err')
+    } catch (e: unknown) {
+      toast(errMsg(e, '保存失败'), 'err')
     } finally {
       setSaving(false)
     }
@@ -118,7 +119,7 @@ export function QuickNotesPage() {
       toast('已删除')
       setDetail(null)
       load()
-    } catch (e: any) { toast(e?.message || '删除失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '删除失败'), 'err') }
   }
 
   return (

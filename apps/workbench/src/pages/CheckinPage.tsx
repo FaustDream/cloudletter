@@ -1,3 +1,4 @@
+﻿import { errMsg } from '../lib/errors'
 /** 习惯打卡：今日打卡 / 连续天数 / 打卡热图；笔图标 → 右侧抽屉编辑详情（文章编辑器内核），
  *  布局三式：舒适卡片（默认）/ 紧凑 / 分组（今日已打 / 今日未打） */
 import { useCallback, useEffect, useState } from 'react'
@@ -59,8 +60,8 @@ export function CheckinPage({ withHeader = true }: { withHeader?: boolean }) {
       }
       setEditing(null)
       load()
-    } catch (e: any) {
-      toast(e?.message || '保存失败', 'err')
+    } catch (e: unknown) {
+      toast(errMsg(e, '保存失败'), 'err')
     } finally {
       setSaving(false)
     }
@@ -71,8 +72,8 @@ export function CheckinPage({ withHeader = true }: { withHeader?: boolean }) {
     try {
       await api.put(`/workbench/checkin/${item.id}`, { log: JSON.stringify(log), streak: computeStreak(JSON.stringify(log)) })
       load()
-    } catch (e: any) {
-      toast(e?.message || '操作失败', 'err')
+    } catch (e: unknown) {
+      toast(errMsg(e, '操作失败'), 'err')
     }
   }
 
@@ -83,8 +84,8 @@ export function CheckinPage({ withHeader = true }: { withHeader?: boolean }) {
       toast('已删除')
       setDrawerOpen(false)
       load()
-    } catch (e: any) {
-      toast(e?.message || '删除失败', 'err')
+    } catch (e: unknown) {
+      toast(errMsg(e, '删除失败'), 'err')
     }
   }
 

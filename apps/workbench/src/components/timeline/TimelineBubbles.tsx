@@ -1,3 +1,4 @@
+﻿import { errMsg } from '../../lib/errors'
 /**
  * 视图 A：云笺（气泡时间线，原鱼骨）
  * 需求（第 2 轮）：
@@ -8,13 +9,12 @@
  *  - 保留拖动改期（notes/ledger/plan/checkin 真实落库）
  */
 import { useEffect, useMemo, useRef, useState, useLayoutEffect, type DragEvent } from 'react'
-import { api } from '../../api'
+import { api, logClient } from '../../api'
 import { useToast } from '../framework/Toast'
 import { timelineLayout, type TimelineLayout } from '../../lib/layout'
 import { Icon } from '../framework/Icon'
 import { EmptyState } from '../framework/EmptyState'
 import { CAPSULE_THEMES, readTheme, listDayThemes, writeDayTheme, themeLabel, DAY_THEME_PREFIX } from '../../lib/componentTheme'
-import { logClient } from '../../api'
 import {
   SEG_LABEL, TL_COLOR, TL_DESC, TL_TYPES, dayLabel, daysAgo, filterNodes, segOf,
   type SegKey, type TimelineDay, type TimelineNode, type TimelineType,
@@ -248,9 +248,9 @@ export function TimelineBubbles({ days, filter, split, onMoved, onOpenDetail }: 
       }
       toast(`已移动到 ${targetDate}`)
       onMoved?.()
-    } catch (e: any) {
-      toast(e?.message || '移动失败', 'err')
-      logClient('error', 'timeline', '改期失败', { id: p.id, scope: p.scope, targetDate, err: e?.message })
+    } catch (e: unknown) {
+      toast(errMsg(e, '移动失败'), 'err')
+      logClient('error', 'timeline', '改期失败', { id: p.id, scope: p.scope, targetDate, err: errMsg(e) })
     }
   }
 

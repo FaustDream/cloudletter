@@ -71,7 +71,7 @@ export function toMonsters(
 }
 
 // GET /battle/today —— 今日讨伐列表（未完成计划 = 存活怪物）
-battle.get('/today', ah(async (req, res) => {
+battle.get('/today', ah(async (_req, res) => {
   const plans = await prisma.planItem.findMany({
     where: { done: false },
     orderBy: [{ level: 'asc' }, { createdAt: 'asc' }],

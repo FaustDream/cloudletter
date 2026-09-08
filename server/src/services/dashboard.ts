@@ -112,7 +112,7 @@ export async function dashboardStats(): Promise<{
     maxStreak = Math.max(maxStreak, c.streak || 0)
     try {
       const log = JSON.parse(c.log || '{}') as Record<string, boolean>
-      for (const [d, v] of Object.entries(log)) if (v === true) checkedDays++
+      for (const [, v] of Object.entries(log)) if (v === true) checkedDays++
       if (log[today] === true) todayCheckins++
     } catch { /* 忽略损坏 log */ }
   }

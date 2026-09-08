@@ -1,3 +1,4 @@
+﻿import { errMsg } from '../lib/errors'
 /** 分类管理：颜色语义 + 数量联动（点击开抽屉看分类下内容）+ hover 操作 + 描述/时间 */
 import { useCallback, useEffect, useState } from 'react'
 import { api, type Category } from '../api'
@@ -57,7 +58,7 @@ export function CategoriesPage({ withHeader = true }: { withHeader?: boolean }) 
         toast('已创建分类')
       }
       setCreating(false); load()
-    } catch (e: any) { toast(e?.message || '操作失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '操作失败'), 'err') }
   }
 
   const remove = async (c: Category) => {
@@ -65,7 +66,7 @@ export function CategoriesPage({ withHeader = true }: { withHeader?: boolean }) 
     try {
       await api.del(`/categories/${c.id}`)
       toast('已删除'); load()
-    } catch (e: any) { toast(e?.message || '删除失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '删除失败'), 'err') }
   }
 
   return (

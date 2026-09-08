@@ -1,3 +1,4 @@
+﻿import { errMsg } from '../../lib/errors'
 /**
  * 速记面板：边缘把手（常驻）+ 点击打开的居中弹窗。
  * - ⚡ 速记把手常驻屏幕右缘；**点击**把手打开居中弹窗（不随悬停触发）
@@ -7,7 +8,7 @@
  *   计划 = 直接进今日计划（PlanItem：紧急度 level / 完成时间 dueDate / 标题 text / 详情 note）
  * - 经 experience 开关决定 XP 文案；弹窗外层为透明捕获层（DESIGN-SPEC §9）
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api, type Category, type NoteType } from '../../api'
 import { useToast } from '../framework/Toast'
@@ -73,7 +74,6 @@ export function QuickNoteModal({ onSaved }: { onSaved?: () => void }) {
     setText(''); setTagNames(['灵感']); setCategoryName(''); setPlanTitle(''); setPlanNote(''); setLevel('P1'); setDueDate('')
     setDraftEpoch((e) => e + 1)
   }
-  const close = () => { setOpen(false); resetDraft() }
 
   /** 保存时解析分类 id：优先按名匹配已有分类，否则新建（下拉内「新建」已落库的可直接命中） */
   const resolveCategoryId = (name: string): Promise<string> =>
@@ -113,8 +113,8 @@ export function QuickNoteModal({ onSaved }: { onSaved?: () => void }) {
       onSaved?.()
       // 全局广播：任意页面保存速记后，时间轴等关心数据的页面自行刷新
       window.dispatchEvent(new CustomEvent('cl:quicknote:saved'))
-    } catch (e: any) {
-      toast(e?.message || '保存失败', 'err')
+    } catch (e: unknown) {
+      toast(errMsg(e, '保存失败'), 'err')
     } finally {
       setSaving(false)
     }

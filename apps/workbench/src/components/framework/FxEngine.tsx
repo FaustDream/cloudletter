@@ -61,7 +61,7 @@ export function FxEngine() {
       { x: .8, y: .65, r: 460, c: '160,140,255', a: .045, s: -.0006, w: 1.2 },
       { x: .55, y: .15, r: 360, c: '110,255,215', a: .04, s: .0005, w: 2.1 },
     ].map((b) => ({ ...b, r: Math.max(state.W, state.H) * (b.r / 560) }))
-    const flows = Array.from({ length: 14 }, (_, i) => ({
+    const flows = Array.from({ length: 14 }, () => ({
       x: Math.random() * state.W, y: Math.random() * state.H,
       vy: .18 + Math.random() * .6, len: 30 + Math.random() * 70,
       c: Math.random() < .5 ? '140,200,255' : '170,150,255',
@@ -93,7 +93,6 @@ export function FxEngine() {
     const tick = (t: number) => {
       if (!state.run) return
       const now = t
-      const dt = Math.min((now - state.last) / 1000 || .016, .05)
       state.last = now
       const tb = now / 1000
       const mx = state.mouse.x, my = state.mouse.y, mOn = state.mouse.on

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 文章路由（V2）：list / get / create / update（乐观锁 + 版本）/ delete / revisions / restore。
  * 内容真相源 = Markdown 文件；"文件先落、DB 后提交"，DB 失败回滚文件，保持元数据与文件一致。
  */
@@ -82,7 +82,7 @@ posts.get('/', ah(async (req, res) => {
   res.json({
     items: items.map((p) => {
       let cover = ''
-      try { cover = (JSON.parse(p.frontmatter || '{}') as { cover?: string }).cover ?? '' } catch {}
+      try { cover = (JSON.parse(p.frontmatter || '{}') as { cover?: string }).cover ?? '' } catch { /* 畸形 frontmatter 忽略 */ }
       return {
         id: p.id,
         slug: p.slug,
@@ -257,7 +257,7 @@ posts.post('/batch', ah(async (req, res) => {
   for (const p of targets) {
     const data: Record<string, unknown> = {}
     let fm: Record<string, unknown> = {}
-    try { fm = JSON.parse(p.frontmatter || '{}') } catch {}
+    try { fm = JSON.parse(p.frontmatter || '{}') } catch { /* 畸形 frontmatter 忽略 */ }
     if (action === 'publish') {
       data.status = 'published'
       if (!p.publishedAt) data.publishedAt = new Date()
@@ -397,7 +397,7 @@ posts.put('/:id', ah(async (req, res) => {
   let fm: Record<string, unknown> = {}
   try {
     fm = JSON.parse(post.frontmatter || '{}')
-  } catch {}
+  } catch { /* 回滚尽力而为 */ }
   if (body.categoryId !== undefined) {
     if (body.categoryId) {
       const cat = await prisma.category.findUnique({ where: { id: body.categoryId } })
@@ -471,7 +471,7 @@ posts.put('/:id', ah(async (req, res) => {
     try {
       if (newSlug) renamePostAssets(newSlug, post.slug)
       writePostFile(toFile(post))
-    } catch {}
+    } catch { /* 回滚尽力而为 */ }
     if (isP2025(e)) {
       if (body.baseVersion !== undefined) {
         const fresh = await prisma.post.findUnique({ where: { id: post.id } })
@@ -561,7 +561,7 @@ posts.post('/:id/revisions/:vid/restore', ah(async (req, res) => {
   } catch (e) {
     try {
       writePostFile(toFile(post))
-    } catch {}
+    } catch { /* 回滚尽力而为 */ }
     throw e
   }
   writeRevisionFile(post.slug, version, content)

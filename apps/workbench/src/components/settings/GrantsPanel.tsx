@@ -1,3 +1,4 @@
+﻿import { errMsg } from '../../lib/errors'
 /**
  * 一次性授权管理面板（设置 · 隐私与安全）：创建授权（邮件送达）/ 列表 / 撤销。
  * 明文链接仅在创建响应返回一次（供人工转达兜底）；列表只展示状态不展示链接。
@@ -66,8 +67,8 @@ export function GrantsPanel() {
       setLabel('')
       toast('授权邮件已发送')
       load()
-    } catch (e: any) {
-      toast(e?.message || '创建失败', 'err')
+    } catch (e: unknown) {
+      toast(errMsg(e, '创建失败'), 'err')
     } finally {
       setCreating(false)
     }
@@ -79,7 +80,7 @@ export function GrantsPanel() {
       await api.del(`/grants/${g.id}`)
       toast('授权已撤销')
       load()
-    } catch (e: any) { toast(e?.message || '操作失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '操作失败'), 'err') }
   }
 
   return (

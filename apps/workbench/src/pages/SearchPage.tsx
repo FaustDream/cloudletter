@@ -8,6 +8,20 @@ import { readLayoutTheme, SEARCH_CARD_THEMES } from '../lib/componentTheme'
 
 interface ArticleHit { slug: string; title: string; excerpt: string; category: string | null; tags: string[]; publishedAt: string | null; draft: boolean }
 interface WbHit { scope: string; id: string; label: string; value: string; date?: string }
+/** 工作台五类模块行（搜索用统一的最小结构；后端返回字段在运行时保证存在，from unknown 断言收窄） */
+interface WbRow {
+  id: string
+  text: string
+  note: string
+  name: string
+  cat: string
+  amount: number
+  unit: string
+  title: string
+  body: string
+  date?: string
+  createdAt?: string
+}
 
 const RECENT_KEY = 'cl_recent_searches'
 const SUGGESTIONS = ['Markdown', '项目复盘', '云笺集', 'Fuwari', '计划']
@@ -104,8 +118,9 @@ export function SearchPage() {
       const wb: WbHit[] = []
       await Promise.all(scopes.map(async (s) => {
         try {
-          const r = await api.get<{ items: any[] }>(`/workbench/${s}`)
-          for (const it of r.items ?? []) {
+          const r = await api.get<{ items: Array<Record<string, unknown>> }>(`/workbench/${s}`)
+          for (const raw of r.items ?? []) {
+            const it = raw as unknown as WbRow
             const textParts: string[] = []
             if (s === 'plan') textParts.push(it.text, it.note)
             else if (s === 'checkin') textParts.push(it.name)
@@ -121,7 +136,7 @@ export function SearchPage() {
               })
             }
           }
-        } catch {}
+        } catch { /* 单模块检索失败不阻断整体搜索，静默降级为空结果 */ }
       }))
       // 分类 / 标签
       const cats = await api.get<{ items: Category[] }>('/categories').catch(() => ({ items: [] }))
@@ -133,7 +148,7 @@ export function SearchPage() {
       // 记录最近搜索
       setRecent((prev) => {
         const next = [kw, ...prev.filter((r) => r !== kw)].slice(0, 8)
-        try { localStorage.setItem(RECENT_KEY, JSON.stringify(next)) } catch {}
+        try { localStorage.setItem(RECENT_KEY, JSON.stringify(next)) } catch { /* 隐私模式/存满：仅本次不记录，不影响搜索 */ }
         return next
       })
     } finally {

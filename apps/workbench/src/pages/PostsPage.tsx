@@ -1,3 +1,4 @@
+﻿import { errMsg } from '../lib/errors'
 /** 文章管理页：筛选（分类/标签/状态/搜索）+ 排序 + 多选批量 + hover 快捷操作 + Tab 数量 */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -107,8 +108,8 @@ export function PostsPage() {
       const r = await api.post<{ ok: boolean; affected: number }>('/posts/batch', { ids: [...sel], action, payload: extra })
       toast(`已处理 ${r.affected} 篇`)
       setSel(new Set()); load()
-    } catch (e: any) {
-      toast(e?.message || '批量操作失败', 'err')
+    } catch (e: unknown) {
+      toast(errMsg(e, '批量操作失败'), 'err')
     }
   }
 
@@ -131,7 +132,7 @@ export function PostsPage() {
       await api.del(`/posts/${p.id}`)
       toast('已删除')
       load()
-    } catch (e: any) { toast(e?.message || '删除失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '删除失败'), 'err') }
   }
 
   return (

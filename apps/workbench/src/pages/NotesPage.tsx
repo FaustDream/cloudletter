@@ -1,3 +1,4 @@
+import { errMsg } from '../lib/errors'
 /** 灵感笔记：5 种布局（卡片/列表/时间线/瀑布流/便利贴，页头即点即换）；
  *  点卡片 → 右侧抽屉直接编辑详情（标题/分类/标签/富文本正文），随手记=抽屉新建，
  *  默认分类/标签「灵感」，与文章共用；分类/标签=Notion 式下拉（可搜索新建）。
@@ -7,12 +8,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api, type Category, type NoteItem, type NoteStatus } from '../api'
 import { Icon } from '../components/framework/Icon'
-import { confirmDialog } from '../components/framework/Modal'
+import { confirmDialog, Field } from '../components/framework/Modal'
 import { Drawer } from '../components/framework/Drawer'
 import { MarkdownEditor } from '../components/editor/MarkdownEditor'
 import { TagMultiSelect } from '../components/editor/TagMultiSelect'
 import { Dropdown } from '../components/framework/Dropdown'
-import { Field } from '../components/framework/Modal'
 import { useToast } from '../components/framework/Toast'
 import { PageHeader } from '../components/framework/PageHeader'
 import { EmptyState } from '../components/framework/EmptyState'
@@ -127,8 +127,8 @@ export function NotesPage() {
         setDrawerOpen(false)
       }
       load()
-    } catch (e: any) {
-      toast(e?.message || '保存失败', 'err')
+    } catch (e: unknown) {
+      toast(errMsg(e, '保存失败'), 'err')
     } finally {
       setSaving(false)
     }
@@ -141,8 +141,8 @@ export function NotesPage() {
       toast('已删除')
       setDrawerOpen(false)
       load()
-    } catch (e: any) {
-      toast(e?.message || '删除失败', 'err')
+    } catch (e: unknown) {
+      toast(errMsg(e, '删除失败'), 'err')
     }
   }
 

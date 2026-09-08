@@ -1,4 +1,4 @@
-/** 视图 B：节点宇宙（Three.js，第 2 轮升级）
+﻿/** 视图 B：节点宇宙（Three.js，第 2 轮升级）
  *  4 连线可交互：连线/节点可点击，点击后全局降光 → 关联节点与连接线鲜明高亮（双层强调）
  *  5 详情卡移到顶部（不贴边）
  *  6 节点球：内容长度/类型/时间决定大小（限位 0.9–2.4）；类型专属表情贴球；材质辉光动态脉动
@@ -10,11 +10,11 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { TL_COLOR, TL_TYPES, daysAgo, filterNodes, type TimelineDay, type TimelineNode, type TimelineType } from './timeline'
+import { TL_TYPES, daysAgo, filterNodes, type TimelineDay, type TimelineNode, type TimelineType } from './timeline'
 import { EmptyState } from '../framework/EmptyState'
 import { ServerStatusPanel } from '../framework/ServerStatusPanel'
 import { logClient } from '../../api'
-import { DIM, MAX_FLOAT, SKY, SPEED_STEPS, escapeHtml, type FloatBubble, type PairInfo } from './universe3d/consts'
+import { MAX_FLOAT, SKY, SPEED_STEPS, escapeHtml, type FloatBubble } from './universe3d/consts'
 import { createEnvironment, type UniverseEnvironment } from './universe3d/environment'
 import { buildNodeWorld, type NodeWorld } from './universe3d/nodes'
 import { UniverseControls } from './universe3d/UniverseControls'

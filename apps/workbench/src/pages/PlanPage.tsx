@@ -1,3 +1,4 @@
+﻿import { errMsg } from '../lib/errors'
 /** 今日计划：优先级 + 截止时间 + 逾期/延期状态 + 完成时间；
  *  点行 → 右侧抽屉直接编辑（文章编辑器内核写备注），布局三式：舒适（默认）/ 紧凑 / 分组（P0/P1/P2） */
 import { useCallback, useEffect, useState } from 'react'
@@ -69,7 +70,7 @@ export function PlanPage({ withHeader = true }: { withHeader?: boolean }) {
       }
       setEditing(null)
       load()
-    } catch (e: any) { toast(e?.message || '保存失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '保存失败'), 'err') }
     finally { setSaving(false) }
   }
 
@@ -82,14 +83,14 @@ export function PlanPage({ withHeader = true }: { withHeader?: boolean }) {
         toast(`✅ 完成计划「${item.text}」· ${praise()}`)
       }
       load()
-    } catch (e: any) { toast(e?.message || '操作失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '操作失败'), 'err') }
   }
 
   const remove = async (item: PlanItem) => {
     try {
       await api.del(`/workbench/plan/${item.id}`)
       toast('已删除'); setDrawerOpen(false); load()
-    } catch (e: any) { toast(e?.message || '删除失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '删除失败'), 'err') }
   }
 
   const stateOf = (item: PlanItem): { cls: string; label: string } | null => {

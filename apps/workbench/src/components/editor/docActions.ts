@@ -33,9 +33,9 @@ export function selectedEditorText(): string {
 export function createWikilink(editor: Editor): 'wrapped' | 'inserted' {
   const text = selectedEditorText()
   if (text) {
-    editor.insertInlineContent(`[[${text}]] ` as any)
+    editor.insertInlineContent(`[[${text}]] `)
     return 'wrapped'
   }
-  editor.insertInlineContent('[[' as any)
+  editor.insertInlineContent('[[')
   return 'inserted'
 }

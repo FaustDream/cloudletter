@@ -21,7 +21,7 @@ import { pickStaleLocalDraft } from '../lib/savePolicy'
 import { compressImage } from '../lib/image'
 import { EdNotice, NOTICE_AUTO_CLOSE_MS } from '../components/editor/EdNotice'
 import { ExportMenu } from '../components/editor/ExportMenu'
-import { useEditorSave, snap, type EditorContent, type EditorNotice } from '../components/editor/useEditorSave'
+import { useEditorSave, snap, type EditorContent } from '../components/editor/useEditorSave'
 import { RevisionPanel } from '../components/editor/RevisionPanel'
 import { EdSideMeta, Outline, WikiLinks, type Frontmatter } from '../components/editor/Outline'
 // BlockNote 体积大（ProseMirror 全家桶），独立 chunk 按需加载
@@ -50,7 +50,7 @@ export function EditorPage() {
   const {
     savedSnap, saveState, online, notice,
     setSaveState, setNotice, setOnline,
-    doSave, doSaveRef, saveStateRef, postRef,
+    doSave, doSaveRef,
   } = useEditorSave({
     post, content, slug, baseVersion, categories, setSlug, setBaseVersion, toast,
   })

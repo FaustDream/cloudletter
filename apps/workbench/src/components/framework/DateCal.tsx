@@ -67,7 +67,7 @@ export function DateCal({ value, onChange, min, max, header = null }: DateCalPro
 }
 
 /** 浮层方向判定（相对锚点容器）：向上翻如果容器上方空间不足 */
-export function flipDir(el: HTMLElement | null, gap = 8): 'down' | 'up' {
+export function flipDir(el: HTMLElement | null): 'down' | 'up' {
   if (!el) return 'down'
   const r = el.getBoundingClientRect()
   const spaceBelow = window.innerHeight - r.bottom

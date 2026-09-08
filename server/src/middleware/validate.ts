@@ -28,8 +28,6 @@ export interface FieldSpec {
   item?: FieldSpec
 }
 
-type FieldValue = string | number | boolean | Record<string, unknown> | undefined
-
 export const v = {
   str: (): FieldSpec => ({ type: 'string' }),
   num: (): FieldSpec => ({ type: 'number' }),

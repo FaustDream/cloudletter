@@ -37,11 +37,9 @@ async function main() {
     // 轻量解析现值（仅 category/tags 行）
     let fmCategory: string | null = null
     let fmHasTags = false
-    let fmTagsLine = ''
-    let fmCategoryLine = ''
     for (const line of m[1].split(/\r?\n/)) {
-      if (/^category\s*:/i.test(line)) { fmCategoryLine = line; const v = line.slice(line.indexOf(':') + 1).trim().replace(/^["']|["']$/g, ''); fmCategory = v || null }
-      else if (/^tags\s*:/i.test(line)) { fmHasTags = true; fmTagsLine = line }
+      if (/^category\s*:/i.test(line)) { const v = line.slice(line.indexOf(':') + 1).trim().replace(/^["']|["']$/g, ''); fmCategory = v || null }
+      else if (/^tags\s*:/i.test(line)) { fmHasTags = true }
     }
     const wantCategory = p.category?.name ?? null
     const wantTags = p.tags.map((t) => t.tag.name)

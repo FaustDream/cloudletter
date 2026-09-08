@@ -1,3 +1,4 @@
+﻿import { errMsg } from '../lib/errors'
 /**
  * 日常（目标之外的第二入口）：番茄专注 + 今日回顾。
  * - 番茄专注：计时引擎使用成熟开源方案 react-timer-hook（截止时间戳驱动，无手写 setInterval），
@@ -107,7 +108,7 @@ export function DailyPage() {
         toast(`✅ 完成工作计划「${t.text}」· ${praise()}`)
       }
       loadWork()
-    } catch (e: any) { toast(e?.message || '操作失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '操作失败'), 'err') }
   }
 
   const loadNotes = useCallback(() => {
@@ -192,7 +193,7 @@ export function DailyPage() {
         loadNotes()
         toast(`🍅 专注完成，已记入时间线 · ${praise()}`)
       }
-    } catch (e: any) { toast(e?.message || '记录失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '记录失败'), 'err') }
   }, [focusPlanRef, loadFocusLogs, loadNotes, toast])
 
   /** 完成当前专注轮：记录 + 庆祝 + 自动进入休息（或停止等待） */
@@ -286,7 +287,7 @@ export function DailyPage() {
       setSaved(true)
       celebrate(window.innerWidth / 2, window.innerHeight / 2, 22)
       toast('今日回顾已写入，可在时间线查看')
-    } catch (e: any) { toast(e?.message || '保存失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '保存失败'), 'err') }
   }
 
   return (

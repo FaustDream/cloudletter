@@ -1,3 +1,4 @@
+﻿import { errMsg } from '../../lib/errors'
 /**
  * 设置中心 · 集成与链接分组（从 SettingsPage 拆出）：
  * - SMTP 状态、RSS 公开订阅地址
@@ -24,9 +25,9 @@ export const IntegrationsGroup = () => {
   const [feedUrl, setFeedUrl] = useState('')
   const [feedBusy, setFeedBusy] = useState(false)
 
-  const loadCreds = () => { api.get<{ items: any[] }>('/integrations/api-credentials').then((r) => setCreds(r.items)).catch(() => {}) }
-  const loadHooks = () => { api.get<{ items: any[] }>('/integrations/webhooks').then((r) => setHooks(r.items)).catch(() => {}) }
-  const loadFeeds = () => { api.get<{ items: any[] }>('/feeds').then((r) => setFeeds(r.items)).catch(() => {}) }
+  const loadCreds = () => { api.get<{ items: Array<Record<string, unknown>> }>('/integrations/api-credentials').then((r) => setCreds(r.items)).catch(() => {}) }
+  const loadHooks = () => { api.get<{ items: Array<Record<string, unknown>> }>('/integrations/webhooks').then((r) => setHooks(r.items)).catch(() => {}) }
+  const loadFeeds = () => { api.get<{ items: Array<Record<string, unknown>> }>('/feeds').then((r) => setFeeds(r.items)).catch(() => {}) }
 
   // 挂载即加载（原 loadAll 按需拆分）
   useEffect(() => {
@@ -43,37 +44,37 @@ export const IntegrationsGroup = () => {
       setCredKeyOnce(`${r.name}: ${r.key}`)
       setNewCredName('')
       loadCreds()
-    } catch (e: any) { toast(e?.message || '创建失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '创建失败'), 'err') }
   }
   const revokeCred = async (id: string) => {
     try { await api.del(`/integrations/api-credentials/${id}`); loadCreds(); toast('凭据已撤销') }
-    catch (e: any) { toast(e?.message || '撤销失败', 'err') }
+    catch (e: unknown) { toast(errMsg(e, '撤销失败'), 'err') }
   }
   const saveHook = async (payload: Record<string, unknown>) => {
     try {
       if (hookEditing?.id) await api.put(`/integrations/webhooks/${hookEditing.id}`, payload)
       else await api.post('/integrations/webhooks', payload)
       setHookEditing(null); loadHooks(); toast('Webhook 已保存')
-    } catch (e: any) { toast(e?.message || '保存失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '保存失败'), 'err') }
   }
   const toggleHook = async (h: Record<string, unknown>) => {
     try { await api.put(`/integrations/webhooks/${h.id}`, { enabled: !h.enabled }); loadHooks() }
-    catch (e: any) { toast(e?.message || '操作失败', 'err') }
+    catch (e: unknown) { toast(errMsg(e, '操作失败'), 'err') }
   }
   const deleteHook = async (id: string) => {
     try { await api.del(`/integrations/webhooks/${id}`); loadHooks(); toast('Webhook 已删除') }
-    catch (e: any) { toast(e?.message || '删除失败', 'err') }
+    catch (e: unknown) { toast(errMsg(e, '删除失败'), 'err') }
   }
   const testHook = async (id: string) => {
     try {
       const r = await api.post<{ ok: boolean; status: number; message: string }>(`/integrations/webhooks/${id}/test`)
       toast(r.message)
       loadHooks()
-    } catch (e: any) { toast(e?.message || '测试失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '测试失败'), 'err') }
   }
   const showCalls = async (id: string) => {
     try {
-      const r = await api.get<{ items: any[] }>(`/integrations/webhooks/${id}/calls`)
+      const r = await api.get<{ items: Array<Record<string, unknown>> }>(`/integrations/webhooks/${id}/calls`)
       setHookCalls((p) => ({ ...p, [id]: r.items }))
     } catch { /* ignore */ }
   }
@@ -84,18 +85,18 @@ export const IntegrationsGroup = () => {
       const r = await api.post<{ ok: boolean; title: string; added: number }>('/feeds/subscribe', { url: feedUrl.trim() })
       toast(`已订阅「${r.title}」（首拉 ${r.added} 条）`)
       setFeedUrl(''); loadFeeds()
-    } catch (e: any) { toast(e?.message || '订阅失败', 'err') } finally { setFeedBusy(false) }
+    } catch (e: unknown) { toast(errMsg(e, '订阅失败'), 'err') } finally { setFeedBusy(false) }
   }
   const refreshFeed = async (id: string) => {
     try {
       const r = await api.post<{ ok: boolean; added: number }>(`/feeds/${id}/refresh`)
       toast(`订阅刷新完成（新增 ${r.added} 条）`)
       loadFeeds()
-    } catch (e: any) { toast(e?.message || '刷新失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '刷新失败'), 'err') }
   }
   const removeFeed = async (id: string) => {
     try { await api.del(`/feeds/${id}`); loadFeeds(); toast('已取消订阅') }
-    catch (e: any) { toast(e?.message || '操作失败', 'err') }
+    catch (e: unknown) { toast(errMsg(e, '操作失败'), 'err') }
   }
 
   return (
@@ -142,11 +143,11 @@ export const IntegrationsGroup = () => {
       <Sec icon="globe" title="Webhook" tip="事件推送（创建/发布/更新/删除文章）；HMAC 签名、调用日志、失败自动重试 2 次">
         <Row k="新建 / 编辑">
           <div className="hook-editor">
-            <input value={String((hookEditing as any)?.name ?? '')} placeholder="名称（如通知机器人）" onChange={(e) => setHookEditing((h) => ({ ...(h ?? {}), name: e.target.value }))} />
-            <input value={String((hookEditing as any)?.url ?? '')} placeholder="https://example.com/hook" onChange={(e) => setHookEditing((h) => ({ ...(h ?? {}), url: e.target.value }))} />
+            <input value={String(hookEditing?.name ?? '')} placeholder="名称（如通知机器人）" onChange={(e) => setHookEditing((h) => ({ ...(h ?? {}), name: e.target.value }))} />
+            <input value={String(hookEditing?.url ?? '')} placeholder="https://example.com/hook" onChange={(e) => setHookEditing((h) => ({ ...(h ?? {}), url: e.target.value }))} />
             <label className="hook-ev" title="事件多选">
               {['post.published', 'post.created', 'post.updated', 'post.deleted'].map((ev) => {
-                const list: string[] = Array.isArray((hookEditing as any)?.events) ? (hookEditing as any).events : []
+                const list: string[] = Array.isArray(hookEditing?.events) ? (hookEditing.events as string[]) : []
                 return (
                   <label key={ev}><input type="checkbox" checked={list.includes(ev)} onChange={(e) => {
                     const next = e.target.checked ? [...list, ev] : list.filter((x) => x !== ev)
@@ -155,9 +156,9 @@ export const IntegrationsGroup = () => {
                 )
               })}
             </label>
-            <input value={String((hookEditing as any)?.secret ?? '')} placeholder="签名密钥（可选，HMAC-SHA256）" onChange={(e) => setHookEditing((h) => ({ ...(h ?? {}), secret: e.target.value }))} />
+            <input value={String(hookEditing?.secret ?? '')} placeholder="签名密钥（可选，HMAC-SHA256）" onChange={(e) => setHookEditing((h) => ({ ...(h ?? {}), secret: e.target.value }))} />
             <button className="btn slim" disabled={!hookEditing?.name || !hookEditing?.url}
-              onClick={() => void saveHook({ name: (hookEditing as any)?.name, url: (hookEditing as any)?.url, events: (hookEditing as any)?.events ?? [], secret: (hookEditing as any)?.secret, enabled: hookEditing?.enabled ?? true })}>
+              onClick={() => void saveHook({ name: hookEditing?.name, url: hookEditing?.url, events: Array.isArray(hookEditing?.events) ? hookEditing.events : [], secret: hookEditing?.secret, enabled: hookEditing?.enabled ?? true })}>
               保存
             </button>
             {!!hookEditing?.id && <button className="btn slim ghost" onClick={() => setHookEditing(null)}>取消</button>}

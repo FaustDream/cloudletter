@@ -1,3 +1,4 @@
+﻿import { errMsg } from '../../lib/errors'
 /**
  * 设置中心 · 账户分组（从 SettingsPage 拆出）：
  * - 个人资料（昵称 / 头像上传 / 头像装饰）、登录邮箱、密码（中英文规则）
@@ -77,7 +78,7 @@ export const AccountGroup = () => {
   const loadTfa = () =>
     api.get<{ enabled: boolean; pending: boolean }>('/auth/2fa/status').then(setTfaStatus).catch(() => {})
   const loadDevices = () => {
-    api.get<{ records: any[] }>('/auth/devices').then((r) => setDevices(r.records)).catch(() => {})
+    api.get<{ records: Array<Record<string, string>> }>('/auth/devices').then((r) => setDevices(r.records)).catch(() => {})
   }
 
   // 挂载即加载（原 loadAll 按需拆分）
@@ -93,7 +94,7 @@ export const AccountGroup = () => {
     try {
       await updateProfile(nick.trim())
       toast('个人资料已保存')
-    } catch (e: any) { toast(e?.message || '保存失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '保存失败'), 'err') }
   }
 
   const changePwd = async () => {
@@ -105,7 +106,7 @@ export const AccountGroup = () => {
       await api.post('/auth/password', { oldPassword: oldPwd, newPassword: newPwd })
       toast('密码已修改，其他会话已退出')
       setPwdOpen(false); setOldPwd(''); setNewPwd('')
-    } catch (e: any) { toast(e?.message || '修改失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '修改失败'), 'err') }
   }
 
   const changeEmail = async () => {
@@ -114,7 +115,7 @@ export const AccountGroup = () => {
       toast(`登录邮箱已更新为 ${newEmail.trim()}`)
       setEmailOpen(false); setNewEmail(''); setEmailPwd('')
       window.location.reload()
-    } catch (e: any) { toast(e?.message || '修改失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '修改失败'), 'err') }
   }
 
   /* 头像（需求 14）：上传 png/jpeg/webp/gif（GIF 动图支持），≤3MB */
@@ -129,18 +130,18 @@ export const AccountGroup = () => {
         reader.onerror = () => rej(new Error('读取文件失败'))
         reader.readAsDataURL(file)
       })
-      const r = await api.post<{ ok: boolean; avatar: string }>('/auth/avatar', { dataUrl })
+      await api.post<{ ok: boolean; avatar: string }>('/auth/avatar', { dataUrl })
       await updateProfile(nick.trim() || user.nickname || '')
       window.location.reload() // 让全局 user 带上新头像
       toast('头像已更新')
-    } catch (e: any) { toast(e?.message || '上传失败', 'err') } finally { setAvatarBusy(false) }
+    } catch (e: unknown) { toast(errMsg(e, '上传失败'), 'err') } finally { setAvatarBusy(false) }
   }
 
   const saveDecors = async (frame: string, badge: string, effect: string) => {
     try {
       await api.put('/auth/avatar-decors', { frame, badge, effect })
       toast('头像装饰已保存')
-    } catch (e: any) { toast(e?.message || '保存失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '保存失败'), 'err') }
   }
 
   /* 两步验证 */
@@ -151,14 +152,14 @@ export const AccountGroup = () => {
       setTfaQr(await QRCode.toDataURL(r.otpauthUrl, { width: 200, margin: 1 }))
       setTfaToken('')
       setTfaOpen(true)
-    } catch (e: any) { toast(e?.message || '生成失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '生成失败'), 'err') }
   }
   const confirmTfa = async () => {
     try {
       await api.post('/auth/2fa/enable', { token: tfaToken.trim() })
       toast('两步验证已开启，下次登录需输入动态码')
       setTfaOpen(false); loadTfa()
-    } catch (e: any) { toast(e?.message || '验证失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '验证失败'), 'err') }
   }
   const disableTfa = async () => {
     if (!tfaDisablePwd || tfaToken.length !== 6) { toast('请输入密码与 6 位动态码', 'err'); return }
@@ -166,7 +167,7 @@ export const AccountGroup = () => {
       await api.post('/auth/2fa/disable', { password: tfaDisablePwd, token: tfaToken.trim() })
       toast('两步验证已关闭')
       setTfaOpen(false); setTfaDisablePwd(''); setTfaToken(''); loadTfa()
-    } catch (e: any) { toast(e?.message || '关闭失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '关闭失败'), 'err') }
   }
   /* 两步验证邮箱安全恢复（托底：严格校验 + 有效期 + 频控 + 留痕，均已在服务端实现） */
   const sendRecovery = async () => {
@@ -176,7 +177,7 @@ export const AccountGroup = () => {
       if (r.mode === 'demo' && r.dev) toast(`演示模式恢复码：${r.dev.code}`)
       else toast(r.sent ? '恢复码已发送到你的绑定邮箱（15 分钟有效，仅一次）' : '恢复码已发送' + (r.sent === false ? '（账户未开启两步验证）' : ''))
       setRecoverStep('confirm')
-    } catch (e: any) { toast(e?.message || '发送失败', 'err') } finally { setRecoverBusy(false) }
+    } catch (e: unknown) { toast(errMsg(e, '发送失败'), 'err') } finally { setRecoverBusy(false) }
   }
   const confirmRecovery = async () => {
     setRecoverBusy(true)
@@ -186,7 +187,7 @@ export const AccountGroup = () => {
       setRecoverOpen(false); setRecoverCode(''); setRecoverStep('send')
       await logout()
       window.location.href = '/login'
-    } catch (e: any) { toast(e?.message || '验证失败', 'err') } finally { setRecoverBusy(false) }
+    } catch (e: unknown) { toast(errMsg(e, '验证失败'), 'err') } finally { setRecoverBusy(false) }
   }
 
   const isCurrentDev = (deviceId: string) => !!deviceId && deviceId === localStorage.getItem('cl_dev')

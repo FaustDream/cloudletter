@@ -60,7 +60,6 @@ search.get('/', ah(async (req, res) => {
 
   // 降级路径：FTS5 不可用 → DB LIKE（标题 + 正文镜像），行为等价但随量级变慢
   if (!ftsAvailable()) {
-    const like = `%${q}%`
     const rows = await prisma.post.findMany({
       where: { OR: [{ title: { contains: q } }, { rawMarkdown: { contains: q } }], ...(includeDraft ? {} : { status: 'published' }) },
       select: { slug: true, title: true, rawMarkdown: true, frontmatter: true, status: true, publishedAt: true },

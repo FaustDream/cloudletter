@@ -1,3 +1,4 @@
+﻿import { errMsg } from '../../lib/errors'
 /**
  * 设置中心 · 关于 + 快捷键分组（从 SettingsPage 拆出）：
  * - 关于：版本 v1.0、更新记录、帮助与反馈（邮件）
@@ -50,9 +51,9 @@ const FeedbackForm = ({ defaultEmail }: { defaultEmail: string }) => {
       setResult('sent')
       setSubject(''); setContent('')
       toast('反馈已发送')
-    } catch (e: any) {
+    } catch (e: unknown) {
       setResult('fail')
-      toast(e?.message || '发送失败', 'err')
+      toast(errMsg(e, '发送失败'), 'err')
     } finally { setBusy(false) }
   }
   return (

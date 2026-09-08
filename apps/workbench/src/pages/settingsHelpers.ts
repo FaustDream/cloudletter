@@ -1,3 +1,4 @@
+﻿import { errMsg } from '../lib/errors'
 /** 设置页数据导出助手：聚合工作台各模块为云笺集备份 JSON（kind=cloudletter-backup） */
 import { api } from '../api'
 import { todayYMD } from '../lib/date'
@@ -9,9 +10,9 @@ export async function exportDataBundle(toast: { (msg: string, kind?: 'err'): voi
     try {
       const r = await api.get<{ items: unknown[] }>(`/workbench/${s}`)
       modules[s] = r.items
-    } catch (e: any) {
+    } catch (e: unknown) {
       modules[s] = []
-      toast(`模块 ${s} 导出失败：${e?.message ?? '未知错误'}`, 'err')
+      toast(`模块 ${s} 导出失败：${errMsg(e, '未知错误')}`, 'err')
     }
   }
   bundle.modules = modules

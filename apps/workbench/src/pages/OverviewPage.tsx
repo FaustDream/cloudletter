@@ -63,7 +63,6 @@ export function OverviewPage() {
   const [range, setRange] = useState<RangeState>(loadRangePref)
   const [loading, setLoading] = useState(true)
   const [loadErr, setLoadErr] = useState(false)
-  const [dashErr, setDashErr] = useState(false)
   const [gameSignal, setGameSignal] = useState(0)
   // 游戏化开关（设置 → 游戏）：讨伐 / 经验升级 默认关闭
   const [game, setGame] = useState<GamePrefs>(readGamePrefs)
@@ -90,7 +89,7 @@ export function OverviewPage() {
     // 数据核心/数字城市统计（真实聚合，数值面积小，随视图一起拉取）
     api.get<DashboardStats>('/workbench/dashboard')
       .then(setDash)
-      .catch(() => setDashErr(true))
+      .catch(() => { /* dashboard 拉取失败不阻塞视图：卡片区显示 0，仅记日志 */ })
   }
   useEffect(load, [range])
   // 速记全局保存广播：总览页收到后刷新

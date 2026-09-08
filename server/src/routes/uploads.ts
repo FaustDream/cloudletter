@@ -3,8 +3,7 @@
  * - 客户端已做缩略图压缩（长边 ≤2000px / JPEG q0.85，GIF 保留动图原样），这里兜底类型与大小校验
  * - 文件名 = 时间戳36进制 + 8位随机 hex，不可枚举；静态读取无需登录（博客前台将来引用图片需公开可读）
  */
-import { Router } from 'express'
-import express from 'express'
+import express, { Router } from 'express'
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'

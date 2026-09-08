@@ -1,3 +1,4 @@
+﻿import { errMsg } from '../lib/errors'
 /** 长期目标：进度可视化 + 关联（目标 → 今日计划/习惯）；点目标行 → 右侧抽屉直接编辑，
  *  布局三式：舒适（默认）/ 紧凑 / 分组（未开始/进行中/已完成） */
 import { useCallback, useEffect, useState } from 'react'
@@ -81,7 +82,7 @@ export function GoalsPage({ withHeader = true }: { withHeader?: boolean }) {
       }
       setEditing(null)
       load()
-    } catch (e: any) { toast(e?.message || '保存失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '保存失败'), 'err') }
     finally { setSaving(false) }
   }
 
@@ -89,7 +90,7 @@ export function GoalsPage({ withHeader = true }: { withHeader?: boolean }) {
     try {
       await api.put(`/workbench/goals/${g.id}`, { current: Math.max(0, g.current + d) })
       load()
-    } catch (e: any) { toast(e?.message || '操作失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '操作失败'), 'err') }
   }
 
   const remove = async (g: GoalItem) => {
@@ -97,7 +98,7 @@ export function GoalsPage({ withHeader = true }: { withHeader?: boolean }) {
     try {
       await api.del(`/workbench/goals/${g.id}`)
       toast('已删除'); setDrawerOpen(false); load()
-    } catch (e: any) { toast(e?.message || '删除失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '删除失败'), 'err') }
   }
 
   const openLink = async (g: GoalItem, type: 'plan' | 'checkin') => {
@@ -108,7 +109,7 @@ export function GoalsPage({ withHeader = true }: { withHeader?: boolean }) {
       setLinkItems(r.items ?? [])
       const key = type === 'plan' ? g.relatedPlanIds : g.relatedCheckinIds
       setLinkSel(new Set(parseIds(key)))
-    } catch (e: any) { toast(e?.message || '加载失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '加载失败'), 'err') }
   }
 
   const saveLink = async () => {
@@ -119,7 +120,7 @@ export function GoalsPage({ withHeader = true }: { withHeader?: boolean }) {
       await api.put(`/workbench/goals/${link.goal.id}`, { [key]: val })
       toast('关联已保存')
       setLink(null); load()
-    } catch (e: any) { toast(e?.message || '保存失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '保存失败'), 'err') }
   }
 
   const linkLabel = (it: PlanItem | CheckinItem) => {

@@ -35,7 +35,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   const res = await fetch(`/api/v2${path}`, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
-    const e = (data as any)?.error
+    const e = (data as { error?: { message?: string } }).error
     throw new GuestApiError(res.status, e?.message ?? `HTTP ${res.status}`)
   }
   return data as T

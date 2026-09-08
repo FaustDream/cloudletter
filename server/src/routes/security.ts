@@ -10,7 +10,7 @@ import crypto from 'node:crypto'
 import { prisma } from '../prisma'
 import { requireAuth } from '../auth'
 import { ah, err } from './helpers'
-import { requestInfo, logActivity } from '../services/activity'
+import { logActivity } from '../services/activity'
 import { sendMail, smtpStatus } from '../mailer'
 import { avatarsDir } from '../config'
 

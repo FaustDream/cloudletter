@@ -1,9 +1,10 @@
+﻿import { errMsg } from '../lib/errors'
 /**
  * 一次性授权访问页（公开路由 /grant，不在登录 Guard 内）：
  * 邮件链接携带 token → redeem 换取访客会话 → 按授权范围渲染只读视图。
  * 有效期由服务端强制；随时可被管理员撤销；「退出访问」即清除本地会话。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { guestApi, getGuestToken, setGuestToken, SCOPE_LABELS } from '../lib/guestApi'
 import { MarkdownView } from '../components/framework/MarkdownView'
@@ -45,9 +46,9 @@ export function GrantPage() {
         } else {
           setErr('缺少授权凭证：请通过授权邮件中的链接进入。')
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (dead) return
-        setErr(e?.message || '授权验证失败，链接可能已失效或被撤销')
+        setErr(errMsg(e, '授权验证失败，链接可能已失效或被撤销'))
       } finally {
         if (!dead) setChecking(false)
       }

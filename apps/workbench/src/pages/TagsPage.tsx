@@ -1,3 +1,4 @@
+﻿import { errMsg } from '../lib/errors'
 /** 标签管理：使用频次视觉编码 + 分档 + 未使用标签一键清理 + 点击开抽屉看关联内容（文章+灵感笔记共用） */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, type Tag } from '../api'
@@ -37,7 +38,7 @@ export function TagsPage({ withHeader = true }: { withHeader?: boolean }) {
     try {
       await api.post('/tags', { name: name.trim() })
       toast('已创建标签'); setName(''); setCreating(false); load()
-    } catch (e: any) { toast(e?.message || '创建失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '创建失败'), 'err') }
   }
 
   const remove = async (t: Tag) => {
@@ -45,7 +46,7 @@ export function TagsPage({ withHeader = true }: { withHeader?: boolean }) {
     try {
       await api.del(`/tags/${t.id}`)
       toast('已删除'); load()
-    } catch (e: any) { toast(e?.message || '删除失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '删除失败'), 'err') }
   }
 
   const cleanAllUnused = async () => {

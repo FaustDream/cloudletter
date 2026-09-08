@@ -21,6 +21,8 @@ export interface AuthUser {
 }
 
 declare global {
+  // Express 类型增强（req.user 等）：声明合并只能用 namespace，禁用 no-namespace
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       user?: AuthUser

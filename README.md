@@ -32,8 +32,9 @@ pnpm -C server dev                 # 后端开发服务器（:3011）
 pnpm -C apps/workbench dev         # 前端开发服务器（:3015）
 pnpm -C server test                # 后端单测（vitest run）
 pnpm -C apps/workbench test        # 前端单测（vitest run）
-pnpm -C server typecheck           # 后端类型检查
-pnpm -C apps/workbench typecheck   # 前端类型检查
+pnpm -C server typecheck           # 后端类型检查（strict + noUnusedLocals/Parameters）
+pnpm -C apps/workbench typecheck   # 前端类型检查（strict + noUnusedLocals/Parameters）
+pnpm -C server lint                # 后端 ESLint（0 error 门禁）
 pnpm -C apps/workbench check:design # 设计令牌纪律检查（紫色/字号/层叠/模糊，DESIGN-SPEC §9）
 pnpm -C apps/workbench build       # 前端生产构建（前置 check-tokens 设计门禁）
 pnpm -C tests/e2e test             # 端到端测试（Playwright，独立端口 4011/4015）
@@ -41,6 +42,8 @@ pnpm -C tests/e2e test:headed      # 端到端测试（有头浏览器）
 ```
 
 ## 变更记录
+
+- 2026-09-08（风险修复）：潜在风险排查与修复（纯内部强化，行为不变）。① 全仓显式 `any` 清零：server 的 `req.query`/`catch (e: any)`/`(siteCfg as any)` 等收窄改 `unknown` + 类型谓词，前端新增统一错误提取工具 `lib/errors.ts`（`errMsg`/`tryCatch`，杜绝 `catch (e: any)` 模式）。② 两侧 tsconfig 开启 `noUnusedLocals`/`noUnusedParameters` 并修复全部未使用告警（预估逻辑死代码）。③ 两侧接入 ESLint 扁平配置（workbench 自含副本 + 根副本同规则集），修复全部 lint error（空 catch 块补注释、`while(true)` 无限循环改带上限循环、重复导入/孤儿依赖收口），存量约束降级为 warn 基线不阻塞。④ 详细介绍见 docs/memory/2026-09-08.md。
 
 - 2026-09-08（架构）：代码架构改进（纯内部重构，行为不变）。后端：workbench.ts 巨型路由分层 —— 时间轴聚合抽 `services/timeline.ts`（guest 路由改从 service 导入，消除路由互相 import）、聚合统计抽 `services/dashboard.ts`、系统采样抽 `services/system-status.ts`、文章/笔记标签同步三合一为 `services/tags.ts`；全部 `(prisma as any)` 动态模型访问与 `catch (e: any)` 清理为类型安全收窄；`index.ts` 内联中间件（安全头/日志/限流/CORS/错误包络）模块化为 `middleware/*`。前端：`api.ts` 类型拆分为 `api-types.ts`（45 个引用文件经 `export type *` 无感），timeline 双份 Timeline 类型定义收敛为单一来源；TimelineUniverse3d（788 行）拆出 `universe3d/environment.ts` 与 `universe3d/nodes.ts`；EditorPage（634 行）拆出 `lib/image.ts`、`components/editor/EdNotice.tsx`、`ExportMenu.tsx`、`useEditorSave.ts`（保存会话 hook）。验证：后端 142/142、前端 144/144、双端 typecheck、`pnpm build`（含 check-tokens 门禁）通过。详见 docs/memory/2026-09-08.md。
 

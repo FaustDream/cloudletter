@@ -11,9 +11,11 @@ export function computeStreak(log: string): number {
   const map = parseLog(log)
   let n = 0
   const d = new Date()
-  while (true) {
-    const k = todayYMD(d)
-    if (map[k]) { n++; d.setDate(d.getDate() - 1) } else break
+  // 回溯上限一年：打卡连续性不存在跨年断档的合法场景
+  for (let i = 0; i < 366; i++) {
+    if (!map[todayYMD(d)]) break
+    n++
+    d.setDate(d.getDate() - 1)
   }
   return n
 }

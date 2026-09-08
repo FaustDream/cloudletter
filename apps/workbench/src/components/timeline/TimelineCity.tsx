@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 大屏三 · 个人数字城市（需求文档 §7）
  * 核心问题：「我的整个数字世界现在是什么状态？」—— 城市 = 状态，不做神经连接
  * 固定的数据 → 城市元素映射（全部来自真实数据，不虚构城市指标）：
@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DashboardStats, TimelineDay, TimelineNode, TimelineType } from '../../api'
-import { TL_COLOR, TL_TYPES, filterNodes } from './timeline'
+import { TL_COLOR, filterNodes } from './timeline'
 
 interface Props {
   days: TimelineDay[]

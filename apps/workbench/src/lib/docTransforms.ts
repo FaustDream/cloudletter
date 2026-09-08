@@ -53,14 +53,11 @@ function withMasked(md: string, patterns: RegExp[], fn: (masked: string) => stri
     })
   }
   masked = fn(masked)
-  let count = 0
   const out = masked.replace(/\u0000(\d+)\u0001/g, (_, i) => {
-    void i
     return stash[Number(i)] ?? ''
   })
   // 计数：还原后统计新增的 [[ 标记（还原的 stash 中也可能含 [[，故在 fn 阶段计数）
-  void count
-  return { md: out, count }
+  return { md: out, count: 0 }
 }
 
 /** 识别双链：把正文中的其他文章标题包成 [[标题]]（掩码保护围栏/行内代码/既有链接） */
@@ -83,7 +80,7 @@ export function recognizeWikilinksInMarkdown(
       for (const title of pool) {
         const esc = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
         // 不在 [[ ]] 内部（掩码已处理既有双链，这里防同轮早先生成的 [[ ]] 嵌套误配）
-        text = text.replace(new RegExp(`(?<!\\[\\[)(?<!\\[)${esc}(?!\\]\\])(?!\\])`, 'g'), (m) => {
+        text = text.replace(new RegExp(`(?<!\\[\\[)(?<!\\[)${esc}(?!\\]\\])(?!\\])`, 'g'), () => {
           count++
           return `[[${title}]]`
         })

@@ -1,3 +1,4 @@
+﻿import { errMsg } from '../../lib/errors'
 /**
  * 设置中心 · 站点设置 + 通知分组（从 SettingsPage 拆出）：
  * - 站点自定义中心（需求 17：傻瓜式 + CSS 高级），站点配置挂载即拉取
@@ -10,6 +11,14 @@ import { api } from '../../api'
 import { THEME_REGISTRY } from '../../lib/theme'
 import { Sec, Row } from './shared'
 
+/** 站点配置递归值（傻瓜式表单 + CSS 高级配置的任意嵌套 JSON） */
+type SiteScalar = string | number | boolean | null
+interface SiteValue { [k: string]: SiteValue | SiteScalar }
+type SiteConfig = Record<string, SiteValue>
+function asObj(v: SiteValue | undefined): Record<string, SiteValue> {
+  return v && typeof v === 'object' && v !== null ? v as Record<string, SiteValue> : {}
+}
+
 export const SiteGroup = ({ g }: { g: 'site' | 'notify' }) => {
   const { user } = useAuth()
   const toast = useToast()
@@ -21,14 +30,13 @@ export const SiteGroup = ({ g }: { g: 'site' | 'notify' }) => {
   }))
   const [fbEmail, setFbEmail] = useState('') // 默认反馈接收邮箱（需求 26）
 
-  // 站点设置（需求 17）
-  const [siteCfg, setSiteCfg] = useState<Record<string, any>>({})
+  // 站点设置（需求 17）：表单读写一律走 siteDraft（siteCfg 仅落地用，页面不直接读）
   const [siteLoading, setSiteLoading] = useState(true)
-  const siteDraft = useRef<Record<string, any>>({})
+  const siteDraft = useRef<SiteConfig>({})
 
   const loadSite = () => {
-    api.get<any>('/settings')
-      .then((r) => { setSiteCfg(r); siteDraft.current = JSON.parse(JSON.stringify(r)) })
+    api.get<SiteConfig>('/settings')
+      .then((r) => { siteDraft.current = r })
       .catch(() => {})
       .finally(() => setSiteLoading(false))
   }
@@ -58,27 +66,24 @@ export const SiteGroup = ({ g }: { g: 'site' | 'notify' }) => {
   }
 
   /* ========== 站点自定义中心（需求 17） ========== */
-  const patchSite = (path: string, value: any) => {
-    siteDraft.current = { ...siteDraft.current }
-    const parts = path.split('.')
-    let o: any = siteDraft.current
-    while (parts.length > 1) { const k = parts.shift()!; o[k] = o[k] ?? {}; o = o[k] }
-    o[parts[0]] = value
-  }
   const saveSite = async () => {
     try {
       await api.put('/settings', siteDraft.current)
       toast('站点设置已保存')
-    } catch (e: any) { toast(e?.message || '保存失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '保存失败'), 'err') }
   }
-  const siteVal = (path: string, fallback = '') => {
+  const siteVal = (path: string, fallback = ''): string => {
     const parts = path.split('.')
-    let o: any = siteDraft.current
-    for (const p of parts) { if (o?.[p] === undefined) return fallback; o = o[p] }
-    return o ?? fallback
+    let v: SiteValue | undefined = siteDraft.current
+    for (const p of parts) {
+      const o = asObj(v)
+      if (!(p in o)) return fallback
+      v = o[p]
+    }
+    return v === undefined || v === null ? fallback : String(v)
   }
-  const siteGroup = () => (siteDraft.current.site && typeof siteDraft.current.site === 'object' ? siteDraft.current.site : {})
-  const patchSiteGroup = (k: string, v: any) => {
+  const siteGroup = (): Record<string, SiteValue> => asObj(siteDraft.current.site)
+  const patchSiteGroup = (k: string, v: SiteScalar) => {
     siteDraft.current = { ...siteDraft.current, site: { ...siteGroup(), [k]: v } }
   }
 

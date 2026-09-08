@@ -22,10 +22,9 @@ import {
   type DefaultReactSuggestionItem,
 } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/mantine'
-import { filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
-import type { BlockNoteEditor as BlockNoteEditorInstance, PartialBlock } from '@blocknote/core'
+import { filterSuggestionItems, insertOrUpdateBlockForSlashMenu, type BlockNoteEditor as BlockNoteEditorInstance, type PartialBlock } from '@blocknote/core'
 import { zhDictionary } from '../../i18n/blocknote-zh'
-import { editorSchema, normalizeCodeLanguages } from './customBlocks'
+import { editorSchema, normalizeCodeLanguages, type ParsedBlock } from './customBlocks'
 import { EditorToolbar } from './EditorToolbar'
 import { matchWikilinkAtOffset } from '../../lib/wikilinkText'
 import { applyDocTransform, createWikilink } from './docActions'
@@ -115,9 +114,10 @@ export function BlockNoteEditor({
   /** options 引用终身稳定：useCreateBlockNote 对 options 身份敏感（实测每次渲染的新对象
    *  会令编辑器实例反复重建、多实例绑同一 DOM，表现为打字失效/内容被"撤销"清空）。
    *  uploadFile 经 ref 解引用，保持捕获最新回调。 */
-  const editorOptionsRef = useRef({
+  const editorOptionsRef = useRef<NonNullable<Parameters<typeof useCreateBlockNote>[0]>>({
     schema: editorSchema,
-    dictionary: zhDictionary as any,
+    // BlockNote 的 dictionary 字段声明为 `Dictionary & Record<string, any>`，0.54 类型含 any 下限
+    dictionary: zhDictionary as NonNullable<Parameters<typeof useCreateBlockNote>[0]>['dictionary'],
     uploadFile: async (file: File): Promise<string> => {
       const handler = onPasteImageRef.current
       if (!handler) throw new Error('上传不可用')
@@ -136,7 +136,7 @@ export function BlockNoteEditor({
   const replaceFromMarkdown = async (md: string, keepOnFail = false): Promise<boolean> => {
     const replaceStartedAt = Date.now()
     const { md: cleanMd, styles } = extractListStyleComments(md)
-    let blocks: any[] = []
+    let blocks: ParsedBlock[] = []
     if (cleanMd.trim()) {
       try {
         blocks = normalizeCodeLanguages(await editor.tryParseMarkdownToBlocks(cleanMd))
@@ -309,7 +309,7 @@ export function BlockNoteEditor({
         aliases: ['callout', 'tip', 'note', '提示', '高亮', '标注'],
         group: '高级',
         icon: <span className="bn-slice-ico">💡</span>,
-        onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: 'callout' } as any),
+        onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: 'callout' as const }),
       },
       {
         title: '嵌入网页',
@@ -317,7 +317,7 @@ export function BlockNoteEditor({
         aliases: ['embed', 'iframe', 'bilibili', 'youtube', '视频', '嵌入', '网页'],
         group: '高级',
         icon: <span className="bn-slice-ico">🌐</span>,
-        onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: 'embed' } as any),
+        onItemClick: () => insertOrUpdateBlockForSlashMenu(editor, { type: 'embed' as const }),
       },
     ]
     return filterSuggestionItems([...getDefaultReactSlashMenuItems(editor), ...extra], query)
@@ -334,7 +334,7 @@ export function BlockNoteEditor({
         subtext: '插入 [[双链]]·点击可跳转',
         group: '关联文章',
         icon: <span className="bn-slice-ico">🔗</span>,
-        onItemClick: () => { editor.insertInlineContent(`[[${t.title}]] ` as any) },
+        onItemClick: () => { editor.insertInlineContent(`[[${t.title}]] `) },
       }))
   }
 

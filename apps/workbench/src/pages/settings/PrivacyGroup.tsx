@@ -1,3 +1,4 @@
+﻿import { errMsg } from '../../lib/errors'
 /**
  * 设置中心 · 隐私与安全 + 数据与存储分组（从 SettingsPage 拆出）：
  * - 可见性默认值、一次性授权、活动日志（完整列表 + 日志导出/导入，挂载即拉取）
@@ -12,22 +13,25 @@ import { todayYMD } from '../../lib/date'
 import { exportDataBundle } from '../settingsHelpers'
 import { Sec, Row, fmtTime } from './shared'
 
+/** 活动日志行（/activity 返回结构） */
+interface LogRow { id: string; action: string; object: string; result: string; detail: string; client: string; ip: string; at: string }
+
 export const PrivacyGroup = ({ g }: { g: 'privacy' | 'data' }) => {
   const toast = useToast()
 
   // 隐私 / 数据
   const [vis, setVis] = useState(localStorage.getItem('cl_visibility_default') || 'private')
-  const [logs, setLogs] = useState<Array<{ id: string; action: string; object: string; result: string; detail: string; client: string; ip: string; at: string }>>([])
+  const [logs, setLogs] = useState<LogRow[]>([])
   const [logLabels, setLogLabels] = useState<Record<string, string>>({})
   const [logPage, setLogPage] = useState(1)
   const [logTotal, setLogTotal] = useState(0)
   const [logAction, setLogAction] = useState('')
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
-  const [storageMode, setStorageMode] = useState<'server' | 'local'>('server')
+  const storageMode: 'server' | 'local' = 'server' // 展示用：SQLite 服务器存储 + Markdown 真相源（固定架构，无切换）
 
   const loadLogs = (page: number) => {
-    api.get<{ items: any[]; total: number; pages: number; page: number; labels: Record<string, string> }>(`/activity?page=${page}${logAction ? `&action=${logAction}` : ''}`)
+    api.get<{ items: LogRow[]; total: number; pages: number; page: number; labels: Record<string, string> }>(`/activity?page=${page}${logAction ? `&action=${logAction}` : ''}`)
       .then((r) => { setLogs(r.items); setLogTotal(r.total); setLogPage(r.page); setLogLabels(r.labels) })
       .catch(() => {})
   }
@@ -47,7 +51,7 @@ export const PrivacyGroup = ({ g }: { g: 'privacy' | 'data' }) => {
       a.click()
       URL.revokeObjectURL(a.href)
       toast('活动日志已导出（登录 / 操作 / 安全 / 重大事件）')
-    } catch (e: any) { toast(e?.message || '导出失败', 'err') } finally { setExporting(false) }
+    } catch (e: unknown) { toast(errMsg(e, '导出失败'), 'err') } finally { setExporting(false) }
   }
   const importLogs = async (file: File) => {
     setImporting(true)
@@ -57,7 +61,7 @@ export const PrivacyGroup = ({ g }: { g: 'privacy' | 'data' }) => {
       const r = await api.post<{ ok: boolean; added: number }>('/activity/import', { bundle })
       toast(`活动日志导入完成（新增 ${r.added} 条，仅合并不覆盖）`)
       loadLogs(1)
-    } catch (e: any) { toast(e?.message || '导入失败：请确认是云笺集活动日志文件', 'err') } finally { setImporting(false) }
+    } catch (e: unknown) { toast(errMsg(e, '导入失败：请确认是云笺集活动日志文件'), 'err') } finally { setImporting(false) }
   }
 
   /* ========== 数据与存储（导入 / 导出） ========== */
@@ -65,7 +69,7 @@ export const PrivacyGroup = ({ g }: { g: 'privacy' | 'data' }) => {
     setExporting(true)
     try {
       await exportDataBundle(toast)
-    } catch (e: any) { toast(e?.message || '导出失败', 'err') } finally { setExporting(false) }
+    } catch (e: unknown) { toast(errMsg(e, '导出失败'), 'err') } finally { setExporting(false) }
   }
   const importData = async (file: File) => {
     setImporting(true)
@@ -75,7 +79,7 @@ export const PrivacyGroup = ({ g }: { g: 'privacy' | 'data' }) => {
         '/workbench/data/import', { bundle, conflict: 'skip' })
       const parts = Object.entries(r.counts).map(([k, v]) => `${k} 新增 ${v.added} / 跳过 ${v.skipped}`)
       toast(`数据导入完成：${parts.join('，')}（冲突自动跳过，可重复导入不重复）`)
-    } catch (e: any) { toast(e?.message || '导入失败：请确认是云笺集备份文件', 'err') } finally { setImporting(false) }
+    } catch (e: unknown) { toast(errMsg(e, '导入失败：请确认是云笺集备份文件'), 'err') } finally { setImporting(false) }
   }
   const clearCache = () => {
     // 登录态(cl_token)、设备标识(cl_dev)、登录会话标记与导览关闭记录不清——否则导览会在用户选了「永不提示」后再次弹出

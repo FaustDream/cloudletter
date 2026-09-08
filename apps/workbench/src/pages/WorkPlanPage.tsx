@@ -1,3 +1,4 @@
+﻿import { errMsg } from '../lib/errors'
 /**
  * 工作计划（日常子模块 · 核心功能）：服务周一至周五的工作安排。
  * - 周视图：周一~周日 7 列（工作日高亮），每列该日任务与完成度；周导航 + 回到本周
@@ -108,7 +109,7 @@ export function WorkPlanPage() {
       }
       setFormOpen(false); setEditing(null)
       load()
-    } catch (e: any) { toast(e?.message || '保存失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '保存失败'), 'err') }
     finally { setSaving(false) }
   }
 
@@ -121,7 +122,7 @@ export function WorkPlanPage() {
         toast(`✅ 完成工作计划「${t.text}」· ${praise()}`)
       }
       load()
-    } catch (e: any) { toast(e?.message || '操作失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '操作失败'), 'err') }
   }
 
   const remove = async (t: WorkTask) => {
@@ -131,7 +132,7 @@ export function WorkPlanPage() {
       toast('已删除')
       setDetail(null)
       load()
-    } catch (e: any) { toast(e?.message || '删除失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '删除失败'), 'err') }
   }
 
   /* ── 工作时间设置 ── */
@@ -142,7 +143,7 @@ export function WorkPlanPage() {
       setSchedule({ ...cfg })
       setCfgOpen(false)
       toast('工作时间已保存')
-    } catch (e: any) { toast(e?.message || '保存失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '保存失败'), 'err') }
   }
   const toggleWorkday = (d: number) => setCfg((c) => ({
     ...c,

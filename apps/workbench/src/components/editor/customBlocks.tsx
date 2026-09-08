@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 编辑器块类型扩充（BlockNote 0.54 官方扩展机制）：
  * - Callout 提示框：emoji + 色调高亮卡片；markdown 进出降级为引用块（文本零丢失）
  * - 嵌入网页：B站 / YouTube 自动转内嵌播放器，其余站点渲染链接卡；markdown 存为链接
@@ -54,9 +54,10 @@ const mermaidPreview: CodeBlockPreview = (block: Block) => {
       const { svg } = await mermaid.render(`cl-mmd-${Date.now()}-${mermaidSeq++}`, String(block.content ?? ''))
       holder.innerHTML = svg
       holder.classList.remove('code-mermaid-loading')
-    } catch (e: any) {
+    } catch (e: unknown) {
       holder.classList.add('code-mermaid-err')
-      holder.textContent = e?.message ? `图表语法错误：${e.message}` : '图表语法错误'
+      const msg = e instanceof Error ? e.message : ''
+      holder.textContent = msg ? `图表语法错误：${msg}` : '图表语法错误'
     }
   })()
   return { dom }
@@ -302,14 +303,16 @@ export function canonicalCodeLanguage(lang: string): string {
   return hit?.[0] ?? 'text'
 }
 
-/** 递归遍历解析出的块，把代码块语言归一到规范 id（含列表等嵌套块） */
-export function normalizeCodeLanguages(blocks: any[]): any[] {
+/** 递归遍历解析出的块，把代码块语言归一到规范 id（含列表等嵌套块）。
+ *  BlockNote 解析块结构庞大且类型不稳定，这里只取用到的窄接口。 */
+export interface ParsedBlock { type: string; props?: Record<string, unknown>; content?: unknown }
+export function normalizeCodeLanguages(blocks: ParsedBlock[]): ParsedBlock[] {
   for (const b of blocks) {
     if (b?.type === 'codeBlock' && b?.props && typeof b.props.language === 'string') {
       b.props.language = canonicalCodeLanguage(b.props.language)
     }
-    if (Array.isArray(b?.content) && b.content.length && typeof b.content[0] === 'object') {
-      normalizeCodeLanguages(b.content)
+    if (Array.isArray(b?.content) && b.content.length) {
+      normalizeCodeLanguages(b.content as ParsedBlock[])
     }
   }
   return blocks

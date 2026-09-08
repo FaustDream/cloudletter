@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { BlockNoteEditor, PartialBlock } from '@blocknote/core'
 import { autoFormatMarkdown, recognizeWikilinksInMarkdown } from '../../lib/docTransforms'
-import { applyDocTransform, createWikilink, selectedEditorText } from './docActions'
+import { applyDocTransform, createWikilink } from './docActions'
 import { Icon } from '../framework/Icon'
 import { nextBulletStyle, nextOrderedStyle, BULLET_STYLES, ORDERED_STYLES, LIST_STYLE_LABEL, type ListStyle } from '../../lib/listStyles'
 
@@ -101,12 +101,6 @@ export function EditorToolbar({ editor, titles, currentTitle, onImageUpload, not
     if (['heading', 'quote', 'bulletListItem', 'numberedListItem', 'checkListItem', 'toggleListItem', 'codeBlock', 'callout'].includes(block.type)) {
       editor.updateBlock(block, { type: 'paragraph' })
     }
-  }
-
-  const selectedText = (): string => {
-    const text = selectedEditorText()
-    if (!text) notify?.('请先选中要处理的文字', 'err')
-    return text
   }
 
   const applyTransform = async (label: string, fn: (md: string) => { md: string; count: number }) => {

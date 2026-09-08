@@ -63,7 +63,7 @@ async function loadPost(postId: string): Promise<SearchablePost | null> {
   let fm: Record<string, unknown> = {}
   try {
     fm = JSON.parse(post.frontmatter || '{}')
-  } catch {}
+  } catch { /* 畸形 frontmatter 忽略 */ }
   return {
     slug: post.slug,
     title: post.title,

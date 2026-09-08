@@ -30,7 +30,6 @@ workbench.use(requireAuth)
    格式：cloudletter-backup JSON（含 kind / version / modules）。
    校验 → 冲突策略（skip 保留现有 / overwrite 覆盖）→ 事务提交，失败整体回滚。
    ============================================================ */
-const IMPORT_MODULES = ['plan', 'checkin', 'ledger', 'goals', 'notes', 'worktask'] as const
 const IMPORT_MODEL: Record<string, string> = {
   plan: 'planItem', checkin: 'checkinItem', ledger: 'ledgerEntry',
   goals: 'goalItem', notes: 'noteItem', worktask: 'workTask',

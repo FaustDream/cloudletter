@@ -12,7 +12,7 @@ export const md: MarkdownIt = new MarkdownIt({ html: false, linkify: true, break
 
 // RenderRule 定义在 @types/markdown-it 的 namespace 内：用实例类型索引取型，规避 default import 的 TS2702
 const defaultFence: NonNullable<MarkdownIt['renderer']['rules']['fence']> =
-  md.renderer.rules.fence ?? ((tokens, idx, options, env, self) => self.renderToken(tokens, idx, options))
+  md.renderer.rules.fence ?? ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options))
 
 md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   const token = tokens[idx]

@@ -27,7 +27,7 @@ export function slugify(title: string): string {
   const base = title
     .trim()
     .toLowerCase()
-    .replace(/[\\/:*?"<>|#^\[\]]/g, '')
+    .replace(/[\\/:*?"<>|#^[\]]/g, '')
     .replace(/\s+/g, '-')
   return base || `post-${Date.now()}`
 }
@@ -85,7 +85,7 @@ export function writePostFile(post: PostFile): string {
   } catch (e) {
     try {
       if (fs.existsSync(tmp)) fs.rmSync(tmp)
-    } catch {}
+    } catch { /* 清理尽力而为 */ }
     throw e
   }
   return file

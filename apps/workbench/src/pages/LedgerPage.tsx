@@ -1,3 +1,4 @@
+﻿import { errMsg } from '../lib/errors'
 /** 记账本：多视图（列表/卡片/多列）+ 多维筛选（类型/分类/月份/关键词）+ 预算 + 趋势 + 编辑/删除/详情 */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, type LedgerEntry } from '../api'
@@ -128,7 +129,7 @@ export function LedgerPage() {
         toast('已记账')
       }
       setCreating(false); setEditing(null); load()
-    } catch (e: any) { toast(e?.message || '保存失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '保存失败'), 'err') }
   }
 
   const remove = async (it: LedgerEntry) => {
@@ -138,7 +139,7 @@ export function LedgerPage() {
       toast('已删除')
       setDetail(null)
       load()
-    } catch (e: any) { toast(e?.message || '删除失败', 'err') }
+    } catch (e: unknown) { toast(errMsg(e, '删除失败'), 'err') }
   }
 
   const saveBudget = (v: string) => {

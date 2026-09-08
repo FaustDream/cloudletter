@@ -17,22 +17,22 @@ export function ServerStatusPanel() {
   useEffect(() => {
     let stop = false
     let timer = 0
-    const tick = async (delay: number) => {
+    const tick = async () => {
       if (stop) return
       try {
         const s = await serverStatus()
         if (stop) return
         setSt(s)
         setDead(false)
-        timer = window.setTimeout(() => tick(3000), 3000)
+        timer = window.setTimeout(tick, 3000)
       } catch (e) {
         if (stop) return
         setDead(true)
         logClient('warn', 'status-panel', '服务器状态获取失败', { err: e instanceof Error ? e.message : 'network' })
-        timer = window.setTimeout(() => tick(8000), 8000) // 失败退避 8s
+        timer = window.setTimeout(tick, 8000) // 失败退避 8s
       }
     }
-    tick(0)
+    tick()
     timerRef.current = timer
     return () => {
       stop = true

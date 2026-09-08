@@ -1,3 +1,4 @@
+﻿import { errMsg } from '../../lib/errors'
 /**
  * 今日讨伐卡（游戏化 · 任务融合）：把未完成计划映射成怪物（P0=首领 / P1=精英怪 / P2=小怪）。
  * 打怪 = 完成任务（POST /battle/attack 真实落库），掉落 XP/金币与时间线同口径。
@@ -137,8 +138,8 @@ export function BattleCard({ onSlain, openSignal }: { onSlain?: () => void; /** 
       toast(`⚔️ 击败「${r.slain.name}」！掉落 +${r.drop.xp} XP · +${r.drop.gold} 金币 · ${praise()}`)
       setMonsters((list) => (list ?? []).filter((x) => x.id !== m.id))
       onSlain?.()
-    } catch (e: any) {
-      toast(e?.message || '攻击失败', 'err')
+    } catch (e: unknown) {
+      toast(errMsg(e, '攻击失败'), 'err')
       load()
     } finally {
       setBusyId(null)

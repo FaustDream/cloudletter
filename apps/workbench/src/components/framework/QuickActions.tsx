@@ -1,3 +1,4 @@
+﻿import { errMsg } from '../../lib/errors'
 /** 快速动作（全局）：写文章 / 捕捉灵感 / 记一笔 —— 右侧抽屉，保存不关闭，Cmd/Ctrl+Shift+N 唤起灵感 */
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -6,7 +7,6 @@ import { Drawer } from './Drawer'
 import { Field } from './Modal'
 import { useToast } from './Toast'
 import { Icon } from './Icon'
-import { todayYMD } from '../../lib/date'
 import { Dropdown } from './Dropdown'
 
 type Action = 'post' | 'note' | 'ledger' | null
@@ -81,7 +81,7 @@ export function QuickActionsProvider({ children }: { children: ReactNode }) {
       toast(publish ? '已发布（文章页可见）' : '已保存为草稿')
       if (!publish) { setPTitle(''); setPBody(''); setPTags('') }
       if (publish) close()
-    } catch (e: any) { toast(e?.message || '保存失败', 'err') } finally { setSaving(false) }
+    } catch (e: unknown) { toast(errMsg(e, '保存失败'), 'err') } finally { setSaving(false) }
   }
 
   const saveNote = async () => {
@@ -91,7 +91,7 @@ export function QuickActionsProvider({ children }: { children: ReactNode }) {
       await api.post('/workbench/notes', { title: nTitle.trim() || '（无标题）', body: nBody, tags: [nMood], date: new Date().toISOString().slice(0, 10) })
       toast('灵感已捕捉')
       setNTitle(''); setNBody('')
-    } catch (e: any) { toast(e?.message || '保存失败', 'err') } finally { setSaving(false) }
+    } catch (e: unknown) { toast(errMsg(e, '保存失败'), 'err') } finally { setSaving(false) }
   }
 
   const saveLedger = async () => {
@@ -102,7 +102,7 @@ export function QuickActionsProvider({ children }: { children: ReactNode }) {
       await api.post('/workbench/ledger', { kind: lKind, cat: lCat, amount: amt, note: lNote.trim(), date: new Date().toISOString().slice(0, 10) })
       toast('已记账')
       setLAmount(''); setLNote('')
-    } catch (e: any) { toast(e?.message || '保存失败', 'err') } finally { setSaving(false) }
+    } catch (e: unknown) { toast(errMsg(e, '保存失败'), 'err') } finally { setSaving(false) }
   }
 
   return (
@@ -132,7 +132,7 @@ export function QuickActionsProvider({ children }: { children: ReactNode }) {
                     })
                     close()
                     nav(`/posts/${r.id}/edit`)
-                  } catch (e: any) { toast(e?.message || '创建草稿失败', 'err') }
+                  } catch (e: unknown) { toast(errMsg(e, '创建草稿失败'), 'err') }
                 }}
               >
                 <Icon name="arrow" size={15} /> 展开编辑

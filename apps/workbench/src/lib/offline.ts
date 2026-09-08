@@ -61,5 +61,5 @@ export function loadDraft(postId: string): EditorDraft | null {
 export function clearDraft(postId: string): void {
   try {
     localStorage.removeItem(keyOf(postId))
-  } catch {}
+  } catch { /* 隐私模式/不可访问：本次清空不生效也无副作用 */ }
 }

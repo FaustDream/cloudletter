@@ -33,7 +33,7 @@ settings.put('/', ah(async (req, res) => {
 
   const current = await prisma.siteSetting.findUnique({ where: { key: 'global' } })
   const merged: Record<string, unknown> = current ? JSON.parse(current.value) : {}
-  let changed: string[] = []
+  const changed: string[] = []
   for (const g of ALLOWED_SETTING_GROUPS) {
     if (body[g] !== undefined && typeof body[g] === 'object' && body[g] !== null) {
       // 体积护栏：单分组过大直接拒绝（防异常注入拖垮站点配置）
