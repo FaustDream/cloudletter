@@ -61,7 +61,7 @@ server/
 │  ├─ index.ts            # 入口：安全头、/healthz、挂载 v2、错误包络、优雅退出
 │  ├─ prisma.ts           # Prisma client 单例
 │  ├─ crypto.ts           # scrypt + TOTP(RFC6238)
-│  ├─ seed.ts             # 种子（须 ADMIN_PASSWORD ≥8 且非弱口令）
+│  ├─ seed.ts             # 种子（本地默认口令 123456；生产须 ADMIN_PASSWORD ≥8 且非弱口令）
 │  ├─ middleware/         # auth.ts（requireAuth）、validate.ts（自研入参校验层）
 │  ├─ guestAuth.ts        # 访客只读授权：requireGuest + requireScope 范围闸门
 │  ├─ routes/             # index.ts 导出 api Router，按域拆分各子路由并聚合挂载 /api/v2
@@ -153,7 +153,7 @@ tests/e2e/
 
 ## 7. 安全规范（Security）
 
-- **认证（当前现实）**：单管理员本地 session，Bearer Token，30 分钟无操作过期、活动即续期；会话仅存哈希（`hashToken`）防 DB 泄露冒用；新口令长度/复杂度在 `seed` 拦截弱口令。🔴
+- **认证（当前现实）**：单管理员本地 session，Bearer Token，30 分钟无操作过期、活动即续期；会话仅存哈希（`hashToken`）防 DB 泄露冒用；本地默认口令 `123456`（`seed`），生产在 `seed` 拦截弱口令、禁止默认凭据上线。🔴
   > ⚠️ 早期 RBAC 四级 / TOTP(±1) / 2FA / 临时 token / 内存限流 / 审计**已移除**（见 `server/src/auth.ts` 顶部注释）。恢复前本条不考核这些项。
 - **限流**：原 IP + 账户双维度限流已移除，当前依赖会话 TTL 与 DB 唯一约束；如需限流须新增 `middleware`（🟡，非当前强制）。🔴
 - **输入**：任意 `req.body/query/params` 校验后才进 DB / shell / 路径。🔴
