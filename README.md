@@ -43,6 +43,8 @@ pnpm -C tests/e2e test:headed      # 端到端测试（有头浏览器）
 
 ## 变更记录
 
+- 2026-09-09（补充）：随手记/计划/目标/习惯/工作计划等编辑表单的编辑器改为填满表单剩余高度、底边直达保存按钮上方分割线，内容超出时在编辑器内部滚动（纯 CSS :has 方案，Modal 补 max-height 兜底）；实测抽屉空态 423px 恒定、810 字内容内部滚动、表单不再被撑高。生产入口 index-DFbwx_8z.js。
+
 - 2026-09-09：计划/目标/习惯/工作计划四处编辑器同款根治（灵感笔记同款问题扩散点清零）——全部改非受控编辑器（value 仅初值、外部永不回灌，杜绝受控回灌把输入重置的「打字被撤销」）、编辑器 Field 改 as=div（label 焦点转发会劫持 contenteditable 点击落点）、minHeight 收 120 配合抽屉/弹窗高度自适应。附双击选区对照实验：双击选词在纯 contenteditable 与 BlockNote 均正常，多击选段为浏览器原生计数行为。Playwright 实测计划页通过；部署备份 2026-09-09T06-31-49，生产入口 index-DoKWdU8j.js（git archive 出包排除并行 WIP）。
 
 - 2026-09-08（风险修复）：潜在风险排查与修复（纯内部强化，行为不变）。① 全仓显式 `any` 清零：server 的 `req.query`/`catch (e: any)`/`(siteCfg as any)` 等收窄改 `unknown` + 类型谓词，前端新增统一错误提取工具 `lib/errors.ts`（`errMsg`/`tryCatch`，杜绝 `catch (e: any)` 模式）。② 两侧 tsconfig 开启 `noUnusedLocals`/`noUnusedParameters` 并修复全部未使用告警（预估逻辑死代码）。③ 两侧接入 ESLint 扁平配置（workbench 自含副本 + 根副本同规则集），修复全部 lint error（空 catch 块补注释、`while(true)` 无限循环改带上限循环、重复导入/孤儿依赖收口），存量约束降级为 warn 基线不阻塞。④ 详细介绍见 docs/memory/2026-09-08.md。
