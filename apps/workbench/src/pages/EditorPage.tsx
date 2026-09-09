@@ -42,6 +42,8 @@ export function EditorPage() {
   const [content, setContent] = useState<EditorContent>({ markdown: '', title: '', fm: {} })
   const [slug, setSlug] = useState('')
   const [baseVersion, setBaseVersion] = useState<number | null>(null)
+  /** 编辑器显式重置令牌：草稿恢复/版本恢复等少数合法回灌场景 +1（配合 BlockNoteEditor resetKey） */
+  const [contentEpoch, setEpoch] = useState(0)
   /** 右栏（文档信息/大纲）显隐：写作时可收起获得沉浸画布，记忆在 localStorage */
   const [sideOpen, setSideOpen] = useState(() => localStorage.getItem('cl_ed_side') !== '0')
   const [showHistory, setShowHistory] = useState(false)
@@ -146,6 +148,7 @@ export function EditorPage() {
     setBaseVersion(d.baseVersion)
     savedSnap.current = ''
     setSaveState('dirty')
+    setEpoch((e) => e + 1) // 编辑器已在挂载态：显式触发 resetKey 重建内容
     if (id) clearDraft(id)
     setNotice(null)
     if (isOnline()) void doSaveRef.current('manual')
@@ -339,6 +342,7 @@ export function EditorPage() {
               <BlockNoteEditor
                 key={post.id}
                 value={content.markdown}
+                resetKey={contentEpoch}
                 onChange={(v) => patchContent({ markdown: v })}
                 onPasteImage={handlePasteImage}
                 wikilinkTargets={linkTargets}
@@ -383,6 +387,7 @@ export function EditorPage() {
           currentMarkdown={content.markdown}
           onRestored={(md) => {
             patchContent({ markdown: md })
+            setEpoch((e) => e + 1) // 编辑器已在挂载态：显式触发 resetKey 重建内容
             setShowHistory(false)
             toast('已恢复到所选版本（自动保存将落库）')
           }}

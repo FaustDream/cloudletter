@@ -170,6 +170,7 @@ model CheckinItem {
   id        String   @id @default(cuid())
   name      String
   emoji     String   @default("✨")
+  desc      String   @default("") // 习惯说明（文章编辑器内核，Markdown）
   log       String   @default("{}")
   streak    Int      @default(0)
   createdAt DateTime @default(now())
@@ -195,6 +196,7 @@ model GoalItem {
   id               String   @id @default(cuid())
   name             String
   emoji            String   @default("🎯")
+  desc             String   @default("") // 目标描述 / 拆解思路（文章编辑器内核，Markdown）
   current          Float    @default(0)
   target           Float
   unit             String   @default("")

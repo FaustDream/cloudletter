@@ -10,8 +10,8 @@
  * - 暗色主题：监听 <html data-theme>，同步切换 BlockNote theme
  * - 真相源仍是 Markdown：挂载时 markdown → blocks，编辑时 blocks → markdown 上抛（300ms 合并）
  * - 图片粘贴/拖拽/上传统一走 onPasteImage（服务端 /uploads + 客户端压缩缩略图）
- * - 外部 value 变更（版本恢复/重载）仅在确实不同时重新解析回灌；
- *   回灌期间抑制内容变更回抛，杜绝「解析 → 变更 → 再解析」反馈环（文字选择/双击场景安全）
+ * - 协议（2026-09-09 收敛）：一律非受控——value 仅初值，渲染期外部变化永不回灌；
+ *   少数合法回灌（草稿恢复/版本恢复）必须显式传 resetKey 触发重建
  */
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -71,7 +71,7 @@ export function BlockNoteEditor({
   onOpenWikilink,
   currentTitle,
   notify,
-  uncontrolled = false,
+  resetKey,
 }: {
   value: string
   onChange: (markdown: string) => void
@@ -86,8 +86,12 @@ export function BlockNoteEditor({
   /** 轻提示（编辑页 toast） */
   notify?: (message: string, kind?: 'ok' | 'err') => void
   /** 非受控模式：value 只作首屏初值，外部值变更不再回灌（弹窗随手记等一次性编辑场景），
-   *  彻底杜绝「回灌 replaceBlocks → 内容被重置」类撤销/丢字问题 */
+   *  彻底杜绝「回灌 replaceBlocks → 内容被重置」类撤销/丢字问题。
+   *  2026-09-09 协议收敛：隐式受控回灌通道已删除，所有场景一律非受控；参数保留兼容既有调用点 */
   uncontrolled?: boolean
+  /** 显式内容重置令牌：resetKey 变化时按当前 value 重建内容（草稿恢复 / 版本恢复等
+   *  少数合法回灌场景必须显式声明）。渲染期的 value 变化永不强推内容。 */
+  resetKey?: number | string
 }) {
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
@@ -208,22 +212,24 @@ export function BlockNoteEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor])
 
-  // 外部值变更（版本恢复 / 载入文章）：仅当确实不同于最近上抛值时重新解析回灌；
-  // 非受控模式（随手记弹窗）关闭该通道，编辑期间外部永不强推内容
+  // 2026-09-09 协议收敛：删除隐式受控回灌 effect——渲染期的 value 变化永不强推内容
+  //（受控回灌是「打字被重置/表现为撤销」系列 bug 的根因，且表单场景全部关闭即卸载、初值语义足够）。
+  // 少数合法回灌场景（草稿恢复/版本恢复）改走下方显式 resetKey。
+
+  // 显式内容重置：仅 resetKey 变化时按当前 value 重建（keepOnFail=true：解析失败保持现有内容不清空）
+  const valueRef = useRef(value)
+  valueRef.current = value
+  const readyRef = useRef(false)
+  readyRef.current = ready
+  const lastResetKey = useRef(resetKey)
   useEffect(() => {
-    if (!ready || uncontrolled) return
-    if (value === lastEmitted.current) return
-    let cancelled = false
-    void (async () => {
-      if (!cancelled) {
-        // 解析失败 → 保持现有内容并同步 lastEmitted（防无限重解析）：内容暂旧但绝不清空
-        await replaceFromMarkdown(value, true)
-        if (!cancelled) lastEmitted.current = value
-      }
-    })()
-    return () => { cancelled = true }
+    if (resetKey === undefined) return
+    if (lastResetKey.current === resetKey) return // 初次挂载由挂载 effect 负责初值
+    lastResetKey.current = resetKey
+    if (!readyRef.current) return
+    void replaceFromMarkdown(valueRef.current, true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, ready])
+  }, [resetKey])
 
   // 图片灯箱：点击正文里的图片放大预览（Esc / 点击遮罩关闭）
   useEffect(() => {
