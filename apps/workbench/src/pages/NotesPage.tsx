@@ -29,7 +29,7 @@ const NOTE_STATUS: Array<{ value: NoteStatus | ''; label: string }> = [
 ]
 const NOTE_STATUS_LABEL: Record<NoteStatus, string> = { pending: '待使用', used: '已使用', expired: '已过期' }
 
-export function NotesPage() {
+export function NotesPage({ withHeader = true }: { withHeader?: boolean }) {
   const [sp, setSp] = useSearchParams()
   const [items, setItems] = useState<NoteItem[]>([])
   const [cats, setCats] = useState<Category[]>([])
@@ -149,8 +149,8 @@ export function NotesPage() {
   return (
     <>
       <PageHeader
-        title="灵感笔记"
-        subtitle={`共 ${items.length} 条 · 分类标签与文章共用`}
+        title={withHeader ? '想法' : undefined}
+        subtitle={withHeader ? `共 ${items.length} 条 · 分类标签与文章共用` : undefined}
         actions={
           <>
             <div className="seg" style={{ marginRight: 12 }} aria-label="状态筛选">

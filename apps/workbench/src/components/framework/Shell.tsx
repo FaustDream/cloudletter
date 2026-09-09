@@ -24,12 +24,10 @@ interface NavItem {
  *  需求调整：统一顺序 = 云笺 / 灵感 / 文章 / 日常 / 计划 / 目标 / 习惯 / 检索 / 记账本 / 分类标签 / 设置。 */
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: '云笺', icon: 'home' },
-  { to: '/notes', label: '灵感', icon: 'book' },
   { to: '/posts', label: '文章', icon: 'file' },
+  { to: '/hub', label: '工作台', icon: 'list' },
   { to: '/daily', label: '日常', icon: 'flame' },
-  { to: '/plan', label: '计划', icon: 'list' },
-  { to: '/goals', label: '目标', icon: 'target' },
-  { to: '/checkin', label: '习惯', icon: 'check' },
+  { to: '/workplan', label: '工作计划', icon: 'target' },
   { to: '/search', label: '检索', icon: 'search' },
   { to: '/ledger', label: '记账本', icon: 'wallet' },
   { to: '/organize', label: '分类标签', icon: 'grid' },

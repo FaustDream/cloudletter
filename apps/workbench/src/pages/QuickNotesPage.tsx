@@ -19,7 +19,7 @@ import { PageHeader } from '../components/framework/PageHeader'
 import { EmptyState } from '../components/framework/EmptyState'
 import { resolveCategoryIdByName } from '../lib/taxonomy'
 
-export function QuickNotesPage() {
+export function QuickNotesPage({ withHeader = true }: { withHeader?: boolean }) {
   const [items, setItems] = useState<NoteItem[]>([])
   const [cats, setCats] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
@@ -125,8 +125,8 @@ export function QuickNotesPage() {
   return (
     <>
       <PageHeader
-        title="速记汇总"
-        subtitle={`共 ${items.length} 条 · 分类标签与文章共用 · 计划请到「目标 → 今日计划」`}
+        title={withHeader ? '速记汇总' : undefined}
+        subtitle={withHeader ? `共 ${items.length} 条 · 分类标签与文章共用 · 计划请到「目标 → 今日计划」` : undefined}
         actions={<button className="btn" onClick={openCreate}><Icon name="plus" size={16} /> 新增速记</button>}
       />
 

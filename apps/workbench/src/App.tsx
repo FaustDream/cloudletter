@@ -1,4 +1,4 @@
-/** 工作台路由：内容(总览/文章/灵感/分类标签/检索) + 日常 + 计划/目标/习惯 + 记账 + 账号，旧路径重定向 */
+/** 工作台路由：内容(总览/文章/分类标签/检索) + 工作台(/hub：计划/目标/习惯/想法) + 日常/工作计划/记账 + 账号，旧路径重定向 */
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useSearchParams } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth'
 import { Shell } from './components/framework/Shell'
@@ -9,16 +9,11 @@ import { LoginPage } from './pages/LoginPage'
 import { OverviewPage } from './pages/OverviewPage'
 import { PostsPage } from './pages/PostsPage'
 import { EditorPage, NewPostPage } from './pages/EditorPage'
-import { NotesPage } from './pages/NotesPage'
 import { OrganizePage } from './pages/OrganizePage'
 import { SearchPage } from './pages/SearchPage'
-import { GoalsHomePage } from './pages/GoalsHomePage'
-import { GoalsPage } from './pages/GoalsPage'
-import { PlanPage } from './pages/PlanPage'
-import { CheckinPage } from './pages/CheckinPage'
 import { DailyPage } from './pages/DailyPage'
-import { QuickNotesPage } from './pages/QuickNotesPage'
 import { WorkPlanPage } from './pages/WorkPlanPage'
+import { HubPage } from './pages/HubPage'
 import { LedgerPage } from './pages/LedgerPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { GrantPage } from './pages/GrantPage'
@@ -73,18 +68,19 @@ export default function App() {
                       <Route path="posts" element={<PostsPage />} />
                       <Route path="posts/new" element={<NewPostPage />} />
                       <Route path="posts/:id/edit" element={<EditorPage />} />
-                      <Route path="notes" element={<NotesPage />} />
-                      <Route path="quick-notes" element={<QuickNotesPage />} />
+                      <Route path="notes" element={<Redirect to="/hub?tab=ideas" />} />
+                      <Route path="quick-notes" element={<Redirect to="/hub?tab=ideas" />} />
+                      <Route path="hub" element={<HubPage />} />
                       <Route path="organize" element={<OrganizePage />} />
                       <Route path="search" element={<SearchPage />} />
                       {/* 日常 */}
                       <Route path="daily" element={<DailyPage />} />
                       <Route path="workplan" element={<WorkPlanPage />} />
-                      {/* 目标三件套：独立页（旧聚合页 /goals-home 保留兼容） */}
-                      <Route path="goals-home" element={<GoalsHomePage />} />
-                      <Route path="goals" element={<GoalsPage />} />
-                      <Route path="plan" element={<PlanPage />} />
-                      <Route path="checkin" element={<CheckinPage />} />
+                      {/* 目标三件套：已并入工作台 /hub（旧路径 Redirect 兼容） */}
+                      <Route path="goals-home" element={<Redirect to="/hub?tab=goals" />} />
+                      <Route path="goals" element={<Redirect to="/hub?tab=goals" />} />
+                      <Route path="plan" element={<Redirect to="/hub?tab=plan" />} />
+                      <Route path="checkin" element={<Redirect to="/hub?tab=checkin" />} />
                       {/* 记账 */}
                       <Route path="ledger" element={<LedgerPage />} />
                       {/* 设置（账户已并入设置中心） */}
