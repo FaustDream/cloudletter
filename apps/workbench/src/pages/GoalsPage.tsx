@@ -240,8 +240,8 @@ export function GoalsPage({ withHeader = true }: { withHeader?: boolean }) {
             <Field label="目标值"><input type="number" min={1} value={form.target} onChange={(e) => setForm({ ...form, target: e.target.value })} placeholder="100" /></Field>
             <Field label="单位（可选）"><input type="text" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder="本 / 次 / 公里" /></Field>
           </div>
-          <Field label="目标描述 / 拆解思路（文章编辑器 · 可留空）">
-            <MarkdownEditor value={form.desc} onChange={(md) => setForm((f) => ({ ...f, desc: md }))} minHeight={220} />
+          <Field label="目标描述 / 拆解思路（文章编辑器 · 可留空）" as="div">
+            <MarkdownEditor value={form.desc} onChange={(md) => setForm((f) => ({ ...f, desc: md }))} minHeight={120} uncontrolled />
           </Field>
         </Drawer>
       )}

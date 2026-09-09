@@ -207,8 +207,8 @@ export function PlanPage({ withHeader = true }: { withHeader?: boolean }) {
               <input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
             </Field>
           </div>
-          <Field label="计划详情（文章编辑器 · 可留空）">
-            <MarkdownEditor value={form.note} onChange={(md) => setForm((f) => ({ ...f, note: md }))} minHeight={240} />
+          <Field label="计划详情（文章编辑器 · 可留空）" as="div">
+            <MarkdownEditor value={form.note} onChange={(md) => setForm((f) => ({ ...f, note: md }))} minHeight={120} uncontrolled />
           </Field>
         </Drawer>
       )}

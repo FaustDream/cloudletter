@@ -259,8 +259,8 @@ export function WorkPlanPage() {
               <input type="text" value={form.text} onChange={(e) => setForm({ ...form, text: e.target.value })} placeholder="要完成什么工作？" autoFocus />
             </Field>
           </div>
-          <Field label="具体工作内容 / 备注（文章编辑器 · 可留空）">
-            <MarkdownEditor value={form.note} onChange={(md) => setForm((f) => ({ ...f, note: md }))} minHeight={240} />
+          <Field label="具体工作内容 / 备注（文章编辑器 · 可留空）" as="div">
+            <MarkdownEditor value={form.note} onChange={(md) => setForm((f) => ({ ...f, note: md }))} minHeight={120} uncontrolled />
           </Field>
         </Modal>
       )}

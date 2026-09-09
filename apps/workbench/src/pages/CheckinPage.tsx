@@ -219,8 +219,8 @@ export function CheckinPage({ withHeader = true }: { withHeader?: boolean }) {
           <Field label="图标（emoji）">
             <input type="text" value={form.emoji} onChange={(e) => setForm({ ...form, emoji: e.target.value })} maxLength={4} placeholder="✨" />
           </Field>
-          <Field label="习惯说明 / 执行计划（文章编辑器 · 可留空）">
-            <MarkdownEditor value={form.desc} onChange={(md) => setForm((f) => ({ ...f, desc: md }))} minHeight={220} />
+          <Field label="习惯说明 / 执行计划（文章编辑器 · 可留空）" as="div">
+            <MarkdownEditor value={form.desc} onChange={(md) => setForm((f) => ({ ...f, desc: md }))} minHeight={120} uncontrolled />
           </Field>
         </Drawer>
       )}
