@@ -2339,6 +2339,19 @@ mark { background: color-mix(in srgb, var(--accent) 24%, transparent); color: va
    （全局 .ed-blocknote .bn-container 有 min-height:300px 强撑，一次性编辑表单内压平） */
 .drawer .mded .bn-container, .modal .mded .bn-container { min-height: 120px; }
 .drawer .mded .bn-editor, .modal .mded .bn-editor { padding-bottom: 12px; }
+/* 编辑表单（抽屉/弹窗）含编辑器时：编辑器 Field 撑满表单剩余高度、底边直达保存按钮上方分割线，
+   内容超出时在编辑器内部滚动（.bn-editor），表单整体不再被编辑器内容撑高 */
+.drawer-body:has(.mded), .modal:has(.mded) { display: flex; flex-direction: column; }
+.modal:has(.mded) { max-height: calc(100vh - 48px); overflow: auto; }
+.modal:has(.mded) > .mh, .modal:has(.mded) > .mfoot { flex-shrink: 0; }
+.drawer-body:has(.mded) > .mfield:has(.mded), .modal:has(.mded) > .mfield:has(.mded) {
+  flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; margin-bottom: 0; }
+.drawer-body:has(.mded) .mded, .modal:has(.mded) .mded { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 220px; }
+.drawer-body:has(.mded) .mded .ed-blocknote, .modal:has(.mded) .mded .ed-blocknote,
+.drawer-body:has(.mded) .mded .bn-container, .modal:has(.mded) .mded .bn-container {
+  flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.drawer-body:has(.mded) .mded .bn-editor, .modal:has(.mded) .mded .bn-editor {
+  flex: 1 1 auto; overflow-y: auto; min-height: 120px; }
 
 /* 滚动入场 */
 .reveal { opacity: 0; transform: translateY(16px);
