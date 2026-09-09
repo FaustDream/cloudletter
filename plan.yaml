@@ -1,0 +1,114 @@
+- generic [active] [ref=f3e1]:
+  - generic [ref=f3e3]:
+    - complementary [ref=f3e4]:
+      - generic "云笺集" [ref=f3e5]:
+        - heading "云笺集" [level=1] [ref=f3e6]
+      - navigation "主导航" [ref=f3e7]:
+        - link "云笺" [ref=f3e8] [cursor=pointer]:
+          - /url: /
+        - link "灵感" [ref=f3e12] [cursor=pointer]:
+          - /url: /notes
+        - link "文章" [ref=f3e16] [cursor=pointer]:
+          - /url: /posts
+        - link "日常" [ref=f3e20] [cursor=pointer]:
+          - /url: /daily
+        - link "计划" [ref=f3e23] [cursor=pointer]:
+          - /url: /plan
+        - link "目标" [ref=f3e26] [cursor=pointer]:
+          - /url: /goals
+        - link "习惯" [ref=f3e31] [cursor=pointer]:
+          - /url: /checkin
+        - link "检索" [ref=f3e34] [cursor=pointer]:
+          - /url: /search
+        - link "记账本" [ref=f3e38] [cursor=pointer]:
+          - /url: /ledger
+        - link "分类标签" [ref=f3e41] [cursor=pointer]:
+          - /url: /organize
+        - link "设置" [ref=f3e47] [cursor=pointer]:
+          - /url: /settings
+      - button "展开侧边栏（⌘/Ctrl + B）" [ref=f3e52] [cursor=pointer]
+      - button "个人中心菜单" [ref=f3e57] [cursor=pointer]:
+        - generic [ref=f3e58]: "9"
+    - main [ref=f3e60]:
+      - generic [ref=f3e61]:
+        - generic [ref=f3e62]:
+          - generic [ref=f3e63]:
+            - heading "计划" [level=2] [ref=f3e64]
+            - paragraph [ref=f3e65]: 已完成 5 / 9 · 4 项已逾期
+          - generic "计划布局切换" [ref=f3e66]:
+            - button "舒适" [ref=f3e67] [cursor=pointer]
+            - button "紧凑" [ref=f3e68] [cursor=pointer]
+            - button "分组" [ref=f3e69] [cursor=pointer]
+          - button "新建计划" [ref=f3e70] [cursor=pointer]
+        - generic [ref=f3e73]:
+          - generic [ref=f3e74]:
+            - generic [ref=f3e75] [cursor=pointer]
+            - generic "点击查看与编辑" [ref=f3e78]:
+              - generic [ref=f3e79]: 完成《通用 UI 设计规范》阅读笔记
+              - generic [ref=f3e80]: 整理到灵感
+              - generic [ref=f3e81]: 已逾期
+            - generic [ref=f3e82]: P1 · 重要
+            - button "删除" [ref=f3e83] [cursor=pointer]
+          - generic [ref=f3e86]:
+            - generic [ref=f3e87] [cursor=pointer]
+            - generic "点击查看与编辑" [ref=f3e90]:
+              - generic [ref=f3e91]: 安排下周文章选题
+              - generic [ref=f3e92]: 已逾期
+            - generic [ref=f3e93]: P2 · 一般
+            - button "删除" [ref=f3e94] [cursor=pointer]
+          - generic [ref=f3e97]:
+            - generic [ref=f3e98] [cursor=pointer]
+            - generic "点击查看与编辑" [ref=f3e101]:
+              - generic [ref=f3e102]: 逾期示例：联系设计师确认封面
+              - generic [ref=f3e103]: 已延迟 2 天
+              - generic [ref=f3e104]: 已逾期
+            - generic [ref=f3e105]: P1 · 重要
+            - button "删除" [ref=f3e106] [cursor=pointer]
+          - generic [ref=f3e109]:
+            - generic [ref=f3e110] [cursor=pointer]
+            - generic "点击查看与编辑" [ref=f3e113]:
+              - generic [ref=f3e114]: 采购素材库月卡
+              - generic [ref=f3e115]: 预算 49 元
+              - generic [ref=f3e116]: 已逾期
+            - generic [ref=f3e117]: P2 · 一般
+            - button "删除" [ref=f3e118] [cursor=pointer]
+          - generic [ref=f3e121]:
+            - generic [ref=f3e122] [cursor=pointer]
+            - generic "点击查看与编辑" [ref=f3e125]:
+              - generic [ref=f3e126]: 中文写入验证计划
+              - generic [ref=f3e127]: 通过了测试
+              - generic [ref=f3e128]: 完成于 2026-08-30 04:43
+            - generic [ref=f3e129]: P0 · 紧急
+            - button "删除" [ref=f3e130] [cursor=pointer]
+          - generic [ref=f3e133]:
+            - generic [ref=f3e134] [cursor=pointer]
+            - generic "点击查看与编辑" [ref=f3e137]:
+              - generic [ref=f3e138]: E2E验收计划
+              - generic [ref=f3e139]: 完成于 2026-08-27 09:20
+            - generic [ref=f3e140]: P2 · 一般
+            - button "删除" [ref=f3e141] [cursor=pointer]
+          - generic [ref=f3e144]:
+            - generic [ref=f3e145] [cursor=pointer]
+            - generic "点击查看与编辑" [ref=f3e148]:
+              - generic [ref=f3e149]: ✅ 已完成：备份全部数据
+              - generic [ref=f3e150]: 本轮收尾
+              - generic [ref=f3e151]: 完成于 2026-08-28 01:30
+            - generic [ref=f3e152]: P0 · 紧急
+            - button "删除" [ref=f3e153] [cursor=pointer]
+          - generic [ref=f3e156]:
+            - generic [ref=f3e157] [cursor=pointer]
+            - generic "点击查看与编辑" [ref=f3e160]:
+              - generic [ref=f3e161]: 逾期示例：整理上季度账目
+              - generic [ref=f3e162]: 拖了 3 天
+              - generic [ref=f3e163]: 完成于 2026-08-29 12:26
+            - generic [ref=f3e164]: P0 · 紧急
+            - button "删除" [ref=f3e165] [cursor=pointer]
+          - generic [ref=f3e168]:
+            - generic [ref=f3e169] [cursor=pointer]
+            - generic "点击查看与编辑" [ref=f3e172]:
+              - generic [ref=f3e173]: 走查：验证讨伐联动
+              - generic [ref=f3e174]: 完成于 2026-08-30 03:10
+            - generic [ref=f3e175]: P1 · 重要
+            - button "删除" [ref=f3e176] [cursor=pointer]
+  - button "回到顶部"
+  - button "⚡ 速记" [ref=f3e179] [cursor=pointer]
